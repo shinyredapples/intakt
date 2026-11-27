@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
-use Doctrine\DBAL\DriverManager;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -76,6 +75,7 @@ use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
+use Intakt\Tests\Core\Build\ParkedTaskTable;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
@@ -383,8 +383,8 @@ final class BuildTaskCommandTest extends TestCase
         $branches = self::createStub(BranchPush::class);
         $branches->method('push')->willReturn($this->pushed);
 
-        // On a database that cannot be opened, because the parked run's output is proven on the install's own database in BuildTaskParksOnSqliteTest.
-        $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->folder.'/missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
+        // The parked-task table alone, because the parked run's output is proven on the install's own database in BuildTaskParksOnSqliteTest.
+        $parked = new ParkedTasks(ParkedTaskTable::inMemory(), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
 
         $repositories = self::createStub(ConfiguredRepositories::class);
         $repositories->method('nameOf')->willReturn($this->configuredRepository);

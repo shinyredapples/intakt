@@ -37,6 +37,12 @@ final readonly class BuildRun
         ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
+    // The run too, as in its steps, so a reader can tell which of a task's runs parked it; never the question, because it stays in the row the readers redact.
+    public function parkedPayload(): string
+    {
+        return json_encode(['project' => $this->project, 'task' => (string) $this->task, 'run' => $this->id], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
     // Length-prefixed, so no project name can make the key of another project's task.
     public function startLockKey(): string
     {

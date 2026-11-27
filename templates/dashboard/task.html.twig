@@ -15,6 +15,8 @@
         <p class="lead summary" id="task-where">
             {%- if last.outcome == 'failed' -%}
             Stopped at {{ last.step }}: {{ last.failure }}
+            {%- elseif last.outcome == 'asked' -%}
+            Parked at {{ last.step }}: the build asked a question.
             {%- elseif last.step == final -%}
             Every step passed.
             {%- else -%}
@@ -23,6 +25,19 @@
         </p>
     </div>
 </div>
+{% if question is not null %}
+<section class="section" id="parked-question" aria-labelledby="parked-question-title">
+    <h2 id="parked-question-title">Parked question</h2>
+    <p id="parked-question-text">{{ question.text }}</p>
+    <ul id="parked-question-choices">
+        {% for choice in question.choices %}
+        <li>{{ choice }}</li>
+        {% endfor %}
+    </ul>
+    <p id="parked-question-recommendation">Recommended: {{ question.recommendation }}</p>
+    <p class="muted small">Parked <time>{{ question.parked_at|date('Y-m-d H:i:s', 'UTC') }} UTC</time></p>
+</section>
+{% endif %}
 <section class="tl-pane" aria-labelledby="timeline-title">
 <h2 class="timeline-title" id="timeline-title">Timeline</h2>
 {% for step in steps %}
@@ -31,7 +46,9 @@
         <h2>{{ step.step|replace({'_': ' '})|capitalize }}</h2>
         {{ include('dashboard/components/chip.html.twig', step.outcome == 'failed'
             ? {dot: 'needs', label: 'Failed', on_page: true, broken: true, extra: 'step-failed'}
-            : {icon: 'check', label: 'Passed', on_page: true, extra: 'step-passed'}, with_context = false) }}
+            : (step.outcome == 'asked'
+                ? {dot: 'idle', label: 'Asked', on_page: true, extra: 'step-asked'}
+                : {icon: 'check', label: 'Passed', on_page: true, extra: 'step-passed'}), with_context = false) }}
     </div>
     <p class="muted small"><time>{{ step.ended_at|date('Y-m-d H:i:s', 'UTC') }} UTC</time></p>
     {% if step.failure is not null %}

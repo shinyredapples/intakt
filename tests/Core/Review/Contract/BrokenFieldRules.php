@@ -33,6 +33,8 @@ final readonly class BrokenFieldRules
         yield 'enum: verdict differs in case' => [$design->with('verdict', 'Approve')->json(), '"approve", "changes", "blocked"'];
         yield 'enum: severity is not P1 to P3' => [$design->withFinding('severity', 'P4')->json(), '"P1", "P2", "P3"'];
         yield 'enum: fixable_by is neither builder nor owner' => [$design->withFinding('fixable_by', 'reviewer')->json(), '"builder", "owner"'];
+        yield 'enum: kind is not one of the kinds' => [$design->withFinding('kind', 'style')->json(), '"security", "logic", "missing test", "tidy-up", "other"'];
+        yield 'enum: kind differs in case' => [$design->withFinding('kind', 'Logic')->json(), '"security", "logic", "missing test", "tidy-up", "other"'];
     }
 
     /**
@@ -109,5 +111,10 @@ final readonly class BrokenFieldRules
         yield 'constraint: text is blank' => [$design->withFinding('text', '')->json(), 'findings[0].text: This value should not be blank.'];
         yield 'constraint: line is zero' => [$design->withFinding('line', 0)->json(), 'findings[0].line: This value should be greater than or equal to 1.'];
         yield 'constraint: evidence probe is blank' => [$design->withFinding('evidence', ['probe' => '', 'output' => '...'])->json(), 'findings[0].evidence.probe: This value should not be blank.'];
+        // Constraints, not required keys, because a stored finding from before titles and kinds reads without them; the answer must still name both.
+        yield 'constraint: title is blank' => [$design->withFinding('title', '')->json(), 'findings[0].title: This value should not be blank.'];
+        yield 'constraint: title is missing' => [$design->withoutFinding('title')->json(), 'findings[0].title: This value should not be null.'];
+        yield 'constraint: kind is missing' => [$design->withoutFinding('kind')->json(), 'findings[0].kind: This value should not be null.'];
+        yield 'constraint: kind is null' => [$design->withFinding('kind', null)->json(), 'findings[0].kind: This value should not be null.'];
     }
 }

@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
-use Doctrine\DBAL\DriverManager;
+use DateTimeImmutable;
+use Doctrine\DBAL\Connection;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -39,6 +40,7 @@ use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
+use Intakt\Core\Build\UseCase\BuildTask\ParkedTaskNotCleared;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushResult;
@@ -149,6 +151,7 @@ use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
+use Intakt\Tests\Core\Build\ParkedTaskTable;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
@@ -216,6 +219,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(PushRemoteRefused::class)]
 #[UsesClass(ParkedTaskRecord::class)]
 #[UsesClass(TaskNotParked::class)]
+#[UsesClass(ParkedTaskNotCleared::class)]
 #[UsesClass(BuildQuestion::class)]
 #[UsesClass(QuestionRefused::class)]
 #[UsesClass(PushBranch::class)]
@@ -349,6 +353,8 @@ final class BuildTaskTest extends TestCase
 
     private RecordingChangeOpening $changes;
 
+    private ?Connection $parkedRows = null;
+
     // A ledger that reads back for the text round, because InMemoryLedger reads nothing and the round counts the task's earlier lines.
     private ?RecordingLedger $textLedger = null;
 
@@ -414,6 +420,34 @@ final class BuildTaskTest extends TestCase
         self::assertStringContainsString("\ngpgsig ", $this->git(['cat-file', 'commit', 'feat/task'], $this->remote->path));
         self::assertSame(1, $this->changes->opened);
         self::assertSame([], glob($this->mirrors.'-hand-backs/*'));
+    }
+
+    public function testABuildJobThatBuiltClearsTheQuestionAnEarlierBuildParkedTheTaskWith(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->parkedRows = ParkedTaskTable::inMemory();
+        $this->parkedRows->insert(ParkedTaskRecord::TABLE, new ParkedTaskRecord('alpha', 7, BuildQuestion::fromHandedBack('{"question":"Which name?","choices":["a","b"],"recommendation":"a"}'), new DateTimeImmutable('2026-11-20 10:00:00'), null)->row(), ParkedTaskRecord::rowTypes());
+        $this->parkedRows->insert(ParkedTaskRecord::TABLE, new ParkedTaskRecord('alpha', 8, BuildQuestion::fromHandedBack('{"question":"Which name?","choices":["a","b"],"recommendation":"a"}'), new DateTimeImmutable('2026-11-20 10:00:00'), null)->row(), ParkedTaskRecord::rowTypes());
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame([BuildStep::Push, null], [$outcome->last, $outcome->failure]);
+        self::assertSame(['alpha:8'], $this->parkedRows->fetchFirstColumn("SELECT project || ':' || task FROM build_parked_task"));
+    }
+
+    public function testAParkedQuestionTheDatabaseDoesNotRemoveFailsTheBuildJobStepWithFixedWordsAndRunsNoLaterStep(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->parkedRows = ParkedTaskTable::unopenable($this->mirrors.'-missing');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertSame('Issue 7 of project "alpha" is still parked: the database did not remove its question', $outcome->failure);
+        self::assertSame(['task', 'mirror', 'clone', 'build_job'], array_column($ledger->payloads(), 'step'));
+        self::assertSame($outcome->failure, $ledger->payloads()[3]['failure']);
+        self::assertNull($this->remoteTip());
     }
 
     #[TestWith([BuildStopCause::NoProgress])]
@@ -874,6 +908,7 @@ final class BuildTaskTest extends TestCase
     public function testAQuestionTheDatabaseDoesNotStoreEndsAtTheBuildJobStepFailedWithFixedWordsAndRunsNoLaterStep(): void
     {
         new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::QUESTION, '{"question":"PLANT-question?","choices":["a","b"],"recommendation":"a"}');
+        $this->parkedRows = ParkedTaskTable::unopenable($this->mirrors.'-missing');
         $ledger = new InMemoryLedger();
 
         $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
@@ -1590,8 +1625,8 @@ final class BuildTaskTest extends TestCase
         $dependencies = new CheckJobsFor($this->mirrors.'-checks')->dependencies($this->checkRunner, new PhpGate());
         $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $dependencies, $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
 
-        // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
-        $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
+        // The parked-task table alone, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
+        $parked = new ParkedTasks($this->parkedRows ??= ParkedTaskTable::inMemory(), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
 
         $texts = new PullRequestTextCheck($checkout, new RoutePullRequestText(new PullRequestTextRoutes($this->textLedger ?? $ledger, $this->textLocks ?? $this->locks)));
 
