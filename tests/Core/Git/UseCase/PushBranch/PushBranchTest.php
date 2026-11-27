@@ -1035,9 +1035,18 @@ final class PushBranchTest extends TestCase
         $recordsBefore = $this->scenario->ledger->kinds();
         $retry = $this->scenario->withText($this->scenario->request(), $text);
 
-        foreach ([$push->push(...), $push->openChange(...)] as $call) {
+        $calls = [
+            static function () use ($push, $retry): void {
+                (void) $push->push($retry);
+            },
+            static function () use ($push, $retry): void {
+                $push->openChange($retry);
+            },
+        ];
+
+        foreach ($calls as $call) {
             try {
-                (void) $call($retry);
+                $call();
                 self::fail('A head the remote branch moved past must be refused.');
             } catch (BranchNotPushed $refused) {
                 self::assertStringContainsString('moved since this head was pushed', $refused->getMessage());

@@ -437,7 +437,7 @@ final class BuildTaskTest extends TestCase
 
         $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
 
-        self::assertSame([BuildStep::Push, null], [$outcome->last, $outcome->failure]);
+        self::assertSame([BuildStep::PullRequest, null], [$outcome->last, $outcome->failure]);
         self::assertSame(['alpha:8'], $this->parkedRows->fetchFirstColumn("SELECT project || ':' || task FROM build_parked_task"));
     }
 

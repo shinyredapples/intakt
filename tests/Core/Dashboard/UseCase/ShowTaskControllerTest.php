@@ -379,7 +379,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
         self::assertSame('Parked at build_job: the build asked a question.', $page->filter('#task-where')->text());
-        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Passed', 'Build job Asked', 'Hand back check Not reached', 'Pre push check Not reached', 'Push Not reached'], $this->stepHeads($page));
+        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Passed', 'Build job Asked', 'Hand back check Not reached', 'Pre push check Not reached', 'Push Not reached', 'Pull request Not reached'], $this->stepHeads($page));
         self::assertSame('Keep the old flag?', $page->filter('#parked-question-text')->text());
         self::assertSame(['keep it', 'drop it'], $page->filter('#parked-question-choices li')->each(static fn (Crawler $choice): string => $choice->text()));
         self::assertSame('Recommended: drop it', $page->filter('#parked-question-recommendation')->text());
@@ -434,7 +434,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
-        self::assertSame(['Task Passed', 'Mirror Not reached', 'Clone Not reached', 'Build job Not reached', 'Hand back check Not reached', 'Pre push check Not reached', 'Push Not reached'], $this->stepHeads($page));
+        self::assertSame(['Task Passed', 'Mirror Not reached', 'Clone Not reached', 'Build job Not reached', 'Hand back check Not reached', 'Pre push check Not reached', 'Push Not reached', 'Pull request Not reached'], $this->stepHeads($page));
     }
 
     public function testATaskTheLedgerHoldsNoStepOfIsNotFound(): void
