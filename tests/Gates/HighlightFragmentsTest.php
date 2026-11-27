@@ -399,6 +399,25 @@ final class HighlightFragmentsTest extends SandboxTestCase
         self::assertSame([self::UNORDERED_CLOCK], $this->assembled()->findings);
     }
 
+    public function testABranchMovedBetweenTheTreeReadAndTheHistoryReadStillGivesTheTie(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+        $earlier = trim($this->sandbox->git('rev-parse', 'HEAD')->output);
+        $this->sandbox->git('rm', '--quiet', 'docs/highlights.d/2-earlier.md');
+        $this->sandbox->commitAll('remove the clock row');
+        $this->sandbox->write('docs/highlights.d/2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+        $this->commitFragment('10-later.md', "## Tooling\n| Clock | done | T10 (#10) |\n");
+
+        self::assertSame([self::UNORDERED_CLOCK], $this->assembled()->findings);
+
+        // Forces the race: the history read that resolved HEAD again would see the earlier commit, where only the first addition of 2-earlier.md exists, and 10-later.md would win as uncommitted.
+        $findings = $this->assembledWithHeadMovedAfterTheTreeReadTo($earlier)->findings;
+
+        self::assertSame($earlier, trim($this->sandbox->git('rev-parse', 'HEAD')->output));
+        self::assertSame([self::UNORDERED_CLOCK], $findings);
+    }
+
     public function testARepositoryWithoutCommitsRefusesFragmentsThatSetTheSameRow(): void
     {
         $this->sandbox->startRepository();
@@ -658,6 +677,33 @@ final class HighlightFragmentsTest extends SandboxTestCase
         }
 
         return new HighlightFragments()->assembled($this->sandbox->root);
+    }
+
+    // Because ProcessRunner is final, a git on PATH stands in for the real one: it runs it and, once its first ls-tree ends, moves the branch to the given commit.
+    private function assembledWithHeadMovedAfterTheTreeReadTo(string $commit): HighlightAssembly
+    {
+        $git = trim((string) shell_exec('command -v git'));
+        $bin = $this->sandbox->root.'/.git/moving-git';
+        mkdir($bin);
+        file_put_contents($bin.'/git', implode("\n", [
+            '#!/bin/sh',
+            escapeshellarg($git).' "$@"',
+            'status=$?',
+            'case " $* " in *" ls-tree "*)',
+            '  if mkdir '.escapeshellarg($bin.'/moved').' 2>/dev/null; then '.escapeshellarg($git).' update-ref HEAD '.$commit.' || exit 1; fi;;',
+            'esac',
+            'exit $status',
+            '',
+        ]));
+        chmod($bin.'/git', 0o755);
+        $path = getenv('PATH');
+        putenv('PATH='.$bin.':'.$path);
+
+        try {
+            return $this->assembled();
+        } finally {
+            putenv('PATH='.$path);
+        }
     }
 
     private function commitFragment(string $name, string $rows): void
