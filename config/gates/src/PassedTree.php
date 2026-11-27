@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use DateTimeImmutable;
 use DateTimeZone;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\NativeClock;
@@ -12,7 +13,7 @@ final readonly class PassedTree
 {
     public const string RECORD = FullReport::FOLDER.'/passed.json';
 
-    private function __construct(private TreeFingerprint $fingerprint, private ?string $taken, private int $startedAt, private string $day)
+    private function __construct(private TreeFingerprint $fingerprint, private ?string $taken, private int $startedAt, private string $day, private ClockInterface $clock)
     {
     }
 
@@ -21,7 +22,7 @@ final readonly class PassedTree
     {
         $now = $clock->now();
 
-        return new self($fingerprint, $fingerprint->taken(), $now->getTimestamp(), $now->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d'));
+        return new self($fingerprint, $fingerprint->taken(), $now->getTimestamp(), self::dayOf($now), $clock);
     }
 
     // Because the record is a file the checked code can write too, it only spares a run its caller asked to spare, never one that gates a change.
@@ -38,8 +39,8 @@ final readonly class PassedTree
             return false;
         }
 
-        // Because the tree may change between taking the fingerprint and finding its record, the pass stands only for a tree that still gives the same fingerprint once the record is found.
-        return $this->fingerprint->taken() === $this->taken;
+        // Because the tree may change between taking the fingerprint and finding its record, the pass stands only for a tree that still gives the same fingerprint once the record is found; because the lookup may cross midnight UTC, only while its day is still today.
+        return $this->fingerprint->taken() === $this->taken && self::dayOf($this->clock->now()) === $this->day;
     }
 
     // Because only the latest pass is kept, one small file replaced whole never grows, and a temporary name renamed over it never leaves half a record.
@@ -87,6 +88,11 @@ final readonly class PassedTree
     private function contents(string $fingerprint): string
     {
         return '{"fingerprint":"'.$fingerprint.'","day":"'.$this->day.'"}'."\n";
+    }
+
+    private static function dayOf(DateTimeImmutable $moment): string
+    {
+        return $moment->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d');
     }
 
     private function folderStaysInside(): bool

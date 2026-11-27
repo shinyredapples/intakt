@@ -36,19 +36,20 @@ final readonly class OutputInParts
             throw new UnexpectedValueException('the process did not start');
         }
 
-        $ended = false;
+        $deadline = hrtime(true) + ($this->seconds * 1_000_000_000);
+        $exitCode = null;
 
         try {
-            yield from $this->partsOf($pipes[1]);
-            $ended = true;
+            yield from $this->partsOf($pipes[1], $deadline);
+            $exitCode = $this->exitCodeBy($process, $deadline);
         } finally {
             fclose($pipes[1]);
 
-            if (!$ended) {
+            if (null === $exitCode) {
                 proc_terminate($process, self::KILL);
             }
 
-            $exitCode = proc_close($process);
+            proc_close($process);
         }
 
         if (0 !== $exitCode) {
@@ -83,10 +84,9 @@ final readonly class OutputInParts
      *
      * @throws UnexpectedValueException
      */
-    private function partsOf(mixed $pipe): Generator
+    private function partsOf(mixed $pipe, int $deadline): Generator
     {
         stream_set_blocking($pipe, false);
-        $deadline = hrtime(true) + ($this->seconds * 1_000_000_000);
 
         while (!feof($pipe)) {
             if (hrtime(true) >= $deadline) {
@@ -106,6 +106,29 @@ final readonly class OutputInParts
             if (is_string($part) && '' !== $part) {
                 yield $part;
             }
+        }
+    }
+
+    /**
+     * @param resource $process
+     *
+     * @throws UnexpectedValueException
+     */
+    // Because a process can close its output and keep running, the deadline holds until it exits, not only until its output ends; proc_close() alone would wait for it unbounded.
+    private function exitCodeBy(mixed $process, int $deadline): int
+    {
+        while (true) {
+            $status = proc_get_status($process);
+
+            if (!$status['running']) {
+                return $status['exitcode'];
+            }
+
+            if (hrtime(true) >= $deadline) {
+                throw new UnexpectedValueException('the process ran too long');
+            }
+
+            usleep(10_000);
         }
     }
 }

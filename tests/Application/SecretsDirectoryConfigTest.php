@@ -21,8 +21,8 @@ final class SecretsDirectoryConfigTest extends TestCase
 {
     private const string MOVED = '/secrets-of-a-test';
 
-    /** @var array{server: mixed, env: mixed, process: string|false} */
-    private array $saved;
+    /** @var array<string, array{server: mixed, env: mixed, process: string|false}> */
+    private array $saved = [];
 
     public function testAnInstallOutsideTheTestEnvironmentKeepsItsVaultsInConfigSecretsWhateverTheVariableSays(): void
     {
@@ -43,24 +43,33 @@ final class SecretsDirectoryConfigTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->saved = ['server' => $_SERVER['INTAKT_SECRETS_DIR'] ?? null, 'env' => $_ENV['INTAKT_SECRETS_DIR'] ?? null, 'process' => getenv('INTAKT_SECRETS_DIR')];
-        unset($_ENV['INTAKT_SECRETS_DIR']);
-        putenv('INTAKT_SECRETS_DIR');
-        $_SERVER['INTAKT_SECRETS_DIR'] = sys_get_temp_dir().self::MOVED;
+        $temporary = sys_get_temp_dir();
+        // Because ai.php also reads the projects file, the vault and the kept key, each points at a path that does not exist, so the test never reads the operator's own.
+        $values = ['INTAKT_SECRETS_DIR' => $temporary.self::MOVED, 'INTAKT_CONFIG' => $temporary.'/missing-projects.yaml', 'INTAKT_PROVIDER_KEY_DIR' => $temporary.'/missing-kept-key', 'APP_RUNTIME_ENV' => 'missing-vault', 'SYMFONY_DECRYPTION_SECRET' => null];
+        foreach ($values as $name => $value) {
+            $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null, 'process' => getenv($name)];
+            unset($_SERVER[$name], $_ENV[$name]);
+            putenv($name);
+            if (null !== $value) {
+                $_SERVER[$name] = $value;
+            }
+        }
     }
 
     protected function tearDown(): void
     {
-        unset($_SERVER['INTAKT_SECRETS_DIR'], $_ENV['INTAKT_SECRETS_DIR']);
-        putenv('INTAKT_SECRETS_DIR');
-        if (null !== $this->saved['server']) {
-            $_SERVER['INTAKT_SECRETS_DIR'] = $this->saved['server'];
-        }
-        if (null !== $this->saved['env']) {
-            $_ENV['INTAKT_SECRETS_DIR'] = $this->saved['env'];
-        }
-        if (false !== $this->saved['process']) {
-            putenv('INTAKT_SECRETS_DIR='.$this->saved['process']);
+        foreach ($this->saved as $name => $saved) {
+            unset($_SERVER[$name], $_ENV[$name]);
+            putenv($name);
+            if (null !== $saved['server']) {
+                $_SERVER[$name] = $saved['server'];
+            }
+            if (null !== $saved['env']) {
+                $_ENV[$name] = $saved['env'];
+            }
+            if (false !== $saved['process']) {
+                putenv($name.'='.$saved['process']);
+            }
         }
     }
 
