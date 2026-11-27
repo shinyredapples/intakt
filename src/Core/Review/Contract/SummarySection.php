@@ -59,7 +59,8 @@ final readonly class SummarySection
                 $lines[] = [$line, 0, '', false];
             } elseif ([] !== $lines && array_last($lines)[3] && 1 === preg_match(self::SETEXT, $line, $underline)) {
                 $text = array_pop($lines)[0];
-                array_push($lines, [$text, '=' === $underline[1][0] ? 1 : 2, trim($text), false], [$line, 0, '', false]);
+                $lines[] = [$text, '=' === $underline[1][0] ? 1 : 2, trim($text), false];
+                $lines[] = [$line, 0, '', false];
             } else {
                 [$level, $title] = $this->headingOf($line);
                 $lines[] = [$line, $level, $title, 0 === $level && '' !== trim($line)];
