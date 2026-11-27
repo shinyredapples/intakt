@@ -8,12 +8,16 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Review\Infrastructure\HeadClones;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use LogicException;
+use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
+use Throwable;
 
 // Real git on a fixture repository, because what is under test is what git writes into the clone.
 #[CoversClass(HeadClones::class)]
@@ -89,6 +93,32 @@ final class HeadClonesTest extends TestCase
         }
     }
 
+    public function testAnUnexpectedExceptionWhileCloningPassesThroughAfterTheCloneIsRemoved(): void
+    {
+        $head = $this->committed("one\n");
+        $filesystem = $this->failingAfterTheCloneFolder(new LogicException('a bug while preparing the clone'), null);
+
+        try {
+            new HeadClones($filesystem, $this->root.'/clones')->cloneAt($this->root.'/source', $head);
+            self::fail('The unexpected exception did not pass through.');
+        } catch (LogicException) {
+            self::assertSame([], glob($this->root.'/clones/head-*'));
+        }
+    }
+
+    public function testTheCloneFailureStillPassesThroughWhenRemovingThePartialCloneFailsToo(): void
+    {
+        $head = $this->committed("one\n");
+        $original = new LogicException('a bug while preparing the clone');
+
+        try {
+            new HeadClones($this->failingAfterTheCloneFolder($original, new IOException('cannot remove')), $this->root.'/clones')->cloneAt($this->root.'/source', $head);
+            self::fail('The unexpected exception did not pass through.');
+        } catch (Throwable $passed) {
+            self::assertSame($original, $passed);
+        }
+    }
+
     public function testTwoJobsGetTwoCheckoutsAndRemovingOneLeavesTheOther(): void
     {
         $head = $this->committed("one\ntwo\n");
@@ -127,6 +157,42 @@ final class HeadClonesTest extends TestCase
         $this->git(...[...self::IDENTITY, 'commit', '--quiet', '-m', 'Fixture']);
 
         return new CommitId($this->git('rev-parse', 'HEAD'));
+    }
+
+    // Creates the clone's folder before it throws, so only the removal can leave no partial clone behind.
+    private function failingAfterTheCloneFolder(LogicException $failure, ?IOException $removal): Filesystem
+    {
+        return new class($failure, $removal) extends Filesystem {
+            public function __construct(private readonly LogicException $failure, private readonly ?IOException $removal)
+            {
+            }
+
+            /**
+             * @param iterable<mixed, mixed>|string $dirs
+             */
+            public function mkdir(string|iterable $dirs, int $mode = 0o777): void
+            {
+                parent::mkdir($dirs, $mode);
+
+                if (is_string($dirs) && str_starts_with(basename($dirs), 'head-')) {
+                    Assert::assertDirectoryExists($dirs);
+
+                    throw $this->failure;
+                }
+            }
+
+            /**
+             * @param iterable<mixed, mixed>|string $files
+             */
+            public function remove(string|iterable $files): void
+            {
+                if ($this->removal instanceof IOException) {
+                    throw $this->removal;
+                }
+
+                parent::remove($files);
+            }
+        };
     }
 
     /**

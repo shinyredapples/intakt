@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\TestCase;
+
+final class SendingTest extends TestCase
+{
+    public function testSends(): void
+    {
+        self::assertTrue(true);
+    }
+}
