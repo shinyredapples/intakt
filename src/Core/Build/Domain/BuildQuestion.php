@@ -64,12 +64,27 @@ final readonly class BuildQuestion
             return null;
         }
 
-        // The texts together, because all of them came out of one hand-back and decoding JSON never makes a text longer.
-        if (strlen($accepted->question.implode('', $accepted->choices).$accepted->recommendation) > self::MAX_BYTES) {
+        // The shortest hand-back that holds the texts, because all of them came out of one hand-back and one over the limit is refused; a text that is no UTF-8 never came out of JSON.
+        try {
+            $shortest = self::shortestHandBackOf($accepted);
+        } catch (JsonException) {
+            return null;
+        }
+
+        if (strlen($shortest) > self::MAX_BYTES) {
             return null;
         }
 
         return [$question, $choices, $recommendation] === [$accepted->question, $accepted->choices, $accepted->recommendation] ? $accepted : null;
+    }
+
+    /**
+     * @throws JsonException
+     */
+    // Escaped only where JSON must escape, because a hand-back may write every other character as it is.
+    private static function shortestHandBackOf(self $question): string
+    {
+        return json_encode(['question' => $question->question, 'choices' => $question->choices, 'recommendation' => $question->recommendation], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_LINE_TERMINATORS);
     }
 
     /**

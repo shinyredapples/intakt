@@ -46,6 +46,16 @@ final class StoredParkedQuestionsTest extends TestCase
         self::assertSame([null, null], [$questions->of('alpha', 8), $questions->of('beta', 7)]);
     }
 
+    public function testARowWhoseShortestHandBackIsExactlyAtTheLimitGivesItsQuestion(): void
+    {
+        $room = BuildQuestion::MAX_BYTES - strlen((string) json_encode(['question' => '', 'choices' => ['a', 'b'], 'recommendation' => 'a']));
+        $question = str_repeat('"', intdiv($room, 2)).str_repeat('q', $room % 2);
+        $handBack = (string) json_encode(['question' => $question, 'choices' => ['a', 'b'], 'recommendation' => 'a']);
+        $this->park('alpha', 7, $handBack);
+
+        self::assertSame([BuildQuestion::MAX_BYTES, $question], [strlen($handBack), new StoredParkedQuestions($this->connection)->of('alpha', 7)?->question]);
+    }
+
     /**
      * @return iterable<string, array{array<string, ?string>}>
      */
@@ -75,6 +85,7 @@ final class StoredParkedQuestionsTest extends TestCase
         yield 'a choice longer than a hand-back' => [['choices' => '["a",'.self::textOf(8193).']']];
         yield 'a recommendation longer than a hand-back' => [['choices' => '['.self::textOf(8193).']', 'recommendation' => self::textOf(8193)]];
         yield 'texts that are together longer than a hand-back' => [['question' => self::textOf(4000), 'choices' => '["a",'.self::textOf(4192).']']];
+        yield 'texts whose shortest hand-back escapes them past the limit' => [['question' => '"'.str_repeat('\\"', 4096).'"']];
     }
 
     /**
