@@ -78,7 +78,7 @@
                                 }
                             },
                             "build": {
-                                "description": "Each task intakt:build:task ran, with the last step it recorded, newest first; a failed step is where the run stopped, and a build_job step that asked parked the task with a question.",
+                                "description": "Each task intakt:build:task ran, with the latest step of its latest run, newest first; a failed step is where the run stopped, and a build_job step that asked parked the task with a question.",
                                 "type": "array",
                                 "items": {
                                     "type": "object",
