@@ -117,6 +117,16 @@ final class ShowHistoryControllerTest extends DashboardPageTestCase
         self::assertSame('Intakt', $row->filter('.who')->text());
     }
 
+    public function testADashboardStopWithoutAnActorIsFromTheDashboardAndShowsDashboardAsItsWho(): void
+    {
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStopRequested, '{"round":"round-1","reviewer":"reviewer-1"}'));
+
+        $row = $this->browser->request('GET', '/history')->filter('.ledger tbody tr');
+
+        self::assertSame('dashboard', $row->attr('data-source'));
+        self::assertSame('Dashboard', $row->filter('td.who')->text());
+    }
+
     public function testACooledDownAccountIsALimitAndAnAccountRowAndAProjectRowIsAProjectsRow(): void
     {
         $this->ledger->append(new LedgerEvent(LedgerEventKind::AccountCooledDown, json_encode(['account' => 'sample', 'until' => '2026-12-01T10:00:00+00:00'], JSON_THROW_ON_ERROR)));

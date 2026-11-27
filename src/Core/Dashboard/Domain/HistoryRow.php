@@ -15,6 +15,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final readonly class HistoryRow
 {
     private const string UNNAMED_ACTOR = 'Intakt';
+    private const string DASHBOARD_ACTOR = 'Dashboard';
 
     // A change to a secret carries only its fingerprint, so before and after are not read from such a row and a secret's value can never reach the page.
     private function __construct(
@@ -38,12 +39,13 @@ final readonly class HistoryRow
         $fingerprint = $fields->text('fingerprint');
         $isSecret = null !== $fingerprint;
         $actor = self::filled($fields->text('actor'));
+        $source = self::sourceOf($actor, $recorded->event->kind);
 
         return new self(
             $recorded->recordedAt->setTimezone(new DateTimeZone('UTC')),
             $recorded->event->kind->value,
-            $actor ?? self::UNNAMED_ACTOR,
-            self::sourceOf($actor, $recorded->event->kind),
+            $actor ?? self::unnamedActorOf($source),
+            $source,
             self::filled($fields->text('project')),
             $fields->text('round'),
             $isSecret ? null : $fields->text('before'),
@@ -86,16 +88,22 @@ final readonly class HistoryRow
         return HistoryTopic::of(LedgerEventKind::from($this->kind), $this->project);
     }
 
-    // A name that is empty or only Unicode whitespace or format characters is no name, which trim() would miss for a form feed, a no-break space or a zero-width space, so the topic, the project filter and the Source column all read the same null.
+    // A name is set only when it holds a visible character: a letter, number, punctuation or symbol. A name of only white space, format characters or lone combining marks (a form feed, a no-break space, a zero-width space, U+034F, U+FE0F) is no name and reads as null, so the topic, the project filter and the Source column all agree; a name that holds such a character is kept exactly as written.
     private static function filled(?string $text): ?string
     {
-        return null === $text || 1 === preg_match('/^[\s\p{Z}\p{Cf}]*\z/u', $text) ? null : $text;
+        return null === $text || 1 !== preg_match('/[\p{L}\p{N}\p{P}\p{S}]/u', $text) ? null : $text;
     }
 
     // Only the dashboard's Stop button writes a reviewer stop request, and that row names no actor, so its kind alone says where it came from.
     private static function sourceOf(?string $actor, LedgerEventKind $kind): HistorySource
     {
         return null !== $actor || LedgerEventKind::ReviewerStopRequested === $kind ? HistorySource::Dashboard : HistorySource::Intakt;
+    }
+
+    // A row without an actor shows where it came from: the dashboard's Stop shows Dashboard, every other row Intakt.
+    private static function unnamedActorOf(HistorySource $source): string
+    {
+        return HistorySource::Dashboard === $source ? self::DASHBOARD_ACTOR : self::UNNAMED_ACTOR;
     }
 
     // createFromFormat() rolls an impossible date such as February 30 over into March and only warns, so a warning makes the expiry unreadable. It throws on a NUL byte, which would take the whole page down for one row.
