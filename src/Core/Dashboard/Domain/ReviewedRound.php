@@ -50,7 +50,7 @@ final readonly class ReviewedRound
     /** @var array<string, list<string>>|null */
     public ?array $findingsByReviewer;
 
-    // Keyed by reviewer id, then finding id, with the severity that reviewer gave, because two reviewers may repeat one tracked finding at different severities; null unless every reporter row recorded them.
+    // Keyed by reviewer id, then finding id, with the severity that reviewer gave, because two reviewers may repeat one tracked finding at different severities; a reviewer whose reporter row recorded none is left out, and the whole map is null when no reporter row recorded them.
     /** @var array<string, array<string, string>>|null */
     public ?array $severitiesByReviewer;
 
@@ -116,10 +116,41 @@ final readonly class ReviewedRound
         return [...array_filter($this->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call)];
     }
 
+    public function finding(string $id): ?RoundFinding
+    {
+        return $this->findingIn($this, $id);
+    }
+
+    // The reviewers whose reports the finding holds, merged ones included; null for a round completed before the ledger recorded who reported what, so the page never claims nobody reported it.
+    /**
+     * @return list<ReviewerOutcome>|null
+     */
+    public function reportersOf(RoundFinding $finding): ?array
+    {
+        return $this->reportersIn($this, $finding);
+    }
+
     // Null when the round holds no severity from this reviewer for the id, such as a reporter row written before severities were recorded, so a count never guesses one.
     public function severityReportedBy(string $reviewer, string $id): ?string
     {
         return $this->severityIn($this, $reviewer, $id);
+    }
+
+    // Every severity the reviewer gave under any id the finding holds, because a reviewer may have reported only a merged one, or two that the judge called the same at different severities.
+    /**
+     * @return list<string>
+     */
+    public function severitiesReportedOf(string $reviewer, RoundFinding $finding): array
+    {
+        $given = array_map(fn (string $id): ?string => $this->severityReportedBy($reviewer, $id), $finding->ids());
+
+        return array_values(array_unique(array_filter($given, static fn (?string $severity): bool => null !== $severity)));
+    }
+
+    // One report per reviewer and per id of the finding that reviewer reported, because the judge's card counts reports, not ids; null for a round completed before the ledger recorded who reported what, so the page never claims a count it does not know.
+    public function reportCountOf(RoundFinding $finding): ?int
+    {
+        return $this->reportCountIn($this, $finding);
     }
 
     public function reviewOutcome(): ?ReviewOutcome
@@ -304,9 +335,41 @@ final readonly class ReviewedRound
         return $round->outcomes;
     }
 
+    // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's empty list for `$this->findings`.
+    private function findingIn(self $round, string $id): ?RoundFinding
+    {
+        return array_find($round->findings, static fn (RoundFinding $finding): bool => $finding->id === $id);
+    }
+
+    /**
+     * @return list<ReviewerOutcome>|null
+     */
+    private function reportersIn(self $round, RoundFinding $finding): ?array
+    {
+        $reports = $round->findingsByReviewer;
+
+        if (null === $reports) {
+            return null;
+        }
+
+        return array_values(array_filter($round->outcomes, static fn (ReviewerOutcome $outcome): bool => [] !== array_intersect($finding->ids(), $reports[$outcome->id] ?? [])));
+    }
+
     // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's null for `$this->severitiesByReviewer`.
     private function severityIn(self $round, string $reviewer, string $id): ?string
     {
         return $round->severitiesByReviewer[$reviewer][$id] ?? null;
+    }
+
+    // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's null for `$this->findingsByReviewer`.
+    private function reportCountIn(self $round, RoundFinding $finding): ?int
+    {
+        $reports = $round->findingsByReviewer;
+
+        if (null === $reports) {
+            return null;
+        }
+
+        return array_sum(array_map(static fn (array $reported): int => count(array_intersect($finding->ids(), array_unique($reported))), $reports));
     }
 }

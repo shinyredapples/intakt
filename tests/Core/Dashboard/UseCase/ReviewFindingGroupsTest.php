@@ -94,13 +94,13 @@ final class ReviewFindingGroupsTest extends DashboardPageTestCase
         self::assertSame([0, 0], [$crawler->filter('#review-to-fix details')->count(), $crawler->filter('#review-to-fix .fix-row svg:not(.fix-chev)')->count()]);
     }
 
-    public function testEachRowOpensItsFindingInTheFullRecord(): void
+    public function testEachRowOpensItsFindingsPage(): void
     {
         $this->givenFindingsToFixRated(['F1' => 'P3', 'F2' => 'P1']);
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['/reviews/round-1/record#round-round-1-finding-F2', '/reviews/round-1/record#round-round-1-finding-F1'], $crawler->filter('#review-to-fix a.fix-row')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+        self::assertSame(['/reviews/round-1/findings/F2', '/reviews/round-1/findings/F1'], $crawler->filter('#review-to-fix a.fix-row')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
     }
 
     public function testTheFullRecordLinkStaysBelowTheGroups(): void

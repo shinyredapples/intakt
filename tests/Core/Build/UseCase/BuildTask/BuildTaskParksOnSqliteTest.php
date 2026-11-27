@@ -42,6 +42,7 @@ use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BranchPush;
 use Intakt\Core\Git\Contract\BuildCheckout;
@@ -104,6 +105,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(Issues::class)]
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
+#[UsesClass(RecordedBuildStops::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
 #[UsesClass(BuildVerdict::class)]
@@ -243,7 +245,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts', new RecordedBuildStops());
         $files = new HandBackFile($checkout, new Filesystem(), $this->folder.'/hand-backs');
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);

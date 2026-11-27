@@ -8,6 +8,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
+use Intakt\Core\Review\Contract\FindingKind;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FollowUpNote;
 use Intakt\Core\Review\Contract\ResolvedFinding;
@@ -21,6 +22,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
+use Symfony\Component\Validator\Validation;
 
 #[CoversClass(Verdict::class)]
 #[UsesClass(Finding::class)]
@@ -108,6 +110,15 @@ final class VerdictTest extends TestCase
     public function testAnIntaktFailureVerdictStaysBlocked(Verdict $failure): void
     {
         self::assertSame(Decision::Blocked, $failure->asRecorded()->verdict);
+    }
+
+    #[DataProvider('failureVerdicts')]
+    public function testAnIntaktFailureFindingHasATitleOfThreeToSixWordsAndTheKindOther(Verdict $failure): void
+    {
+        $finding = $failure->findings[0];
+        $violations = Validation::createValidatorBuilder()->enableAttributeMapping()->getValidator()->validateProperty($finding, 'title');
+
+        self::assertSame([0, FindingKind::Other], [count($violations), $finding->kind]);
     }
 
     #[DataProvider('failureIds')]

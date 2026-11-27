@@ -18,11 +18,11 @@ Plain code decides the outcome from the votes and the list, never from how a rev
 
 ## The list To fix
 
-On the main view, each row is one thing to change. It sits in its urgency's group and shows only the first sentence and the place. On a desktop the three groups stand side by side; on a phone they stack, Urgent first. A group with nothing in it says "None". Press a row to open the finding in the **Full record**, where the id, the whole text, the other reviewers' reports and the owl's call are.
+On the main view, each row is one thing to change. It sits in its urgency's group and shows only the first sentence and the place. On a desktop the three groups stand side by side; on a phone they stack, Urgent first. A group with nothing in it says "None". Press a row to open the finding's own page: the whole text, where it sits (the file as a few lines with the finding's line marked, or with no line marked and "Line not recorded" when the line is not known, and any code the reviewer quoted, as written; Intakt keeps no copy of the code itself, so it shows none), who reported it and how serious each reviewer found it, and the owl's call. **Back to the review** returns to the list.
 
 ![Five finding cards from the list To fix: F1, P1, the discount check changed from "amount >= 100" to "amount > 100", at src/discount.js:3, also reported as F6, Fix now; F2, P1, command injection through customerName and execSync, at src/report.js:4, also reported as F5 and F7, Fix now; F3 and F4, P2, new functions without tests; F8, P3, a base charge written twice in src/shipping.js:6, Fix now](../assets/guide/findings.webp)
 
-In the Full record, read a card from left to right:
+The **Full record** lists the same findings as cards. Read a card from left to right:
 
 1. **The urgency.** P1 must be fixed, P2 should be, P3 is a small remark.
 2. **The id,** such as F1. It names this problem for the rest of the review.

@@ -53,7 +53,7 @@ final class RefuseForeignHostTest extends DashboardPageTestCase
      */
     public static function foreignHosts(): iterable
     {
-        foreach (['/projects', '/reviews', '/reviews/round-1', '/search'] as $page) {
+        foreach (['/projects', '/reviews', '/reviews/round-1', '/reviews/round-1/findings/F1', '/search'] as $page) {
             foreach (DashboardHostTest::FOREIGN_HOSTS as $name => $host) {
                 yield $page.' on '.$name => [$page, $host];
             }

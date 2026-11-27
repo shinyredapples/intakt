@@ -1,0 +1,35 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\DataProviderExternal;
+use PHPUnit\Framework\TestCase;
+
+final class HelperTest extends TestCase
+{
+    /** @return list<list<int>> */
+    public static function testRuns(): array
+    {
+        self::assertSame('testRuns', __FUNCTION__);
+
+        return [[1]];
+    }
+
+    /** @return list<list<int>> */
+    public static function testWorks(): array
+    {
+        self::assertSame('testWorks', __FUNCTION__);
+
+        return [[1]];
+    }
+
+    #[DataProvider('testRuns')]
+    #[DataProviderExternal(self::class, 'testWorks')]
+    private function helper(int $row): void
+    {
+        self::assertGreaterThan(0, $row);
+    }
+}

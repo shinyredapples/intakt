@@ -20,6 +20,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobCommand;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobInput;
@@ -56,6 +57,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuildCloneIsNoFolder::class)]
 #[UsesClass(JobRefused::class)]
 #[UsesClass(RunBuildJob::class)]
+#[UsesClass(RecordedBuildStops::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
 #[UsesClass(BuildVerdict::class)]
@@ -303,6 +305,7 @@ final class RunBuildJobCommandTest extends TestCase
             new Filesystem(),
             self::SCRIPT,
             $this->folder.'/prompts',
+            new RecordedBuildStops(),
         ), new Filesystem()));
         $tester = new CommandTester($application->find('intakt:build:run'));
         $tester->execute([

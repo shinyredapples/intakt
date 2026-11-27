@@ -68,16 +68,27 @@ final class ReviewFullRecordTest extends DashboardPageTestCase
         self::assertSame([0, 1, 1], [$record->filter('.state-block')->count(), $record->filter('#live-log-pane')->count(), $record->filter('#timeline-pane')->count()]);
     }
 
-    // A pass that ended without a verdict keeps the earlier judged pass's findings to fix, and that pass is not the newest, which alone opens on arrival.
-    public function testAFindingLinkIntoAPassThatIsNotTheNewestFindsThatPassOpen(): void
+    // A pass that ended without a verdict keeps the earlier judged pass's findings to fix, so the row must name the pass that holds the finding.
+    public function testAFindingRowAfterAPassThatEndedWithoutACallOpensTheFindingOfTheJudgedPass(): void
     {
         $this->givenAChangesRoundWithOneFindingToFix();
         $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
         self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
         $link = (string) $this->browser->request('GET', '/reviews/round-2')->filter('.to-fix a.fix-row')->attr('href');
-        self::assertSame('/reviews/round-1/record#round-round-1-finding-F1', $link);
+        self::assertSame('/reviews/round-1/findings/F1', $link);
 
-        $record = $this->browser->request('GET', $link);
+        $this->browser->request('GET', $link);
+
+        self::assertResponseIsSuccessful();
+    }
+
+    public function testTheFullRecordOfAPassThatIsNotTheNewestOpensThatPass(): void
+    {
+        $this->givenAChangesRoundWithOneFindingToFix();
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
+
+        $record = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertCount(1, $record->filter('#round-round-1 > details.ev[open] li.finding-card#round-round-1-finding-F1'));
     }

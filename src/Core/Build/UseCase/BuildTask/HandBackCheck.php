@@ -7,6 +7,7 @@ namespace Intakt\Core\Build\UseCase\BuildTask;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
+use Intakt\Core\Git\Contract\ObjectIdMalformed;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\HandBack;
@@ -14,7 +15,6 @@ use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
 use Intakt\Core\HandBack\Contract\HandBackChecks;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
-use InvalidArgumentException;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Exception\ProcessSignaledException;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
@@ -46,9 +46,9 @@ final readonly class HandBackCheck
 
             $this->checkout->takeCheckedHead($request->project, new BranchHead($request->branch, $result->head), $request->directory);
         } catch (ExceptionInterface $stopped) {
-            // Caught first, because a process failure may also be an InvalidArgumentException, and its message names the whole command line.
+            // Caught first, because a process failure's message names the whole command line.
             return $this->stoppedBy($stopped);
-        } catch (BuildCheckoutFailed|InvalidArgumentException|HandBackBranchRefused|HandBackNotChecked|RepositoryAttributesRefused $failure) {
+        } catch (BuildCheckoutFailed|ObjectIdMalformed|HandBackBranchRefused|HandBackNotChecked|RepositoryAttributesRefused $failure) {
             return $failure->getMessage();
         }
 

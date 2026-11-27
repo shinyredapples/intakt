@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Contract;
 
 use Intakt\Core\Review\Contract\SameCause;
+use Intakt\Core\Review\Contract\SameCauseLinkRefused;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -41,6 +42,23 @@ final class SameCauseTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         new SameCause()->with('F3', '');
+    }
+
+    public function testAStoredLinkWithoutACauseIdIsNamedAsRefused(): void
+    {
+        self::assertSame('A same-cause link needs a finding id and a cause id.', SameCause::refusalOfStored('F3', ''));
+    }
+
+    public function testAStoredLinkOfAFindingToItselfIsNotNamedAsRefused(): void
+    {
+        self::assertNull(SameCause::refusalOfStored('F3', 'F3'));
+    }
+
+    public function testAStoredLinkThatIsNamedAsRefusedIsRefusedWhenAdded(): void
+    {
+        $this->expectExceptionObject(new SameCauseLinkRefused((string) SameCause::refusalOfStored('', 'F1')));
+
+        new SameCause()->withStored('', 'F1');
     }
 
     public function testAFindingIdThatOnlyStartsLikeItsCauseIsAllowed(): void

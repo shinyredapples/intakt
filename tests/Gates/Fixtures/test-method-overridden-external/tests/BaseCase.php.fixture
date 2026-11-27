@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\Attributes\DataProviderExternal;
+use PHPUnit\Framework\TestCase;
+
+abstract class BaseCase extends TestCase
+{
+    #[DataProviderExternal(RowsTest::class, 'testRows')]
+    public function testReadingRowsWorks(int $row = 1): void
+    {
+        self::assertSame(1, $row);
+    }
+}

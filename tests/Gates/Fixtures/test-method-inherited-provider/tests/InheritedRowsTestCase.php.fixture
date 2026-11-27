@@ -1,0 +1,18 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\TestCase;
+
+abstract class InheritedRowsTestCase extends TestCase
+{
+    /**
+     * @return iterable<array{int}>
+     */
+    public static function testRows(): iterable
+    {
+        yield [1];
+    }
+}
