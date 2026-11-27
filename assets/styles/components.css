@@ -196,6 +196,13 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   color: var(--ink); font: 500 var(--t13)/1 var(--f-head); cursor: pointer;
 }
 .fchip[aria-pressed="true"] { border-color: transparent; background: var(--selected); }
+.filters { display: flex; flex-wrap: wrap; gap: var(--s8); align-items: center; margin-bottom: var(--s16); }
+.filters .input { max-width: 240px; height: 32px; margin-left: auto; }
+/* History's own project picker is for a phone, whose top bar has no project filter; a wider screen filters in the top bar. */
+.filters #history-project { display: none; }
+/* Its own mark, not hidden, because the project filter owns a row's hidden and either may hide it. */
+.ledger tr[data-filtered-out] { display: none; }
+.history-none:empty { margin: 0; }
 
 /* Toasts */
 .toast {
@@ -306,6 +313,14 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .seg { display: flex; }
   .seg button { flex: 1; height: var(--tab-h); }
   .input, .select { height: 48px; }
+  /* overflow-x: auto clips on every side, so the padding keeps the 2px focus ring and its 2px offset inside the box; the negative inline margin keeps the chips lined up with the page. */
+  .filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-block: var(--s4); padding-inline: var(--s4); margin-inline: calc(-1 * var(--s4)); }
+  .filters .input { flex: none; min-width: 200px; height: 48px; }
+  .filters #history-project { display: block; flex: none; width: auto; max-width: 60%; height: 48px; }
+  /* The mock stacks a History row's cells on a phone. The headers are clipped like .sr-only rather than removed, so a screen reader still names a stacked cell, also one that reads only "None". A row the project filter or a chip hides keeps display: none, which the row rule would otherwise beat. */
+  .ledger.history thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .ledger.history tr:not([hidden], [data-filtered-out]) { display: grid; grid-template-columns: minmax(0, 1fr); padding: var(--s12) 0; border-bottom: 1px solid var(--hairline); }
+  .ledger.history td { padding: 2px 0; border: 0; }
   .stepper button { width: 48px; height: 46px; }
   .copy { flex-wrap: wrap; padding: calc(var(--s8) + 2px); }
   .copy code { flex: 1 1 100%; padding: var(--s4); white-space: normal; overflow-wrap: anywhere; }
@@ -559,6 +574,10 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .ledger td { padding: var(--s12) var(--s12) var(--s12) 0; border-bottom: 1px solid var(--hairline); vertical-align: top; overflow-wrap: anywhere; }
 .ledger .num { text-align: right; }
 .ledger .when { color: var(--muted); white-space: nowrap; }
+/* History's Change column, as the mock draws it: the value before muted, the value after it bold. */
+.ledger .change b { font-weight: 600; }
+.ledger .change b:first-of-type { font-weight: 400; color: var(--muted); }
+.ledger .change .arrow { color: var(--muted); }
 /* The review list: each row is one link of at least 44 px at every width (WCAG 2.2 asks for 24), and the round id sits outside it, so a click selects the whole id for copying instead of opening the round. */
 .review-rows { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--hairline); }
 .review-row { border-bottom: 1px solid var(--hairline); }

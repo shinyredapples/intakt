@@ -2,6 +2,9 @@
 
 {% block title %}Trends - Intakt{% endblock %}
 
+{#- A sub-tab of History, so the rail marks History. -#}
+{% set rail_section = 'history' %}
+
 {#- Always loaded, not only with live updates, because the charts' tooltip controller starts from it. -#}
 {% block importmap %}{{ importmap('app') }}{% endblock %}
 
@@ -57,6 +60,7 @@
     </form>
     {% endif %}
 </div>
+{{ include('dashboard/_history_subtabs.html.twig', {current: 'trends'}, with_context = false) }}
 {% set cost = trends.costPerRound %}
 {% set oneReviewerOnly = trends.caughtByOneReviewerOnlyPercent %}
 {% set reviewer = enum('Intakt\\Core\\Dashboard\\Domain\\Character').CodeReviewer %}

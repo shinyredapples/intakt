@@ -149,12 +149,13 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $run = 1 === preg_match('/"run":"([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})"/', $payloads[0] ?? '', $match) ? $match[1] : 'no run';
         self::assertSame(
             [
-                '{"project":"alpha","task":"7","run":"'.$run.'","step":"task","outcome":"passed","failure":null}',
-                '{"project":"alpha","task":"7","run":"'.$run.'","step":"mirror","outcome":"passed","failure":null}',
-                '{"project":"alpha","task":"7","run":"'.$run.'","step":"clone","outcome":"passed","failure":null}',
-                '{"project":"alpha","task":"7","run":"'.$run.'","step":"build_job","outcome":"asked","failure":null}',
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"task","outcome":"passed","failure":null}'],
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"mirror","outcome":"passed","failure":null}'],
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"clone","outcome":"passed","failure":null}'],
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"build_job","outcome":"asked","failure":null}'],
+                ['task_parked', '{"project":"alpha","task":"7","run":"'.$run.'"}'],
             ],
-            $payloads,
+            array_map(array_values(...), $this->connection()->fetchAllAssociative('SELECT kind, payload FROM ledger_event ORDER BY position')),
         );
         self::assertSame([], glob($this->folder.'/hand-backs/*'));
     }
@@ -184,7 +185,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone], $outcome->passedSteps());
         // The scripted job would have asked another question, so this one proves the job never ran.
         self::assertStringContainsString('missing: Must keep working.', $this->question());
-        $payload = $this->connection()->fetchOne('SELECT payload FROM ledger_event ORDER BY position DESC LIMIT 1');
+        $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
         self::assertIsString($payload);
         self::assertStringContainsString('"step":"build_job","outcome":"asked","failure":null}', $payload);
     }
