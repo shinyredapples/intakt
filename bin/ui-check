@@ -113,12 +113,13 @@ async function expectTheme(page, theme, errors) {
   if (shown !== theme) errors.push(`the page shows the ${shown} theme instead of ${theme}`);
 }
 
-// The overlay is checked with a page's name typed, so the Pages group it answers with is checked too.
+// The overlay is checked with a page's name typed, so the Pages group it answers with is checked too. Each typed letter asks again and marks the results busy until the newest answer replaces them, so a row from a shorter prefix ("Tea") never passes for the answer to the whole name.
 async function openSearch(page, query) {
   await page.keyboard.press('Control+k');
   await page.waitForSelector('#search:not([hidden]) #search-results > *');
   await page.keyboard.type(query);
-  await page.waitForFunction((label) => [...document.querySelectorAll('#search-results .res .lbl')].some((row) => row.textContent.trim() === label), query);
+  await page.waitForFunction((typed) => document.querySelector('#search-q').value === typed && !document.querySelector('#search-results').hasAttribute('aria-busy'), query);
+  await page.waitForFunction((label) => [...document.querySelectorAll('#search-results [role="group"]')].some((group) => group.querySelector('.grp')?.textContent.trim() === 'Pages' && [...group.querySelectorAll('a[href]')].some((link) => new URL(link.href).pathname === '/' + label.toLowerCase())), query);
 }
 
 async function runAxe() {
