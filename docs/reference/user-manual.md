@@ -1013,7 +1013,7 @@ disk:
     min_free_inodes: 100000
 ```
 
-`min_free_bytes` (default 2147483648, which is 2 GiB) and `min_free_inodes` (default 100000) are each a whole number of at least 1. Below either one, the check holds new work on that folder; work already running is not stopped, and the hold clears by itself once space is back. A file system without a fixed inode count (btrfs) is checked by its bytes only. A value that is not a whole number of at least 1 stops the application at start with a message naming the key. No step asks the check yet: the mirror update and the build clone will. See [Disk floors](../architecture/disk-floors.md).
+`min_free_bytes` (default 2147483648, which is 2 GiB) and `min_free_inodes` (default 100000) are each a whole number of at least 1. Below either one, the check holds new work on that folder; work already running is not stopped, and the hold clears by itself once space is back. A file system without a fixed inode count (btrfs) is checked by its bytes only. A value that is not a whole number of at least 1 stops the application at start with a message naming the key. Two steps ask the check: a mirror update (`intakt:mirror:update`, also inside `intakt:build:task`) checks the mirrors folder `var/mirrors`, and a build clone (`intakt:build:clone`, also inside `intakt:build:task`) checks the folder the clone goes into. Below a floor, or when the disk's free space cannot be read, the step fails with that reason and writes nothing; run it again once space is back. For now `intakt:build:task` records a held step as a failed one. See [Disk floors](../architecture/disk-floors.md).
 
 ## Intakt's GitHub App
 
