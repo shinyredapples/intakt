@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class ConcreteRuleTest extends RuleCaseTestCase
+{
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function testCases(): iterable
+    {
+        yield 'one' => ['one'];
+    }
+}

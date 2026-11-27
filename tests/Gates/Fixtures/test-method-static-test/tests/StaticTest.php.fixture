@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\TestCase;
+
+final class StaticTest extends TestCase
+{
+    public static function testRun(): void
+    {
+        self::assertTrue(true);
+    }
+}
