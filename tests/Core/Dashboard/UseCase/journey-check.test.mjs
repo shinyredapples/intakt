@@ -34,11 +34,15 @@ function scratch() {
     return mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), 'journey-check-'));
 }
 
+// The page doubles never load a document, so the report the journey check installs is accepted and never called.
+const REPORTS_UNUSED = { exposeBinding: async () => {}, addInitScript: async () => {}, evaluate: async () => {} };
+
 // Stands in for a browser whose page cannot find the button and cannot take a screenshot either.
 function browserWithBrokenPage() {
     const page = {
         setDefaultTimeout() {},
         on() {},
+        ...REPORTS_UNUSED,
         getByRole: () => ({ click: async () => { throw new Error('locator.click: Timeout 10000ms exceeded.\nCall log: waiting for button'); } }),
         screenshot: async () => { throw new Error('the page is gone'); },
     };
@@ -217,7 +221,7 @@ for (const [position, shown] of [[3, 'the verdict'], [4, 'the finding']]) {
             click: async () => visit('/demo'),
             waitFor: async () => queueMicrotask(() => visit('/reviews/r1')),
         };
-        Object.assign(page, { url: () => at, mainFrame: () => page, getByRole: () => locator });
+        Object.assign(page, { url: () => at, mainFrame: () => page, getByRole: () => locator, ...REPORTS_UNUSED });
         const { steps } = JOURNEYS[0];
         await steps[1].run(page, origin);
 
@@ -236,42 +240,11 @@ test('a verdict seen on the review page right before the page leaves and returns
         click: async () => { visit('/demo'); visit('/reviews/r1'); },
         waitFor: async () => { visit('/demo'); visit('/reviews/r1'); },
     };
-    Object.assign(page, { url: () => at, mainFrame: () => page, getByRole: () => locator });
+    Object.assign(page, { url: () => at, mainFrame: () => page, getByRole: () => locator, ...REPORTS_UNUSED });
     const { steps } = JOURNEYS[0];
     await steps[1].run(page, origin);
 
     await assert.rejects(steps[3].run(page, origin), /the page moved on to http:\/\/localhost\/reviews\/r1 while http:\/\/localhost\/reviews\/r1 was looked at/);
-});
-
-// Forces the order: the demo page loads with HTTP 500, then a later visit of /demo is answered HTTP 200 and cancelled before it replaces the document.
-test('a visit of /demo answered HTTP 200 but cancelled after a load that answered HTTP 500 fails step 3', async (t) => {
-    const soon = globalThis.setTimeout;
-    t.mock.method(globalThis, 'setTimeout', (callback) => soon(callback, 10));
-    const origin = 'http://localhost';
-    const page = new EventEmitter();
-    let at = `${origin}/setup?step=5`;
-    const request = () => ({ redirectedFrom: () => null, isNavigationRequest: () => true, headers: () => ({}) });
-    const answer = (req, code) => page.emit('response', { url: () => `${origin}/demo`, status: () => code, frame: () => page, request: () => req });
-    const locator = {
-        filter: () => locator,
-        first: () => locator,
-        click: async () => {
-            const loaded = request();
-            answer(loaded, 500);
-            at = `${origin}/demo`;
-            page.emit('framenavigated', page);
-            page.emit('requestfinished', loaded);
-            const cancelled = request();
-            answer(cancelled, 200);
-            page.emit('requestfailed', cancelled);
-        },
-        waitFor: async () => {},
-    };
-    Object.assign(page, { url: () => at, mainFrame: () => page, getByRole: () => locator });
-    const { steps } = JOURNEYS[0];
-    await steps[1].run(page, origin);
-
-    await assert.rejects(steps[2].run(page, origin), /it led to http:\/\/localhost\/demo \(HTTP 500\)/);
 });
 
 // Forces the order with a stand-in clock: the review page is reached, then the step's time runs out before the look starts, or the look matches only after it ran out.
@@ -292,7 +265,7 @@ for (const [when, clock, error] of [
             click: async () => { visit('/demo'); visit('/reviews/r1'); },
             waitFor: async () => {},
         };
-        Object.assign(page, { url: () => at, mainFrame: () => page, getByRole: () => locator });
+        Object.assign(page, { url: () => at, mainFrame: () => page, getByRole: () => locator, ...REPORTS_UNUSED });
         await JOURNEYS[0].steps[1].run(page, origin);
 
         await assert.rejects(seeRoleSince('/demo', 'heading', 'Changes needed', 1000).run(page, origin), error);

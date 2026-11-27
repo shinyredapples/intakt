@@ -92,14 +92,18 @@ final readonly class InstallWalk
         $address = escapeshellarg(InstallCheck::ADDRESS);
         $results[] = $this->step(self::DEMO, 'node '.escapeshellarg($this->checkout.'/bin/install-check-demo').' '.$address.' '.escapeshellarg($this->logs), $clone);
         $results[] = $this->step(self::UI, 'node bin/ui-check '.$address, $clone);
-        // Because the first journey presses the button that plays the demo run, which the wizard's last step /setup?step=5 offers again only once the run the demo step played is removed.
-        $removal = $this->step(self::REMOVAL, 'docker compose exec -T intakt php bin/console intakt:demo:remove', $clone);
-        $results[] = $removal;
-        $results[] = match (true) {
-            !is_file($clone.'/bin/journey-check') => $this->skipped(self::JOURNEYS, 'the clone has no bin/journey-check'),
-            InstallStatus::Passed !== $removal->status => $this->skipped(self::JOURNEYS, 'the played demo run was not removed'),
-            default => $this->step(self::JOURNEYS, 'node bin/journey-check '.$address, $clone),
-        };
+        // An older clone has neither the journey check nor the removal command, so both are skipped and it is never sent the removal.
+        if (!is_file($clone.'/bin/journey-check')) {
+            $results[] = $this->skipped(self::REMOVAL, 'the clone has no bin/journey-check');
+            $results[] = $this->skipped(self::JOURNEYS, 'the clone has no bin/journey-check');
+        } else {
+            // Because the first journey presses the button that plays the demo run, which the wizard's last step /setup?step=5 offers again only once the run the demo step played is removed.
+            $removal = $this->step(self::REMOVAL, 'docker compose exec -T intakt php bin/console intakt:demo:remove', $clone);
+            $results[] = $removal;
+            $results[] = InstallStatus::Passed === $removal->status
+                ? $this->step(self::JOURNEYS, 'node bin/journey-check '.$address, $clone)
+                : $this->skipped(self::JOURNEYS, 'the played demo run was not removed');
+        }
         $results[] = $this->keyedStep(true, $clone);
         $this->keepScreenshots($clone);
 

@@ -446,6 +446,8 @@ final class InstallCheckTest extends TestCase
         $report = $this->check()->run('/some/repository');
 
         self::assertSame('skipped', $this->statuses($report)['journey-check']);
+        self::assertSame('skipped', $this->statuses($report)['demo-removal: remove the played demo run']);
+        self::assertSame([], array_filter($this->calls, static fn (array $call): bool => str_contains($call['command'], 'intakt:demo:remove')));
         self::assertFalse($report->hasFailed());
     }
 

@@ -147,6 +147,9 @@ function open(pathOnSite) {
       const response = await page.goto(address + pathOnSite);
       if (response === null) throw new Error(`no page was loaded for ${pathOnSite}`);
       if (!response.ok()) throw new Error(`HTTP ${response.status()} for ${pathOnSite}`);
+      // Another page may show the same heading and button, so a redirect or any other address than the one opened fails the step.
+      const reached = withoutFragment(page.url());
+      if (response.request().redirectedFrom() !== null || reached !== address + pathOnSite) throw new Error(`${pathOnSite} led to ${originAndPath(reached)}`);
     },
   };
 }
@@ -210,16 +213,16 @@ function status(code) {
 function press(role, name) {
   return {
     name: `press the ${role} "${name}"`,
-    run: (page) => {
-      watch(page);
+    run: async (page) => {
+      await watch(page);
 
       return page.getByRole(role, { name, exact: true }).click();
     },
   };
 }
 
-// A page can change its address with or without loading a new document (Turbo fetches the page and pushes the address), so the main frame's addresses and the answers to its requests are kept apart and joined by address.
-function watch(page) {
+// A page can change its address with or without loading a new document (Turbo fetches the page and pushes the address), so the main frame's addresses and the statuses its documents report are kept apart and joined by address.
+async function watch(page) {
   TRAILS.get(page)?.stop();
   const trail = { visits: [], statuses: new Map(), changed: () => {} };
   const visited = (frame) => {
@@ -227,66 +230,61 @@ function watch(page) {
     trail.visits.push(withoutFragment(frame.url()));
     trail.changed();
   };
-  // An answer without content (204, 205) leaves the document in place, so it never stands for the page at that address.
-  // An answer counts only once its request finished: a visit cancelled after its answer arrived never replaced the document, so its status must not stand for the page that did load.
-  const answers = new Map();
-  const answered = (response) => {
-    if (!isOfMainFrame(page, response) || !suppliedThePage(response.request()) || [204, 205].includes(response.status())) return;
-    answers.set(response.request(), { address: withoutFragment(response.url()), code: response.status() });
-  };
-  const finished = (request) => {
-    const answer = answers.get(request);
-    if (answer === undefined) return;
-    answers.delete(request);
-    recordStatus(trail.statuses, answer.address, answer.code);
-    trail.changed();
-  };
-  const failed = (request) => answers.delete(request);
-  trail.stop = () => {
-    page.off('framenavigated', visited);
-    page.off('response', answered);
-    page.off('requestfinished', finished);
-    page.off('requestfailed', failed);
-  };
+  trail.stop = () => page.off('framenavigated', visited);
   page.on('framenavigated', visited);
-  page.on('response', answered);
-  page.on('requestfinished', finished);
-  page.on('requestfailed', failed);
   TRAILS.set(page, trail);
+  await listenToReports(page);
 }
 
-// Only finished answers that supplied the page come here, so the latest one for an address is the one the page shows.
+// The binding's name on the page, and the pages it is registered on, as Playwright refuses a second binding of the same name.
+const REPORT_BINDING = '__journeyCheckReport';
+const REPORTING = new WeakSet();
+
+// A finished request does not say that its document was shown, and a document that was shown may never finish loading, so the status comes from the document itself: the page reports its address and the status that supplied what it shows.
+// The script is installed for every later document and into the current one, as a Turbo visit from /setup renders /demo in the same document.
+async function listenToReports(page) {
+  if (!REPORTING.has(page)) {
+    REPORTING.add(page);
+    await page.exposeBinding(REPORT_BINDING, (source, address, code) => {
+      if (source.frame !== page.mainFrame()) return;
+      const trail = TRAILS.get(page);
+      if (trail === undefined || typeof address !== 'string' || !URL.canParse(address)) return;
+      recordStatus(trail.statuses, withoutFragment(address), code);
+      trail.changed();
+    });
+    await page.addInitScript(REPORTER);
+  }
+  await page.evaluate(REPORTER);
+}
+
+// Runs in the page. Event names as Turbo 8.0.23 (importmap.php) dispatches them: turbo:before-fetch-response carries the answer of a fetch on the element that asked for it, and turbo:render follows only a render of the whole page.
+// A Drive visit asks on the root element and a Drive form (the Play the demo run button) on its form; a frame's request or a link prefetch asks on the frame or the link, so these are left out, as is a form inside a frame.
+// A preview from Turbo's cache is no answer, and a status is used once, so a render without an answer of its own never takes an older one.
+const REPORTER = `(() => {
+  if (window.__journeyCheckReporter) return;
+  window.__journeyCheckReporter = true;
+  const report = (code) => { try { window.${REPORT_BINDING}?.(location.href, code ?? null); } catch {} };
+  const askedForThePage = (target) => target === document.documentElement || (target instanceof HTMLFormElement && target.closest('turbo-frame') === null);
+  let answer = null;
+  document.addEventListener('turbo:before-fetch-response', (event) => {
+    if (askedForThePage(event.target)) answer = event.detail?.fetchResponse?.statusCode ?? null;
+  }, true);
+  document.addEventListener('turbo:render', () => {
+    if (document.documentElement.hasAttribute('data-turbo-preview')) return;
+    const code = answer;
+    answer = null;
+    report(code);
+  });
+  report(performance.getEntriesByType('navigation')[0]?.responseStatus);
+})()`;
+
+// The latest report for an address is the page that shows it; no status, or 0, is no answer seen.
 function recordStatus(statuses, address, code) {
-  statuses.set(address, code);
-}
-
-// The page's own fetches answer for the main frame too, but only a navigation or a Turbo Drive visit (never a frame's request or a prefetch) puts its answer in the page's place.
-function suppliedThePage(request) {
-  const first = firstOf(request);
-  if (first.isNavigationRequest()) return true;
-  const headers = first.headers();
-
-  return first.resourceType() === 'fetch' && headers['x-turbo-request-id'] !== undefined && headers['turbo-frame'] === undefined && headers['x-sec-purpose'] !== 'prefetch';
-}
-
-// The browser does not show a fetch's own headers on the request a redirect leads to, so the request that started the chain is judged, as for the demo button's post that redirects to /demo.
-function firstOf(request) {
-  const from = request.redirectedFrom();
-
-  return from === null ? request : firstOf(from);
+  statuses.set(address, Number.isInteger(code) && code > 0 ? code : undefined);
 }
 
 function withoutFragment(address) {
   return address.split('#')[0];
-}
-
-// Playwright throws when asked for the frame of a service worker's request, and a throw in a listener would stop the whole check.
-function isOfMainFrame(page, response) {
-  try {
-    return response.frame() === page.mainFrame();
-  } catch {
-    return false;
-  }
 }
 
 function see(text) {

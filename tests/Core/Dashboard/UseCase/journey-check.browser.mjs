@@ -77,6 +77,9 @@ function routedSite(pages, statuses = {}) {
     };
 }
 
+// Turbo 8.0.23's events around a render of the whole page, as the stand-ins use them: the answer on the element that asked for it (the root element for a visit, the form for a form), then the render on the root element.
+const TURBO = '<script>function turboVisit(url, init, askedOn, then) { fetch(url, init).then((answer) => { (askedOn ?? document.documentElement).dispatchEvent(new CustomEvent("turbo:before-fetch-response", { bubbles: true, detail: { fetchResponse: { statusCode: answer.status } } })); return answer.text().then(() => { history.pushState({}, "", answer.url); document.body.innerHTML = "<main><h1>The demo run</h1></main>"; document.documentElement.dispatchEvent(new Event("turbo:render", { bubbles: true })); then(); }); }); }</script>';
+
 const [FIRST_RUN] = JOURNEYS;
 
 function scratch() {
@@ -174,8 +177,8 @@ test('the first journey passes when the demo page follows to the review at once,
 
 test('the first journey passes when the button fetches the demo page and pushes its address, as Turbo does, and the page follows at once', async () => {
     const pages = demoSite();
-    const fetchAndPush = 'fetch(\'/demo?play=p1\', { headers: { \'X-Turbo-Request-Id\': \'r\' } }).then((answer) => answer.text()).then(() => { history.pushState({}, \'\', \'/demo?play=p1\'); location.assign(\'/reviews/r1\'); })';
-    pages['/setup?step=5'] = `<!doctype html><html lang="en"><head><title>Start</title></head><body><main><h1>See a real review</h1><button onclick="${fetchAndPush}">Play the demo run</button></main></body></html>`;
+    const fetchAndPush = 'turboVisit(\'/demo?play=p1\', { headers: { \'X-Turbo-Request-Id\': \'r\' } }, null, () => location.assign(\'/reviews/r1\'))';
+    pages['/setup?step=5'] = `<!doctype html><html lang="en"><head><title>Start</title>${TURBO}</head><body><main><h1>See a real review</h1><button onclick="${fetchAndPush}">Play the demo run</button></main></body></html>`;
 
     const result = await runJourney(routedSite(pages), ORIGIN, FIRST_RUN, scratch(), 1);
 
@@ -353,8 +356,8 @@ test('the first journey passes when the button posts as Turbo does, the answer r
         return response.writeHead(200, { 'content-type': 'text/html' }).end(pages[request.url] ?? pages[request.url.split('?')[0]] ?? '');
     });
     const pages = demoSite();
-    const post = 'fetch(\'/demo\', { method: \'POST\', headers: { \'X-Turbo-Request-Id\': \'r\' } }).then((answer) => answer.text().then(() => { history.pushState({}, \'\', answer.url); location.assign(\'/reviews/r1\'); }))';
-    pages['/setup?step=5'] = `<!doctype html><html lang="en"><head><title>Start</title></head><body><main><h1>See a real review</h1><button onclick="${post}">Play the demo run</button></main></body></html>`;
+    const post = 'event.preventDefault(); turboVisit(\'/demo\', { method: \'POST\', headers: { \'X-Turbo-Request-Id\': \'r\' } }, this, () => location.assign(\'/reviews/r1\'))';
+    pages['/setup?step=5'] = `<!doctype html><html lang="en"><head><title>Start</title>${TURBO}</head><body><main><h1>See a real review</h1><form method="post" action="/demo" onsubmit="${post}"><button>Play the demo run</button></form></main></body></html>`;
     await new Promise((resolve) => server.listen(0, 'localhost', resolve));
     try {
         const result = await runJourney(browser, `http://localhost:${server.address().port}`, FIRST_RUN, scratch(), 1);
@@ -435,4 +438,73 @@ test('the wait for the review page and the look on it share one deadline, so a v
 
     assert.equal(result.failure.step, 'see the heading "Changes needed" on the review page reached from /demo');
     assert.match(result.failure.error, /Timeout \d+ms exceeded/);
+});
+
+test('a last setup step that redirects to another step showing the same heading and button fails the first journey at step 1', async () => {
+    const pages = demoSite();
+    const server = createServer((request, response) => {
+        if (request.url === '/setup?step=5') return response.writeHead(302, { location: '/setup?step=1' }).end();
+
+        return response.writeHead(200, { 'content-type': 'text/html' }).end(request.url === '/setup?step=1' ? pages['/setup?step=5'] : '');
+    });
+    await new Promise((resolve) => server.listen(0, 'localhost', resolve));
+    try {
+        const address = `http://localhost:${server.address().port}`;
+        const result = await runJourney(browser, address, FIRST_RUN, scratch(), 1);
+
+        assert.equal(result.failure.step, 'open the last setup step and see the start');
+        assert.equal(result.failure.error, `/setup?step=5 led to ${address}/setup`);
+    } finally {
+        server.closeAllConnections();
+        server.close();
+    }
+});
+
+test('a visit of /demo cancelled before any answer arrived leaves the earlier HTTP 500 and fails the first journey at step 3', async () => {
+    const pages = demoSite({ demo: '<h1>The demo run</h1><script>setTimeout(() => { location.assign(location.href); setTimeout(() => window.stop(), 200); }, 50);</script>' });
+    const site = routedSite(pages, { '/demo': [500] });
+    let demoVisits = 0;
+    const result = await runJourney({
+        newContext: async () => {
+            const context = await site.newContext();
+            // The second visit of /demo is never answered, so only the cancel ends it.
+            await context.route((url) => url.pathname === '/demo', (route) => (++demoVisits === 1 ? route.fallback() : undefined));
+
+            return context;
+        },
+    }, ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.equal(result.failure.error, 'the press did not lead to /demo with a success status within 10 s; it led to http://localhost/demo (HTTP 500)');
+});
+
+test('the first journey passes when /demo answers HTTP 200 and follows to the review before its body has finished', async () => {
+    const pages = demoSite();
+    const server = createServer((request, response) => {
+        const [path] = request.url.split('?');
+        if (path !== '/demo') return response.writeHead(200, { 'content-type': 'text/html' }).end(pages[request.url] ?? pages[path] ?? '');
+        response.writeHead(200, { 'content-type': 'text/html' });
+        // The rest of the body would come later; the page has left before it does.
+        response.write('<!doctype html><html lang="en"><head><title>The demo run</title></head><body><main><h1>The demo run</h1><script>location.assign(\'/reviews/r1\');</script>' + ' '.repeat(4096));
+        setTimeout(() => response.end('</main></body></html>'), 5000).unref();
+    });
+    await new Promise((resolve) => server.listen(0, 'localhost', resolve));
+    try {
+        const result = await runJourney(browser, `http://localhost:${server.address().port}`, FIRST_RUN, scratch(), 1);
+
+        assert.equal(result.failure, null);
+    } finally {
+        server.closeAllConnections();
+        server.close();
+    }
+});
+
+test('a /demo document that answered HTTP 500 and a Turbo fetch of /demo answered HTTP 200 that nothing renders fails the first journey at step 3', async () => {
+    const turboFetch = 'fetch(location.href, { headers: { \'X-Turbo-Request-Id\': \'r\' } }).then((answer) => { document.documentElement.dispatchEvent(new CustomEvent(\'turbo:before-fetch-response\', { bubbles: true, detail: { fetchResponse: { statusCode: answer.status } } })); return answer.text(); }).then(() => location.assign(\'/reviews/r1\'));';
+    const pages = demoSite({ demo: `<h1>The demo run</h1><script>${turboFetch}</script>` });
+
+    const result = await runJourney(routedSite(pages, { '/demo': [500] }), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.match(result.failure.error, /it led to http:\/\/localhost\/demo \(HTTP 500\), then /);
 });
