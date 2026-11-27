@@ -4,16 +4,23 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Symfony\Component\Serializer\Attribute\Ignore;
+use Symfony\Component\Validator\Constraints\Callback;
 use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
 use Symfony\Component\Validator\Constraints\NotBlank;
+use Symfony\Component\Validator\Constraints\NotNull;
 use Symfony\Component\Validator\Constraints\Valid;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 // Property names are the JSON field names because Symfony AI's structured output ignores serializer name mapping; excluded because that output builds it, not the container.
 #[Exclude]
 final readonly class Finding
 {
+    // One home for the example the schema and the reviewer prompt give, so it cannot drift past the title's own rules.
+    public const string TITLE_EXAMPLE = 'A large cart loses its discount';
+
     public function __construct(
         #[NotBlank]
         public string $id,
@@ -33,6 +40,16 @@ final readonly class Finding
         public bool $regression = false,
         // A field of the output contract rather than words in the text, because plain code is to route a gap in a gate that passed without parsing prose.
         public bool $gate_gap = false,
+        // Nullable only because a finding stored before reviewers named one has none, so NotNull still refuses a reviewer's answer without it; Symfony AI's schema keeps null in the type despite NotNull: upstream/ai-platform-not-null-promoted-property
+        #[NotNull]
+        #[NotBlank]
+        // Not Symfony's WordCount, because it counts a punctuation mark as a word, so "tidy-up" would be three: upstream/validator-word-count-counts-punctuation
+        #[Callback([self::class, 'refuseOutsideThreeToSixWords'])]
+        #[Schema(description: 'The problem in 3 to 6 plain words, for example "'.self::TITLE_EXAMPLE.'".')]
+        public ?string $title = null,
+        #[NotNull]
+        #[Schema(description: 'What sort of problem this is.')]
+        public ?FindingKind $kind = null,
         // Ignored, so the schema never asks a reviewer for it and an answer naming it is refused; only plain code merges findings, and StoredFindingNormalizer keeps it in stored JSON.
         #[Ignore]
         public FindingIds $merged = new FindingIds(),
@@ -40,6 +57,24 @@ final readonly class Finding
         #[Ignore]
         private ?string $judge_note = null,
     ) {
+    }
+
+    // One meaning of a word for both limits: a part between spaces that holds a letter or a decimal digit, so "tidy-up" and "src/Cart.php" are one word each and ". . ." and "¼ ½ ¾" are none.
+    public static function refuseOutsideThreeToSixWords(?string $title, ExecutionContextInterface $context): void
+    {
+        if (null === $title) {
+            return;
+        }
+
+        $words = preg_match_all('/[^\s\p{L}\p{Nd}]*[\p{L}\p{Nd}]\S*/u', $title);
+
+        if ($words < 3) {
+            $context->buildViolation('At least three words of the title must hold a letter or a digit.')->addViolation();
+        }
+
+        if ($words > 6) {
+            $context->buildViolation('At most six words of the title may hold a letter or a digit.')->addViolation();
+        }
     }
 
     public function judgeNote(): ?string

@@ -6,16 +6,20 @@ namespace Intakt\Tests\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\HistoryRow;
+use Intakt\Core\Dashboard\Domain\HistorySource;
+use Intakt\Core\Dashboard\Domain\HistoryTopic;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(HistoryRow::class)]
+#[UsesClass(HistoryTopic::class)]
 #[UsesClass(PayloadFields::class)]
 final class HistoryRowTest extends TestCase
 {
@@ -66,6 +70,14 @@ final class HistoryRowTest extends TestCase
         self::assertNull($unreadable->expires);
     }
 
+    public function testARowShowsTheRecordedEndOfAnAccountCooldownAsItsExpiry(): void
+    {
+        $row = HistoryRow::of(new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::AccountCooledDown, '{"account":"sample","until":"2026-12-01T10:00:00+00:00"}'), new DateTimeImmutable('2026-12-01T09:00:00+00:00')));
+
+        self::assertSame('2026-12-01 10:00:00', $row->expires?->format('Y-m-d H:i:s'));
+        self::assertContains(HistoryTopic::Limits, $row->topics());
+    }
+
     public function testASecretValueAppearsInARowOnlyAsItsFingerprint(): void
     {
         $row = HistoryRow::of($this->recorded(['fingerprint' => 'ab12cd', 'before' => 'sk-old-secret', 'after' => 'sk-new-secret']));
@@ -86,6 +98,70 @@ final class HistoryRowTest extends TestCase
         self::assertSame('Intakt', $unnamed->who);
         self::assertNull($unnamed->project);
         self::assertSame('Owner asked', $unnamed->label());
+    }
+
+    public function testAStopRequestFromTheDashboardCountsAsFromTheDashboardWithoutAnActor(): void
+    {
+        $stop = HistoryRow::of(new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::ReviewerStopRequested, '{"round":"round-1","reviewer":"reviewer-1"}'), new DateTimeImmutable('2026-11-25T10:00:00+00:00')));
+
+        self::assertSame(HistorySource::Dashboard, $stop->source);
+        self::assertSame(HistorySource::Intakt, HistoryRow::of($this->recorded(['round' => 'round-1']))->source);
+    }
+
+    public function testAStopRequestFromTheDashboardWithoutAnActorShowsDashboardAsItsWho(): void
+    {
+        $stop = HistoryRow::of(new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::ReviewerStopRequested, '{"round":"round-1","reviewer":"reviewer-1"}'), new DateTimeImmutable('2026-11-25T10:00:00+00:00')));
+
+        self::assertSame('Dashboard', $stop->who);
+    }
+
+    public function testAnEmptyActorOnASecretChangeIsIntaktAndTheValuesStayHidden(): void
+    {
+        $row = HistoryRow::of($this->recorded(['actor' => '', 'project' => '', 'fingerprint' => 'abc', 'before' => 'previous', 'after' => 'next']));
+
+        self::assertSame(['Intakt', null, false], [$row->who, $row->project, $row->showsChange()]);
+    }
+
+    public function testAnActorOrProjectOfOnlySpacesReadsAsUnset(): void
+    {
+        $row = HistoryRow::of($this->recorded(['actor' => '   ', 'project' => " \t"]));
+
+        self::assertSame(['Intakt', null], [$row->who, $row->project]);
+    }
+
+    #[TestWith(["\f"])]
+    #[TestWith(["\u{00A0}"])]
+    #[TestWith(["\u{2003}\u{3000}\n"])]
+    #[TestWith(["\u{200B}\u{FEFF}"])]
+    public function testAnActorOrProjectOfOnlyUnicodeWhitespaceReadsAsUnset(string $blank): void
+    {
+        $row = HistoryRow::of($this->recorded(['actor' => $blank, 'project' => $blank]));
+
+        self::assertSame(['Intakt', HistorySource::Intakt, null], [$row->who, $row->source, $row->project]);
+        self::assertNotContains(HistoryTopic::Projects, $row->topics());
+    }
+
+    #[TestWith(["\u{034F}"])]
+    #[TestWith(["\u{FE0F}"])]
+    public function testAnActorOrProjectOfOnlyALoneCombiningMarkReadsAsUnset(string $mark): void
+    {
+        $row = HistoryRow::of($this->recorded(['actor' => $mark, 'project' => $mark]));
+
+        self::assertSame(['Intakt', HistorySource::Intakt, null], [$row->who, $row->source, $row->project]);
+    }
+
+    public function testANameWithACombiningAccentIsKeptAsWritten(): void
+    {
+        $row = HistoryRow::of($this->recorded(['actor' => "e\u{0301}", 'project' => "e\u{0301}"]));
+
+        self::assertSame(["e\u{0301}", "e\u{0301}"], [$row->who, $row->project]);
+    }
+
+    public function testANameWithANoBreakSpaceInsideItIsKeptAsWritten(): void
+    {
+        $row = HistoryRow::of($this->recorded(['actor' => "owner\u{00A0}one", 'project' => "alpha\u{00A0}beta"]));
+
+        self::assertSame(["owner\u{00A0}one", "alpha\u{00A0}beta"], [$row->who, $row->project]);
     }
 
     /**
