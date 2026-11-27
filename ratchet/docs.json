@@ -70,6 +70,9 @@
       "fa4a6f022f603ee7": 121,
       "ffd8809c5fe7ffee": 225
     },
+    "docs/architecture/build-allowance.md": {
+      "81e915d7dafd980a": 181
+    },
     "docs/architecture/build-clone.md": {
       "1c0d252d397f0bbb": 135,
       "468dd38c3f46af7c": 97,
@@ -82,20 +85,20 @@
       "020e3ea641d8293e": 410,
       "05bed1a7362e4b5d": 100,
       "0f2634d3d1e3f007": 239,
+      "13cf7911440d0dae": 124,
       "14cc238c6b1764b3": 345,
       "1834fbf8ead00822": 543,
       "340239a993926314": 196,
       "57e4c0688620633e": 145,
+      "7a25266a1c2a2b9e": 1425,
       "a26e8d34f060b4c4": 195,
       "c144c51cbeaf10d9": 284,
-      "c1e07a344705d3a9": 1321,
       "d9ca451dbfc6f10b": 411,
       "e69d841600f1e266": 386,
       "fe38cabcf23186b0": 878
     },
     "docs/architecture/build-task.md": {
       "15fa31a439315e9d": 424,
-      "17b6eb0ada2648a8": 788,
       "2002e164c041c918": 293,
       "30dd6df805fb177b": 249,
       "5658c354703753d0": 508,
@@ -105,8 +108,9 @@
       "6fabd801f0829523": 215,
       "78560059acbd2288": 284,
       "9d52cfdd81f302e3": 263,
+      "ae737e6047dbece4": 1542,
       "bc37d9d331bb959d": 132,
-      "bc777082c60da84a": 1296,
+      "bdd933c652d0b44b": 809,
       "c174f3c79bef2762": 94,
       "da10ad67ffb8369a": 206,
       "f1e9ebce8e0f5db2": 266,
@@ -663,9 +667,7 @@
     },
     "docs/architecture/review-flow.md": {
       "0581ad99dfd46d3f": 1021,
-      "0b70d1feaa2c9b84": 181,
       "157e7872bd1a993a": 1148,
-      "1621ee9013b97ba1": 345,
       "17609cfa4bfbdc10": 163,
       "1e9cd2bd330f322f": 609,
       "24822047cf2e959e": 154,
@@ -683,9 +685,11 @@
       "afce08a60e472c31": 1154,
       "c5da08fb154f4b70": 142,
       "cbb72789cced06cc": 638,
+      "d09d3d0c0abeeda8": 219,
       "e402ea9aed1542c3": 727,
       "ec02f68c7f10daab": 1757,
       "f214049bc3c68490": 251,
+      "f43cca3550c7ad13": 401,
       "fb1283cfb43e6e32": 948
     },
     "docs/architecture/review-job.md": {
@@ -1412,13 +1416,13 @@
       "68aac65ce27a37ff": 127,
       "722ea631168345b6": 88,
       "9cb2be99ca74e78e": 95,
+      "bf477cd5f26fddc8": 278,
       "cdfd16d3e3cf7a1b": 168,
       "d09df049d7c0bf1a": 95,
       "d6b7271db2820aa0": 95,
       "dfc14f6f4f40d31e": 171,
       "e1b24465e17dcf4d": 86,
-      "e56a40ffa5435804": 192,
-      "e6c1d2cd52e98e69": 202
+      "e56a40ffa5435804": 192
     },
     "docs/guide/checking-a-provider-key.md": {
       "8bd4fa032e97a682": 105
@@ -1488,9 +1492,9 @@
       "60c1b9f6f6b77f37": 266,
       "63b023fa6d40021c": 114,
       "89a400647b124b19": 83,
-      "950d01e4b08442c5": 111,
       "af784080205cd614": 86,
-      "ccd905c0ea8a7244": 126
+      "ccd905c0ea8a7244": 126,
+      "eb9e74a35066d2c1": 169
     },
     "docs/guide/symfony-in-intakt.md": {
       "168dfbb882593edf": 90,
@@ -1901,7 +1905,6 @@
       "6d756b1f58b25c3a": 704,
       "6dea3579984f28e5": 460,
       "6e628c6f6f265468": 96,
-      "6f23cdaf2cce31f6": 2258,
       "6f9dbd8dcd7cafaa": 120,
       "6fa204b6bb45059d": 89,
       "6faf462483ed428e": 278,
@@ -1952,6 +1955,7 @@
       "94bfb88889f2794e": 84,
       "95b21657bb01276e": 84,
       "978b1db5016a48e6": 123,
+      "9913ebd5dc0a0f8c": 230,
       "9947b1b5cb4b0743": 121,
       "9b08ca14b31210f9": 446,
       "9b19ff3f0fdd416d": 122,
@@ -1981,6 +1985,7 @@
       "ae42fd8256d0d949": 276,
       "af88880f6a480b48": 199,
       "b03b711abf146d4a": 88,
+      "b1b4177bda619a86": 418,
       "b2b28ad392a1b80c": 199,
       "b75876b00ebe24f1": 244,
       "b887f5f6940a751f": 312,
@@ -2002,7 +2007,7 @@
       "c93c68a720c027ee": 409,
       "cb8dedd35801c1a3": 169,
       "cbeada3934c8c415": 285,
-      "cc5f8f086b0de1d0": 173,
+      "cda93e884585d2a4": 2264,
       "ce1ccf0d9e57013f": 289,
       "ce87ce69db65047e": 94,
       "cea79ba92dba5673": 232,
@@ -2099,6 +2104,7 @@
       "58042bb451d462c1": 95,
       "657f84f099fbb19e": 99,
       "ab8fe29b02f9cc52": 104,
+      "bb8d7d2f2a8e7e5e": 100,
       "e0fc5d37705d7441": 107,
       "ec450ea5f08af426": 86
     },
@@ -2110,17 +2116,18 @@
   },
   "pages": {
     "docs/guide/a-tour-of-the-dashboard.md": 13685,
-    "docs/guide/accounts-and-costs.md": 2693,
+    "docs/guide/accounts-and-costs.md": 2769,
     "docs/guide/demo-walkthrough.md": 1987,
     "docs/guide/glossary.md": 2246,
     "docs/guide/how-intakt-works.md": 4390,
-    "docs/guide/steering-intakt.md": 2241,
+    "docs/guide/steering-intakt.md": 2299,
     "docs/guide/symfony-in-intakt.md": 2647,
     "docs/guide/the-engine-room.md": 6016,
     "docs/guide/the-journey-of-a-task.md": 5299,
     "docs/guide/why-isnt-anything-happening.md": 2820,
     "docs/guide/why-the-ai-cant-wreck-your-project.md": 4955,
     "docs/guide/writing-a-good-task.md": 2393,
-    "docs/user/08-when-something-goes-wrong.md": 2269
+    "docs/user/08-when-something-goes-wrong.md": 2269,
+    "docs/user/README.md": 1581
   }
 }
