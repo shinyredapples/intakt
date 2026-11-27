@@ -75,6 +75,7 @@ use Twig\Loader\FilesystemLoader;
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(RecordedEvents::class)]
 #[UsesClass(LedgerEvent::class)]
+#[UsesClass(ProjectNames::class)]
 final class ShellHubTest extends TestCase
 {
     private const string SECRET = 'a-test-key-that-is-at-least-thirty-two-bytes-long';

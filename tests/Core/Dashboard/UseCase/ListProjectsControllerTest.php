@@ -15,7 +15,9 @@ use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Domain\ProjectCard;
 use Intakt\Core\Dashboard\Domain\ProjectOrder;
+use Intakt\Core\Dashboard\Domain\ProjectOutcome;
 use Intakt\Core\Dashboard\Domain\ProjectStatus;
+use Intakt\Core\Dashboard\Infrastructure\ConfiguredProjects;
 use Intakt\Core\Dashboard\Infrastructure\ProjectCards;
 use Intakt\Core\Dashboard\UseCase\ListProjects\ListProjectsController;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -36,6 +38,8 @@ use Twig\Environment;
 #[UsesClass(TokenFigures::class)]
 #[UsesClass(ProjectNames::class)]
 #[UsesClass(ResolvedModel::class)]
+#[UsesClass(ConfiguredProjects::class)]
+#[UsesClass(ProjectOutcome::class)]
 final class ListProjectsControllerTest extends DashboardPageTestCase
 {
     public function testTheReviewsOfTwoChangesOfOneProjectShareOneCard(): void

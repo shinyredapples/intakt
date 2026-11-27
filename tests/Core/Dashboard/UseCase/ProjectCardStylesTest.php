@@ -31,6 +31,12 @@ final class ProjectCardStylesTest extends TestCase
         self::assertDoesNotMatchRegularExpression('/white-space|overflow/', $link);
     }
 
+    // The cost line prints a model without a price by its name, and such a name may have no point to break at.
+    public function testALongUnpricedModelNameInTheCostLineWrapsInsideTheCard(): void
+    {
+        self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere/', $this->rule('.pblock .stat', $this->sheet()));
+    }
+
     private function sheet(): string
     {
         $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/components.css');

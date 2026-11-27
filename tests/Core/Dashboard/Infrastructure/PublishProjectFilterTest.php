@@ -62,6 +62,7 @@ use Twig\Loader\FilesystemLoader;
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(RecordedEvents::class)]
 #[UsesClass(LedgerEvent::class)]
+#[UsesClass(ProjectNames::class)]
 final class PublishProjectFilterTest extends TestCase
 {
     // A simulated hub on its own address, reached through Symfony's Hub over a MockHttpClient, so the post is the one a real hub would get.

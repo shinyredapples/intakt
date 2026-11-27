@@ -43,6 +43,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(RecordedEvents::class)]
 #[UsesClass(LedgerEvent::class)]
+#[UsesClass(ProjectNames::class)]
 final class FilterProjectsTest extends TestCase
 {
     public function testAReviewedAndABuiltProjectThatDifferOnlyInCaseComeInByteOrderWhicheverWasListedFirst(): void

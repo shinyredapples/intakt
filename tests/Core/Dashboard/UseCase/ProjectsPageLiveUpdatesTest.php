@@ -6,6 +6,10 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Closure;
 use DateTimeImmutable;
+use Intakt\Core\Ai\Contract\ProjectNames;
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
@@ -59,6 +63,8 @@ use Twig\Environment;
 #[UsesClass(MercureLiveUpdates::class)]
 #[UsesClass(LiveEvent::class)]
 #[UsesClass(RoundProgress::class)]
+#[UsesClass(ProjectNames::class)]
+#[UsesClass(ResolvedModel::class)]
 final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
@@ -230,6 +236,37 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(
             [['alpha'], ['alpha', 'beta']],
             array_map(static fn (Update $update): array => new Crawler($update->getData())->filter('article[data-project]')->each(static fn (Crawler $card): string => (string) $card->attr('data-project')), $this->shellUpdates()),
+        );
+    }
+
+    public function testAWorkerThatYieldedWhileTheHolderFailedToReadHasItsChangePublished(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $events = new PublishedLiveEvents();
+        $other = null;
+        $failed = false;
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'model-a'));
+        $tiers->method('projects')->willReturnCallback(function () use (&$other, &$failed): ProjectNames {
+            if (!$failed && $other instanceof LiveProjectCards) {
+                $failed = true;
+                $this->ledger->startRound('round-2', 'beta');
+                $other->publishLatest();
+
+                throw new RuntimeException('The cards could not be read.');
+            }
+
+            return new ProjectNames();
+        });
+        self::getContainer()->set(TierResolver::class, $tiers);
+        $holder = $this->cardsOfAnotherWorker($events, new NullLogger());
+        $other = $this->cardsOfAnotherWorker($events, new NullLogger());
+
+        $holder->publishLatest();
+
+        self::assertSame(
+            [['alpha', 'beta']],
+            array_map(static fn (LiveEvent $event): array => new Crawler($event->turboStream)->filter('article[data-project]')->each(static fn (Crawler $card): string => (string) $card->attr('data-project')), $events->events),
         );
     }
 

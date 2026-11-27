@@ -10,6 +10,7 @@ use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Dashboard\Domain\ProjectCard;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
 use Throwable;
 use Twig\Environment;
 
@@ -43,19 +44,35 @@ final readonly class LiveProjectCards
     private function publishedInTurn(): void
     {
         $lock = $this->locks->createLock(self::LOCK);
+        $retried = false;
 
         // Tried without waiting, because the worker holding the lock reads the cards again after it lets go, and so publishes what this one would have found.
         while ($lock->acquire(false)) {
             try {
-                $published = $this->publishedOnce();
-            } finally {
-                $lock->release();
-            }
+                if ($this->publishedAndUnchanged($lock)) {
+                    return;
+                }
+                // Boundary: a worker that yielded while this one held the lock counts on it to publish, so a failed read or render is tried once more before the failure is passed on.
+            } catch (Throwable $failure) {
+                if ($retried) {
+                    throw $failure;
+                }
 
-            if ($this->signatureOf($this->cards->now()) === $published) {
-                return;
+                $retried = true;
             }
         }
+    }
+
+    // Compared after the lock is let go, because a worker that changed the cards while this one held it yielded and relies on this read.
+    private function publishedAndUnchanged(LockInterface $lock): bool
+    {
+        try {
+            $published = $this->publishedOnce();
+        } finally {
+            $lock->release();
+        }
+
+        return $this->signatureOf($this->cards->now()) === $published;
     }
 
     private function publishedOnce(): string

@@ -1079,7 +1079,7 @@ a.lane:hover { background: var(--tint-2); }
 .pblock .plink { color: inherit; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .pblock .plink:hover { text-decoration: underline; text-underline-offset: 4px; }
 .pblock .failing { color: var(--red); overflow-wrap: anywhere; }
-.pblock .stat { font: 600 var(--t21)/1.1 var(--f-body); }
+.pblock .stat { font: 600 var(--t21)/1.1 var(--f-body); overflow-wrap: anywhere; }
 .pblock dl { display: grid; grid-template-columns: auto 1fr; gap: var(--s8) var(--s16); margin: var(--s12) 0 0; font-size: var(--t15); }
 .pblock dt { color: var(--muted); }
 .pblock dd { margin: 0; }
