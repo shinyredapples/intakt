@@ -20,6 +20,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -168,6 +169,53 @@ final class RoundStatusMirrorTest extends TestCase
 
         self::assertSame([[[], ['status:in-review']], ['[status:in-review] -> [status:waiting-on-you]'], 1], [$afterTheFailure, $forge->passes, $forge->comments]);
         self::assertLoggedError('warning', 'The status label of octo/app#7 of alpha was not reconciled: GitHub answered 503 to the events read.');
+    }
+
+    public function testAReconcileThatMustReportItsFailureRethrowsAFailedReadOfTheLabelsAndReleasesTheLock(): void
+    {
+        $forge = new RecordingStatusLabels(['status:in-review']);
+        $forge->failOnceReading(RecordingStatusLabels::LABELS);
+        $mirror = $this->mirror(ReviewStatus::WaitingOnYou, $forge);
+
+        try {
+            $mirror->reconcileOrThrow('alpha', new ChangeId(self::CHANGE));
+            self::fail('The failed read was swallowed.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertSame('GitHub answered 503 to the labels read.', $failure->getMessage());
+        }
+        $mirror->reconcileOrThrow('alpha', new ChangeId(self::CHANGE));
+
+        self::assertSame(['status:waiting-on-you'], $forge->labels);
+    }
+
+    public function testAReconcileThatMustReportItsFailureSkipsABusyLockWithoutAFailure(): void
+    {
+        $forge = new RecordingStatusLabels(['status:in-review']);
+        $mirror = $this->mirror(ReviewStatus::WaitingOnYou, $forge);
+        $forge->whileReading(static fn () => $mirror->reconcileOrThrow('alpha', new ChangeId(self::CHANGE)));
+
+        $mirror->reconcileOrThrow('alpha', new ChangeId(self::CHANGE));
+
+        self::assertSame(['[status:in-review] -> [status:waiting-on-you]'], $forge->passes);
+        self::assertLoggedError('info', 'The status label of octo/app#7 of alpha was left to the writer holding its lock.');
+    }
+
+    public function testAReconcileThatMustReportItsFailureRethrowsAFailingLockStoreAndWritesNothing(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('save')->willThrowException(new RuntimeException('Lock storage is unavailable.'));
+        $forge = new RecordingStatusLabels(['status:in-review']);
+        $rounds = self::createStub(LatestRoundStatus::class);
+        $rounds->method('of')->willReturn(ReviewStatus::WaitingOnYou);
+
+        try {
+            new RoundStatusMirror($rounds, new LockFactory($store), $this->logger(), $forge)->reconcileOrThrow('alpha', new ChangeId(self::CHANGE));
+            self::fail('The failed lock store was swallowed.');
+        } catch (LockAcquiringException $failure) {
+            self::assertSame('Lock storage is unavailable.', $failure->getPrevious()?->getMessage());
+        }
+
+        self::assertSame([[], ['status:in-review']], [$forge->passes, $forge->labels]);
     }
 
     public function testAForgeWithoutLabelsIsLeftAlone(): void

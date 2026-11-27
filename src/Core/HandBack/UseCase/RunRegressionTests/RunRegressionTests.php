@@ -31,6 +31,7 @@ use NoDiscard;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
+use Throwable;
 
 final readonly class RunRegressionTests implements RegressionTests
 {
@@ -90,11 +91,20 @@ final readonly class RunRegressionTests implements RegressionTests
         }
 
         // Two jobs of their own, because the base must fail and the head must pass, and one run could not tell which side a failure came from.
-        return new RegressionRuns(
-            $tests,
-            $this->ranOn($job, $repository, RegressionCheckout::base($base, $accepted->head, $tests)),
-            $this->ranOn($job, $repository, RegressionCheckout::head($accepted->head, $tests)),
-        );
+        $baseRun = $this->ranOn($job, $repository, RegressionCheckout::base($base, $accepted->head, $tests));
+
+        try {
+            $headRun = $this->ranOn($job, $repository, RegressionCheckout::head($accepted->head, $tests));
+            // Boundary: records a head run that cannot be prepared or run as no result after a passed base, because that base already shows the test proves nothing and must not be discarded; otherwise rethrows.
+        } catch (Throwable $failure) {
+            if (RegressionRun::Passed !== $baseRun) {
+                throw $failure;
+            }
+
+            $headRun = RegressionRun::NoResult;
+        }
+
+        return new RegressionRuns($tests, $baseRun, $headRun);
     }
 
     private function absolute(string $path): string

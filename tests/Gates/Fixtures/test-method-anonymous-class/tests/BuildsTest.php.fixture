@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\TestCase;
+
+final class BuildsTest extends TestCase
+{
+    public function testTheAnonymousCaseIsBuilt(): void
+    {
+        $case = new class('testRun') extends TestCase {
+            public function testRun(): void
+            {
+                self::assertTrue(true);
+            }
+        };
+
+        self::assertSame('testRun', $case->name());
+    }
+}

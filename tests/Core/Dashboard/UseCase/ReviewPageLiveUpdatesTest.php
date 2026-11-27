@@ -432,7 +432,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
             [['F1', 'Fix now'], ['F2', 'Dropped: deferred to a follow-up issue']],
             $updated->filter('#round-'.$id.'-judged li.finding-card')->each(static fn (Crawler $card): array => [$card->filter('.fc-id')->text(), $card->filter('.fc-call')->text()]),
         );
-        self::assertSame(['/reviews/'.$id.'/record#round-'.$id.'-finding-F1'], $updated->filter('#review-to-fix a.fix-row')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+        self::assertSame(['/reviews/'.$id.'/findings/F1'], $updated->filter('#review-to-fix a.fix-row')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
         self::assertSame('Text of F1.', $updated->filter('#review-to-fix .fix-group.should-fix .fix-title')->text());
         self::assertSame('Outcome: Changes requested, decided by the quorum policy all over all 2 reviewers.', $updated->filter('#round-'.$id.'-outcome')->text());
         self::assertSame('Checked.', $updated->filter('#round-'.$id.'-state')->text());
