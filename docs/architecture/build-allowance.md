@@ -1,6 +1,12 @@
 # When a build over its allowance stops
 
-Progress, not spend, ends a build: one over its allowance keeps going while it makes progress, until the runaway ceiling or the per-task total applies ([Budget and model planner](../design/05-architecture/06-budget-and-model-planner.md), "Allowance per task"). Plain code in `src/Core/Build/Domain/` decides when a running build stops and names the cause. Nothing calls it yet: the build job wires it in with T60 (#1737), together with the ledger record of the cause, the configured limits and the pages.
+Progress, not spend, ends a build: one over its allowance keeps going while it makes progress, until the runaway ceiling or the per-task total applies ([Budget and model planner](../design/05-architecture/06-budget-and-model-planner.md), "Allowance per task"). Plain code in `src/Core/Build/Domain/` decides when a running build stops and names the cause. Nothing calls it yet: the watch of a running build (#3965) will, and the ledger record of the cause, the configured limits and the pages follow with T60 (#1737).
+
+## A stopped job keeps its commits
+
+`RecordedBuildStops` in `src/Core/Build/UseCase/RunBuildJob/` holds the cause recorded for a job, keyed by the job's id (project and branch). `record()` stores it; `causeFor()` returns it and forgets it. In this part only tests call `record()`, and nothing stops a running job yet.
+
+`RunBuildJob` reads the cause after the job ends, also when the job failed, and puts it on `BuildJobOutcome::$stopCause`; a job without a stop carries null. The cause is read only for a job the runner was called with and did not refuse. A job that never reached the runner leaves the cause where it is, because it belongs to the build that holds the branch's job id, whatever failed and with whatever exception: resolving the model, checking the clone folder, reading the build script, writing the prompt file, or building the spec (for example `JobInput` refusing a relative prompt folder with `JobRefused`, or the gate's `registryHosts()` throwing). A job the runner refuses (`JobRefused`) does not read it either. Once the prompt file exists, it is removed on every path, a failed write of the prompt, a refused input and a failed gate included. The verdict does not change: a stopped session bundles what it committed like a session cut at its allowance, so its bundle and pull-request text go through the hand-back check, the pre-push check and the push as usual.
 
 ## The classes
 
@@ -29,4 +35,4 @@ Each of these resets the idle time:
 
 The ceiling and the per-task total stop a build whatever its progress, also while a check runs. A build under its allowance is never stopped for lack of progress.
 
-Tests: `tests/Core/Build/Domain/BuildStopRuleTest.php` moves a `MockClock` between looks to force each case; `tests/Core/Build/Domain/BuildLimitsTest.php` covers the refused limits.
+Tests: `tests/Core/Build/Domain/BuildStopRuleTest.php` moves a `MockClock` between looks to force each case; `tests/Core/Build/Domain/BuildLimitsTest.php` covers the refused limits. `tests/Core/Build/UseCase/RunBuildJob/RunBuildJobTest.php` and `tests/Core/Build/UseCase/BuildTask/BuildTaskTest.php` record each cause while the job runs and show the bundle handed back and pushed.

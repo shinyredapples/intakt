@@ -1,0 +1,30 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\TestCase;
+
+final class CapitalRunTest extends TestCase
+{
+    public function testASCIIWorks(): void
+    {
+        self::assertTrue(true);
+    }
+
+    public function testAURLWorks(): void
+    {
+        self::assertTrue(true);
+    }
+
+    public function testAUrlIsSent(): void
+    {
+        self::assertTrue(true);
+    }
+
+    public function testIDIsSet(): void
+    {
+        self::assertTrue(true);
+    }
+}

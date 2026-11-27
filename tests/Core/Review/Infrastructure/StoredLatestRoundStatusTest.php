@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\ReviewStatus;
 use Intakt\Core\Review\Infrastructure\StoredLatestRoundStatus;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
@@ -13,6 +15,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 
 #[Group('persistence')]
 #[CoversClass(StoredLatestRoundStatus::class)]
@@ -76,6 +79,64 @@ final class StoredLatestRoundStatusTest extends KernelTestCase
         self::assertNull($this->latestStatus()->of('beta', RoundFixture::CHANGE));
     }
 
+    public function testTheStatusReadOfAChangeWithoutRoundsReadsNoAddressOfTheProjectsOtherPullRequests(): void
+    {
+        $this->roundOf('https://github.com/acme/widgets/pull/5');
+        $this->roundOf('feat/other');
+        $queries = self::getContainer()->get('doctrine.debug_data_holder');
+        self::assertInstanceOf(DebugDataHolder::class, $queries);
+        $queries->reset();
+
+        self::assertNull($this->latestStatus()->of('alpha', 'https://github.com/acme/widgets/pull/9'));
+        self::assertNull($this->latestStatus()->of('alpha', 'feat/none'));
+
+        $reads = array_filter(
+            array_map(static fn (array $query): string => is_string($query['sql']) ? $query['sql'] : '', array_merge(...array_values($queries->getData()))),
+            static fn (string $sql): bool => str_contains($sql, 'FROM review_round'),
+        );
+        self::assertNotSame([], $reads);
+        foreach ($reads as $sql) {
+            self::assertMatchesRegularExpression('/change_ref\s+=\s|INSTR\(\w+\.change_ref, \?\)|LOCATE\(\?, \w+\.change_ref\)|POSITION\(\? IN \w+\.change_ref\)/i', $sql);
+        }
+    }
+
+    public function testARoundOfPullRequest123GivesNoStatusToPullRequest12(): void
+    {
+        $this->roundOf('https://github.com/acme/widgets/pull/123');
+
+        self::assertNull($this->latestStatus()->of('alpha', 'https://github.com/acme/widgets/pull/12'));
+        self::assertSame(ReviewStatus::InReview, $this->latestStatus()->of('alpha', 'https://github.com/acme/widgets/pull/123'));
+    }
+
+    public function testAPullRequestNamedWithAnotherSpellingFindsItsRound(): void
+    {
+        $this->roundOf('https://github.com/acme/widgets/pull/7');
+
+        self::assertSame(ReviewStatus::InReview, $this->latestStatus()->of('alpha', 'https://GitHub.com/Acme/Widgets/pull/7/'));
+    }
+
+    public function testALocalBranchMatchesOnlyItsExactStoredSpelling(): void
+    {
+        $this->roundOf('feat/thing');
+
+        self::assertNull($this->latestStatus()->of('alpha', 'FEAT/thing'));
+        self::assertSame(ReviewStatus::InReview, $this->latestStatus()->of('alpha', 'feat/thing'));
+    }
+
+    public function testASpellingWithALeadingNullByteStillFindsItsRound(): void
+    {
+        $canonical = 'https://github.com/acme/widgets/pull/12';
+        $this->roundOf($canonical);
+        $entities = self::getContainer()->get(EntityManagerInterface::class);
+        if ($entities->getConnection()->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            self::markTestSkipped('PostgreSQL cannot store a NUL byte in a text column.');
+        }
+        $entities->getConnection()->executeStatement('UPDATE review_round SET change_ref = ?', ["\0".$canonical]);
+        $entities->clear();
+
+        self::assertSame(ReviewStatus::InReview, $this->latestStatus()->of('alpha', $canonical));
+    }
+
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer());
@@ -84,6 +145,11 @@ final class StoredLatestRoundStatusTest extends KernelTestCase
     private function latestStatus(): StoredLatestRoundStatus
     {
         return new StoredLatestRoundStatus($this->fixture->transactions());
+    }
+
+    private function roundOf(string $change): void
+    {
+        $this->fixture->startFor($change, $this->fixture->bus, 2);
     }
 
     private function publishedRound(): void

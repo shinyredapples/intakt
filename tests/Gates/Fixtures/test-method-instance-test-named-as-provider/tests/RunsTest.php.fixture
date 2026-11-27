@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+
+final class RunsTest extends TestCase
+{
+    public function testRuns(): void
+    {
+        self::assertSame('testRuns', __FUNCTION__);
+    }
+
+    #[DataProvider('testRuns')]
+    private function helper(): void
+    {
+        self::assertSame('helper', __FUNCTION__);
+    }
+}

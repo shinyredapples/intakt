@@ -18,7 +18,6 @@ use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
-use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
@@ -85,6 +84,7 @@ final readonly class RunBuildJob
         // Under the project folder like the jobs' output directories, because the engine mounts host paths.
         #[Autowire('%kernel.project_dir%/var/prompts')]
         private string $promptFolder,
+        private RecordedBuildStops $stops,
     ) {
         // Checked as given, because the compiled container would turn a YAML true into a one-second limit before a typed parameter saw it.
         if (!is_int($toolTimeLimitSeconds)) {
@@ -109,14 +109,35 @@ final readonly class RunBuildJob
     public function run(BuildJob $job): BuildJobOutcome
     {
         $model = $this->modelFor($job);
-        $clone = $this->folder($job->clone);
-        $prompt = $this->promptFileFor($job);
+        $clone = new JobInput($this->folder($job->clone), self::CLONE);
+        // The command is built before the prompt file exists, so a build script that cannot be read leaves no prompt behind.
+        $command = $this->commandOf($job, $model);
+        $prompt = $this->emptyPromptFile();
+
+        $cause = null;
+        $reachedRunner = false;
 
         try {
-            return $this->outcomeOfRunning($this->specOf($job, $model, [new JobInput($clone, self::CLONE), new JobInput($prompt, self::PROMPT)]));
+            // Written and turned into the spec inside the try, because once the prompt file exists every failure must remove it, a failed write and a refused input included.
+            $this->filesystem->appendToFile($prompt, $this->prompts->textFor($job->brief));
+            $spec = $this->specOf($job, $command, $clone, new JobInput($prompt, self::PROMPT));
+            // Set only here, so whatever fails before the runner is called, of any exception class, never reads the cause.
+            $reachedRunner = true;
+            $outcome = $this->outcomeOfRunning($spec);
+        } catch (JobRefused $failure) {
+            // Cleared, because a job the runner refused never started, so the cause belongs to the build that holds the branch's job id.
+            $reachedRunner = false;
+
+            throw $failure;
         } finally {
+            // Read only for a job the runner was called with and did not refuse, also when that job failed, so its cause never reaches the branch's next build; read before the prompt is removed, so a failed removal cannot keep it.
+            if ($reachedRunner) {
+                $cause = $this->stops->causeFor($job);
+            }
             $this->filesystem->remove($prompt);
         }
+
+        return $outcome->stoppedFor($cause);
     }
 
     private function modelFor(BuildJob $job): string
@@ -141,29 +162,24 @@ final readonly class RunBuildJob
         return $absolute;
     }
 
-    // A file of its own for each run, readable by the orchestrator's user only, so two builds never share one.
-    private function promptFileFor(BuildJob $job): string
+    private function commandOf(BuildJob $job, string $model): JobCommand
     {
-        $this->filesystem->mkdir($this->promptFolder, 0o700);
-        $file = $this->filesystem->tempnam($this->promptFolder, 'prompt-', '.md');
-        $this->filesystem->appendToFile($file, $this->prompts->textFor($job->brief));
-
-        return $file;
+        return new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES), (string) $this->toolTimeLimitSeconds);
     }
 
-    /**
-     * @param list<JobInput> $inputs
-     */
-    private function specOf(BuildJob $job, string $model, array $inputs): JobSpec
+    // A file of its own for each run, readable by the orchestrator's user only, so two builds never share one.
+    private function emptyPromptFile(): string
     {
-        return new JobSpec(
-            $this->idOf($job),
-            $job->image,
-            new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES), (string) $this->toolTimeLimitSeconds),
-            $inputs,
-            new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
-            JobEgress::to(new EgressHosts(self::VENDOR_HOST, ...$this->gate->registryHosts())),
-        );
+        $this->filesystem->mkdir($this->promptFolder, 0o700);
+
+        return $this->filesystem->tempnam($this->promptFolder, 'prompt-', '.md');
+    }
+
+    private function specOf(BuildJob $job, JobCommand $command, JobInput ...$inputs): JobSpec
+    {
+        $egress = JobEgress::to(new EgressHosts(self::VENDOR_HOST, ...$this->gate->registryHosts()));
+
+        return new JobSpec($job->jobId(), $job->image, $command, array_values($inputs), new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS), $egress);
     }
 
     private function outcomeOfRunning(JobSpec $spec): BuildJobOutcome
@@ -176,12 +192,6 @@ final readonly class RunBuildJob
         }
 
         return $this->outcomeOf($result);
-    }
-
-    // Length-prefixed, so no project and branch pair names another pair's job; one id per pair, so the runner refuses a second build of a branch while one runs.
-    private function idOf(BuildJob $job): JobId
-    {
-        return new JobId('build-'.substr(hash('sha256', strlen($job->project).':'.$job->project.$job->branch), 0, 40));
     }
 
     private function outcomeOf(JobResult $result): BuildJobOutcome

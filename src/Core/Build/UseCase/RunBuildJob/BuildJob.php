@@ -6,6 +6,7 @@ namespace Intakt\Core\Build\UseCase\RunBuildJob;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Job\Contract\JobId;
 
 final readonly class BuildJob
 {
@@ -19,5 +20,11 @@ final readonly class BuildJob
         public Tier $tier,
         public string $image,
     ) {
+    }
+
+    // Length-prefixed, so no project and branch pair names another pair's job; one id per pair, so the runner refuses a second build of a branch while one runs.
+    public function jobId(): JobId
+    {
+        return new JobId('build-'.substr(hash('sha256', strlen($this->project).':'.$this->project.$this->branch), 0, 40));
     }
 }
