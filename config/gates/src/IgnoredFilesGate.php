@@ -37,12 +37,19 @@ final readonly class IgnoredFilesGate implements Gate
             return GateResult::failedBecause($this->name(), 'git diff failed: '.$rules->firstErrorLine());
         }
 
-        $findings = [
-            ...array_map($this->unstagedRulesFinding(...), $this->paths($rules->output)),
-            ...array_map($this->trackedFinding(...), $this->paths($listing->output)),
-        ];
+        $changedRules = $this->paths($rules->output);
+        $trackedAndIgnored = $this->paths($listing->output);
+        $findings = [...array_map($this->unstagedRulesFinding(...), $changedRules), ...array_map($this->trackedFinding(...), $trackedAndIgnored)];
 
         return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function paths(string $output): array
+    {
+        return array_values(array_unique(array_filter(explode("\0", $output), static fn (string $path): bool => '' !== $path)));
     }
 
     private function unstagedRulesFinding(string $path): string
@@ -76,13 +83,5 @@ final readonly class IgnoredFilesGate implements Gate
         $code = ord($byte[0]);
 
         return $code < 0x20 || $code >= 0x7F ? sprintf('\%03o', $code) : $byte;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function paths(string $output): array
-    {
-        return array_values(array_unique(array_filter(explode("\0", $output), static fn (string $path): bool => '' !== $path)));
     }
 }
