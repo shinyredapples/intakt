@@ -1,0 +1,9 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\TestCase;
+
+final class FirstTest extends TestCase { public function testRun(): void { self::assertSame(1, 1); } } final class SecondTest extends TestCase { public function testRun(): void { self::assertSame(2, 2); } }

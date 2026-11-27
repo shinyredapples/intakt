@@ -75,6 +75,12 @@ It is Friday afternoon. You started a review half an hour ago, and the page stil
 - **Why:** the server is busy, or GitHub answers slowly: about once a minute a load of the board checks the GitHub App connection and can wait up to 15 seconds for it, also when the server's own figures look fine.
 - **What to do:** look at the row of server figures under the board: busy and idle threads, waiting requests, worker restarts, the hub and the forge. A figure that reads `down` says why it could not be read. Inside the container, `php bin/console intakt:server:status` shows the server's figures, and `php bin/console intakt:doctor` runs the forge check and says what to fix.
 
+## A check before a push stops with one error line
+
+- **What you see:** `intakt:check:run` or `intakt:hand-back:check` prints a single error line and exits with 1, with no stack trace.
+- **Why:** either the project's mirror holds an `info/attributes` file (git reads it on top of every other attributes source and nothing switches it off), or, for `intakt:check:run`, the ledger could not record a job event.
+- **What to do:** for the first, remove the file named in the message from the mirror and run the command again. For the second, read the reason in the message (for example a full disk) and run the command again once it is fixed.
+
 ## Docker says the container is unhealthy
 
 - **What you see:** `docker ps` or `docker inspect` shows Intakt as `unhealthy`.
@@ -103,9 +109,15 @@ Before you press anything, `/demo` already says when the run cannot play: instea
 
 You press **Play the demo run**, the page comes back with "The demo run is starting" above the title, and then that line changes to "The demo run did not play." with a reason.
 
-- **What you see:** that line, with a short reason such as "The demo recording could not be read.", "Another Play or a demo removal is running." or "An earlier Play has already played the run."
-- **Why:** the reason says it. The details, with file names, are only in the install's log.
-- **What to do:** fix what the reason names. If another Play or a removal is running, wait until it has ended, reload the page and press Play again. If an earlier Play has already played the run, follow it in the review list. If you removed the demo project with `intakt:demo:remove`, press Play again: it creates the project again. If the page still shows the completed run after a removal, reload it. A page that opened after the refusal does not show it.
+- **What you see:** that line, with a short reason such as "The demo recording could not be read.", "Another Play or a demo removal is running.", "An earlier Play has already played the run." or "Another review in the ledger already used a model call of the demo recording."
+- **Why:** the reason says it. The details, with file names, are only in the install's log. The model call reason means a review in your ledger, of another project or of another recording you played, already has a model call id that this recording uses; the demo run did not play, so the review list has no run of it.
+- **What to do:** fix what the reason names.
+  - **Another Play or a removal is running:** wait until it has ended, reload the page and press Play again.
+  - **An earlier Play has already played the run:** follow it in the review list.
+  - **Another review used a model call, and it was an earlier demo run of another recording:** remove the demo project with `intakt:demo:remove`, then press Play again. Play creates the project again.
+  - **Another review used a model call, and it is a review of another project that must stay:** install a recording made with other model calls. The log names the call.
+  - **You removed the demo project with `intakt:demo:remove`:** press Play again. It creates the project again.
+  - **The page still shows the completed run after a removal:** reload it. A page that opened after the refusal does not show it.
 
 ## A page says "The form token is missing or wrong"
 

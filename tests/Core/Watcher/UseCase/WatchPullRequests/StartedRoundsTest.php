@@ -216,6 +216,25 @@ final class StartedRoundsTest extends KernelTestCase
         self::assertSame(['round-1'], array_map(static fn (StartedRound $round): string => $round->roundId(), $open));
     }
 
+    public function testAPullRequestWhoseRoundStartedAtAnEarlierStaleHeadHasARound(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+        $this->markStored(
+            stale: true,
+            recorded: true,
+        );
+
+        self::assertTrue($this->rounds->hasRoundOf('alpha', RecordedForge::change('7', 'e', '2026-11-02T10:05:00Z')));
+    }
+
+    public function testAPullRequestWithoutAStartedRoundHasNoRound(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+
+        self::assertFalse($this->rounds->hasRoundOf('alpha', RecordedForge::change('8', 'b', '2026-11-02T09:00:00Z')));
+        self::assertFalse($this->rounds->hasRoundOf('beta', $this->green()));
+    }
+
     public function testAReturningHeadWhoseStaleRoundStillOwesItsQueuedLineStartsNoRound(): void
     {
         $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
