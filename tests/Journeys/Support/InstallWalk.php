@@ -92,22 +92,29 @@ final readonly class InstallWalk
         $address = escapeshellarg(InstallCheck::ADDRESS);
         $results[] = $this->step(self::DEMO, 'node '.escapeshellarg($this->checkout.'/bin/install-check-demo').' '.$address.' '.escapeshellarg($this->logs), $clone);
         $results[] = $this->step(self::UI, 'node bin/ui-check '.$address, $clone);
-        // An older clone has neither the journey check nor the removal command, so both are skipped and it is never sent the removal.
-        if (!is_file($clone.'/bin/journey-check')) {
-            $results[] = $this->skipped(self::REMOVAL, 'the clone has no bin/journey-check');
-            $results[] = $this->skipped(self::JOURNEYS, 'the clone has no bin/journey-check');
-        } else {
-            // Because the first journey presses the button that plays the demo run, which the wizard's last step /setup?step=5 offers again only once the run the demo step played is removed.
-            $removal = $this->step(self::REMOVAL, 'docker compose exec -T intakt php bin/console intakt:demo:remove', $clone);
-            $results[] = $removal;
-            $results[] = InstallStatus::Passed === $removal->status
-                ? $this->step(self::JOURNEYS, 'node bin/journey-check '.$address, $clone)
-                : $this->skipped(self::JOURNEYS, 'the played demo run was not removed');
-        }
+        $results = [...$results, ...$this->journeySteps($clone, $address)];
         $results[] = $this->keyedStep(true, $clone);
         $this->keepScreenshots($clone);
 
         return $results;
+    }
+
+    /**
+     * @return list<InstallStepResult>
+     */
+    private function journeySteps(string $clone, string $address): array
+    {
+        // An older clone has neither the journey check nor the removal command, so both are skipped and it is never sent the removal.
+        if (!is_file($clone.'/bin/journey-check')) {
+            return [$this->skipped(self::REMOVAL, 'the clone has no bin/journey-check'), $this->skipped(self::JOURNEYS, 'the clone has no bin/journey-check')];
+        }
+
+        // Because the first journey presses the button that plays the demo run, which the wizard's last step /setup?step=5 offers again only once the run the demo step played is removed.
+        $removal = $this->step(self::REMOVAL, 'docker compose exec -T intakt php bin/console intakt:demo:remove', $clone);
+
+        return [$removal, InstallStatus::Passed === $removal->status
+            ? $this->step(self::JOURNEYS, 'node bin/journey-check '.$address, $clone)
+            : $this->skipped(self::JOURNEYS, 'the played demo run was not removed')];
     }
 
     // Each README line is its own shell, so a cd in one would be lost for the next: the shell writes where it ended, and the next line starts there.
