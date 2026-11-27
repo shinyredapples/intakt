@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+
+abstract class RuleCaseTestCase extends TestCase
+{
+    /**
+     * @return iterable<string, array{string}>
+     */
+    abstract public static function testCases(): iterable;
+
+    #[DataProvider('testCases')]
+    public function testEachCaseHoldsItsPromise(string $case): void
+    {
+        self::assertNotSame('', $case);
+    }
+}

@@ -153,6 +153,10 @@ class Search {
         this.asked++;
         this.opener?.focus?.();
         this.opener = null;
+        // Opened with Ctrl K while nothing had focus, the opener is the body, which takes no focus, so the field would keep it while hidden and the next Tab would start from a control no one sees.
+        if (this.page.activeElement === this.field()) {
+            this.field().blur();
+        }
     }
 
     clear() {

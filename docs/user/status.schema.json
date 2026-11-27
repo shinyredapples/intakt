@@ -78,18 +78,35 @@
                                 }
                             },
                             "build": {
-                                "description": "Each task intakt:build:task ran, with the last step it recorded, newest first; a failed step is where the run stopped.",
+                                "description": "Each task intakt:build:task ran, with the latest step of its latest run, newest first; a failed step is where the run stopped, and a build_job step that asked parked the task with a question.",
                                 "type": "array",
                                 "items": {
                                     "type": "object",
                                     "additionalProperties": false,
-                                    "required": ["task", "step", "outcome", "failure", "ended_at"],
+                                    "required": ["task", "step", "outcome", "failure", "ended_at", "question"],
                                     "properties": {
                                         "task": {"type": "string", "minLength": 1},
                                         "step": {"enum": ["task", "mirror", "clone", "build_job", "hand_back_check", "pre_push_check", "push", "pull_request"]},
-                                        "outcome": {"enum": ["passed", "failed"]},
+                                        "outcome": {"enum": ["passed", "failed", "asked"]},
                                         "failure": {"type": ["string", "null"]},
-                                        "ended_at": {"$ref": "#/definitions/moment"}
+                                        "ended_at": {"$ref": "#/definitions/moment"},
+                                        "question": {
+                                            "description": "The question the task is parked with, its texts redacted, when the outcome is asked and the question is still stored; null otherwise.",
+                                            "oneOf": [
+                                                {"type": "null"},
+                                                {
+                                                    "type": "object",
+                                                    "additionalProperties": false,
+                                                    "required": ["text", "choices", "recommendation", "parked_at"],
+                                                    "properties": {
+                                                        "text": {"type": "string"},
+                                                        "choices": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+                                                        "recommendation": {"type": "string"},
+                                                        "parked_at": {"$ref": "#/definitions/moment"}
+                                                    }
+                                                }
+                                            ]
+                                        }
                                     }
                                 }
                             }
