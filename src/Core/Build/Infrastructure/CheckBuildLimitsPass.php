@@ -28,7 +28,7 @@ final readonly class CheckBuildLimitsPass implements CompilerPassInterface
         try {
             new BuildLimits(...$limits);
         } catch (InvalidArgumentException $refused) {
-            throw new InvalidArgumentException(sprintf('The build limits under parameters: are refused: %s', $refused->getMessage()), previous: $refused);
+            throw new InvalidArgumentException(sprintf('The build limits under parameters: are refused: %s', $refused->getMessage()), $refused->getCode(), previous: $refused);
         }
     }
 
