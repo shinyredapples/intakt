@@ -41,6 +41,15 @@ final class CheckBuildLimitsPassTest extends TestCase
         self::assertSame(1, $container->getParameter(BuildServices::CEILING_TOKENS));
     }
 
+    public function testAPhpConstantLimitIsAWholeNumberOnceTheConfigurationIsLoadedAndIsChecked(): void
+    {
+        $container = $this->containerWith([BuildServices::IDLE_SECONDS => constant('PHP_INT_MAX')]);
+
+        new CheckBuildLimitsPass()->process($container);
+
+        self::assertSame(PHP_INT_MAX, $container->getParameter(BuildServices::IDLE_SECONDS));
+    }
+
     /**
      * @return iterable<string, array{string}>
      */

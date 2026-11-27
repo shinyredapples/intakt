@@ -1218,7 +1218,7 @@ Intakt also gives the build session a tool time limit: one command the Developer
 - `intakt.build.ceiling_tokens` (default 20000000): the runaway ceiling, the tokens after which one build stops whatever its progress.
 - `intakt.build.task_total_tokens` (default 50000000): the tokens of all builds of one task together, its continuations included, after which it stops.
 
-Each must be a literal whole number of at least 1 written in the file, and the ceiling must not be below the allowance. A value read from the environment (`%env(int:...)%`), a reference to another parameter, `true`, a quoted number or a decimal is refused. Intakt checks them when its container is built, so after a change run `php bin/console cache:clear`: a refused value makes it fail with a message that names the parameter or the broken rule. The defaults are starting points, to be tuned once stops are recorded.
+Each must be a literal whole number of at least 1 written in the file, and the ceiling must not be below the allowance. A value read from the environment (`%env(int:...)%`), a reference to another parameter, `true`, a quoted number or a decimal is refused. A `!php/const` value is already a whole number when the file is read, so it is checked like a literal one. Intakt checks them when its container is built, so after a change run `php bin/console cache:clear`: a refused value makes it fail with a message that names the parameter or the broken rule. The defaults are starting points, to be tuned once stops are recorded.
 
 It needs a Docker engine (see [Job containers](../architecture/job-containers.md)). The container does not get your Claude login yet, so a real build cannot sign in; running one is not possible until that part is built.
 
