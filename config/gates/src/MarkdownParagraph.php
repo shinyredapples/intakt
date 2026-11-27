@@ -9,6 +9,7 @@ final readonly class MarkdownParagraph
     public function __construct(
         public string $text,
         public int $words,
+        public int $line,
     ) {
     }
 

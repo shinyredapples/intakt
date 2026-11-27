@@ -340,7 +340,7 @@ The file lies in the checked folder (`--root`, else the repository), under `var/
 For example:
 
 ```
-{"static":["cs","rector",...,"ratchet","workflows","left-undone"],"order":["cs","phpstan","rector",...,"container","ratchet","workflows","left-undone"]}
+{"static":["cs","rector",...,"ratchet","docs","workflows","left-undone"],"order":["cs","phpstan","rector",...,"container","ratchet","docs","workflows","left-undone"]}
 ```
 
 With any other argument beside it, `bin/check` runs no gate: it prints an `error` line with its usage and exits with 2. A normal `bin/check` run is unchanged: it still starts the static gates before the gates that run your change's code.
@@ -488,6 +488,14 @@ Two more findings limit where the objects that carry a role prompt are built, be
 ## When `bin/check` reports a ratchet finding
 
 A new PHPStan rule can be switched on before the code is clean: the violations it finds that day go into a ratchet list, one file per rule outside `config/gates/`, included from `config/gates/phpstan.neon`. The `ratchet` gate of `bin/check` (also with `--fast`) makes sure such a list only gets shorter. It compares each list with the list on the target branch and fails when an entry was added, a `count` went up, or an entry's identifier, message pattern or path changed, for example `ratchet/loose-conditions.neon: count rose from 2 to 3: [...]`. To resolve it, fix the new violation in the code instead of listing it; deleting entries and lowering counts always pass. A list also needs a line `# Cleanup issue: #<number>` in its header, may hold nothing but `parameters:` with `ignoreErrors:` (`ignoreErrors: []` once its last entry is gone), and arrives only in the change that adds its include. A violation that is not on the list, or a list entry that no longer matches anything (for example after a fix or after moving the file), fails the `phpstan` gate: delete the entry in the same change as the fix. A tree without any list passes with the note `no ratchet lists`. The gate reads the includes of `config/gates/phpstan.neon` only as plain `- path` lines under an unindented `includes:` key (the lines may be indented or not); any other form, such as `includes: [...]` or a configuration file that is indented as a whole, fails with `cannot read the includes` rather than overlooking a list.
+
+## When `bin/check` reports a docs finding
+
+The `docs` gate keeps the documentation readable. A paragraph in `README.md` or under `docs/` may hold at most 80 words, and a page under `docs/user/` or `docs/guide/` at most 1500 words. A finding names the file, the line for a paragraph, and the limit, for example `docs/guide/glossary.md:12: paragraph of 95 words, over the limit of 80 words per paragraph; split it or cut words`.
+
+Paragraphs and pages that were already too long are listed in `ratchet/docs.json`. That list may only shrink. Editing a listed paragraph makes it new, so it must then meet the limit, and so does a copy of a listed paragraph on the same page. When a listed entry is no longer needed, or a page got shorter than its listed count, the gate asks you to remove the entry or lower the count. Deleting the list fails; an empty list is valid.
+
+A paragraph is listed by a hash of its text after each run of whitespace is collapsed to one space, so rewrapping lines or changing spacing keeps its allowance, and any other change to the words loses it.
 
 ## GitHub's test merge and the `commits` gate
 
