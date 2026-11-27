@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
+use Intakt\Core\Review\Contract\FindingKind;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\JudgedFinding;
@@ -296,6 +297,32 @@ final class ReadRoundToolsTest extends KernelTestCase
             'kind' => null,
             'merged' => [],
         ], $findings[0]);
+    }
+
+    public function testTheFindingsResourceKeepsAFreshFindingsTitleAndKind(): void
+    {
+        $titled = new Finding(
+            'A',
+            Severity::P2,
+            null,
+            null,
+            null,
+            'Text of A.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: Finding::TITLE_EXAMPLE,
+            kind: FindingKind::Logic,
+        );
+        $round = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$titled], [], [])]));
+        $id = $round->id()->toRfc4122();
+
+        /** @var list<array<string, mixed>> $findings */
+        $findings = json_decode($this->findingsResource()($id, 'intakt://rounds/'.$id.'/findings'), true, flags: JSON_THROW_ON_ERROR);
+
+        self::assertSame(['F1', Finding::TITLE_EXAMPLE, FindingKind::Logic->value], [$findings[0]['id'], $findings[0]['title'], $findings[0]['kind']]);
     }
 
     public function testEachToolRefusesAnUnknownRoundAsAnMcpToolError(): void
