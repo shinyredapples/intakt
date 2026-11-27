@@ -8,7 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// The reset is null when the reading names none or the cause has no known end.
+// The reset is null when the reading names none or the cause has no known end, because the dashboard must not show a time it cannot back.
 #[Exclude]
 final readonly class LeftOutAccount
 {

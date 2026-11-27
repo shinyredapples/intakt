@@ -49,7 +49,7 @@ final readonly class CeilingStartGuard
         $uses = $this->currentUsesOf($account);
         $atCeiling = $this->windowAtCeiling($uses, 0.0);
         $trusted = [] !== $uses && array_all($uses, static fn (WindowUse $use): bool => $use->ageInSeconds <= self::TRUSTED_FOR_SECONDS);
-        $resets = null === $atCeiling ? array_map(static fn (WindowUse $use): ?DateTimeImmutable => $use->usage->resetsAt, $uses) : [$uses[$atCeiling->value]->usage->resetsAt];
+        $resets = $atCeiling instanceof UsageWindow ? [$uses[$atCeiling->value]->usage->resetsAt] : array_map(static fn (WindowUse $use): ?DateTimeImmutable => $use->usage->resetsAt, $uses);
         $known = array_filter($resets, static fn (?DateTimeImmutable $resetsAt): bool => $resetsAt instanceof DateTimeImmutable);
         usort($known, static fn (DateTimeImmutable $one, DateTimeImmutable $other): int => $one <=> $other);
 

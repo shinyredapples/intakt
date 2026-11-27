@@ -7,7 +7,7 @@ namespace Intakt\Core\Budget\Contract;
 use Intakt\Core\Ai\Contract\Account;
 use NoDiscard;
 
-// Run at every job start over the accounts the job's role may use; the owner's order is the order of the list given.
+// Run at every job start over the accounts the job's role may use, and the list is in the owner's order because that order is the last tie-break.
 interface AccountRanking
 {
     /**

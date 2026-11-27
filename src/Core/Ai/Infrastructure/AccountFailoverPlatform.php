@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Ai\Infrastructure;
 
 use Closure;
+use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
@@ -131,15 +132,6 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return $free;
     }
 
-    // Every account without a cooldown is left out of the ranking, so nothing is sent; the wait is the soonest reset of those, a second at least and a day at most.
-    private function outOfRoom(RankedAccounts $ranked): Throwable
-    {
-        $now = $this->clock->now()->getTimestamp();
-        $waits = array_map(static fn (LeftOutAccount $left): int => null === $left->resetsAt ? AccountCooldowns::LONGEST_SECONDS : max(1, $left->resetsAt->getTimestamp() - $now), $ranked->leftOut);
-
-        return new EveryAccountCoolingDown($this->provider, min(AccountCooldowns::LONGEST_SECONDS, ...$waits));
-    }
-
     private function pinnedOf(Account $account, ?string $routerProvider): ?PinnedProvider
     {
         return null === $routerProvider ? null : new PinnedProvider($account, $routerProvider);
@@ -156,6 +148,15 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         }
 
         return new EveryAccountCoolingDown($this->provider, min([AccountCooldowns::LONGEST_SECONDS, ...$waits]));
+    }
+
+    // Every account without a cooldown is left out of the ranking, so nothing is sent; the wait is the soonest reset of those, a second at least and a day at most.
+    private function outOfRoom(RankedAccounts $ranked): Throwable
+    {
+        $now = $this->clock->now()->getTimestamp();
+        $waits = array_map(static fn (LeftOutAccount $left): int => $left->resetsAt instanceof DateTimeImmutable ? max(1, $left->resetsAt->getTimestamp() - $now) : AccountCooldowns::LONGEST_SECONDS, $ranked->leftOut);
+
+        return new EveryAccountCoolingDown($this->provider, min(AccountCooldowns::LONGEST_SECONDS, ...$waits));
     }
 
     /**

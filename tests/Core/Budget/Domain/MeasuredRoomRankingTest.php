@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Budget\Domain;
 
-use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\LeftOutAccount;
@@ -42,8 +41,8 @@ final class MeasuredRoomRankingTest extends TestCase
 
     public function testAnAccountAtItsWeeklyCeilingIsLeftOutWithTheWeeklyCause(): void
     {
-        $this->read('first', 10.0, 95.0, 5, 60);
-        $this->read('second', 10.0, 20.0, 5, 60);
+        $this->both('first', $this->usage(10.0, 5), $this->usage(95.0, 60));
+        $this->both('second', $this->usage(10.0, 5), $this->usage(20.0, 60));
 
         $ranked = $this->rank('first', 'second');
 
@@ -55,7 +54,7 @@ final class MeasuredRoomRankingTest extends TestCase
 
     public function testAnAccountAtItsShortWindowCeilingIsLeftOutWithTheShortWindowCause(): void
     {
-        $this->read('first', 95.0, 20.0, 2, 60);
+        $this->both('first', $this->usage(95.0, 2), $this->usage(20.0, 60));
 
         $ranked = $this->rank('first');
 
@@ -66,7 +65,7 @@ final class MeasuredRoomRankingTest extends TestCase
 
     public function testAnAccountCoolingDownIsLeftOutWithoutAReset(): void
     {
-        $this->read('first', 10.0, 20.0, 5, 60);
+        $this->both('first', $this->usage(10.0, 5), $this->usage(20.0, 60));
         $this->holds->coolDown(new Account(Provider::ClaudeCode, 'first'), $this->clock->now()->modify('+1 hour'));
 
         $ranked = $this->rank('first', 'second');
@@ -78,16 +77,16 @@ final class MeasuredRoomRankingTest extends TestCase
 
     public function testOfTwoAccountsWithRoomTheOneWhoseWindowResetsSoonerRanksFirst(): void
     {
-        $this->read('first', 10.0, 20.0, 4, 60);
-        $this->read('second', 10.0, 20.0, 1, 60);
+        $this->both('first', $this->usage(10.0, 4), $this->usage(20.0, 60));
+        $this->both('second', $this->usage(10.0, 1), $this->usage(20.0, 60));
 
         self::assertSame(['second', 'first'], $this->names($this->rank('first', 'second')));
     }
 
     public function testAccountsWithTheSameResetKeepTheOwnersOrder(): void
     {
-        $this->read('first', 10.0, 20.0, 3, 60);
-        $this->read('second', 10.0, 20.0, 3, 60);
+        $this->both('first', $this->usage(10.0, 3), $this->usage(20.0, 60));
+        $this->both('second', $this->usage(10.0, 3), $this->usage(20.0, 60));
 
         self::assertSame(['first', 'second'], $this->names($this->rank('first', 'second')));
         self::assertSame(['second', 'first'], $this->names($this->rank('second', 'first')));
@@ -95,23 +94,23 @@ final class MeasuredRoomRankingTest extends TestCase
 
     public function testAnAccountWhoseReadingIsOlderThanTheProbeIntervalRanksAfterATrustedOne(): void
     {
-        $this->read('first', 10.0, 20.0, 5, 60);
+        $this->both('first', $this->usage(10.0, 5), $this->usage(20.0, 60));
         $this->clock->modify('+'.(CeilingStartGuard::TRUSTED_FOR_SECONDS + 1).' seconds');
-        $this->read('second', 10.0, 20.0, 5, 60);
+        $this->both('second', $this->usage(10.0, 5), $this->usage(20.0, 60));
 
         self::assertSame(['second', 'first'], $this->names($this->rank('first', 'second')));
     }
 
     public function testAnAccountWithoutAReadingRanksAfterEveryTrustedAccountEvenOneThatResetsLater(): void
     {
-        $this->read('second', 10.0, 20.0, 5, 100);
+        $this->both('second', $this->usage(10.0, 5), $this->usage(20.0, 100));
 
         self::assertSame(['second', 'first'], $this->names($this->rank('first', 'second')));
     }
 
     public function testAnUnknownAccountIsStillRankedWhenNoTrustedOneHasRoom(): void
     {
-        $this->read('first', 10.0, 95.0, 5, 60);
+        $this->both('first', $this->usage(10.0, 5), $this->usage(95.0, 60));
 
         $ranked = $this->rank('first', 'second');
 
@@ -120,7 +119,7 @@ final class MeasuredRoomRankingTest extends TestCase
 
     public function testAPaidAccountRanksAfterASubscriptionWithRoomWhateverItsPlace(): void
     {
-        $this->read('team', 10.0, 20.0, 5, 100);
+        $this->both('team', $this->usage(10.0, 5), $this->usage(20.0, 100));
 
         $ranked = new MeasuredRoomRanking($this->holds, $this->guard())->rank([new Account(Provider::Anthropic, 'key'), new Account(Provider::ClaudeCode, 'team')]);
 
@@ -129,8 +128,8 @@ final class MeasuredRoomRankingTest extends TestCase
 
     public function testEachAccountIsRankedFromItsOwnReadingsOnly(): void
     {
-        $this->read('first', 95.0, 20.0, 2, 60);
-        $this->read('second', 10.0, 20.0, 2, 60);
+        $this->both('first', $this->usage(95.0, 2), $this->usage(20.0, 60));
+        $this->both('second', $this->usage(10.0, 2), $this->usage(20.0, 60));
         $other = new Account(Provider::Codex, 'first');
         $this->readings->record(new WindowReading($other, UsageWindow::Weekly, new Usage(99.0, $this->clock->now()->modify('+60 hours'))));
 
@@ -142,7 +141,7 @@ final class MeasuredRoomRankingTest extends TestCase
 
     public function testAnAccountWhoseCeilingWindowHasResetIsRankedAgain(): void
     {
-        $this->read('first', 95.0, 20.0, 2, 60);
+        $this->both('first', $this->usage(95.0, 2), $this->usage(20.0, 60));
         $this->clock->modify('+3 hours');
 
         self::assertSame(['first'], $this->names($this->rank('first')));
@@ -150,26 +149,31 @@ final class MeasuredRoomRankingTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->clock = new MockClock(new DateTimeImmutable('2026-03-02 10:00:00 UTC'));
+        $this->clock = new MockClock('2026-03-02 10:00:00 UTC');
         $this->readings = new ReadingsInMemory($this->clock);
         $this->holds = new HoldsInMemory($this->clock);
     }
 
-    private function read(string $name, float $short, float $weekly, int $shortResetsInHours, int $weeklyResetsInHours): void
+    private function usage(float $percent, int $resetsInHours): Usage
+    {
+        return new Usage($percent, $this->clock->now()->modify('+'.$resetsInHours.' hours'));
+    }
+
+    private function both(string $name, Usage $short, Usage $weekly): void
     {
         $account = new Account(Provider::ClaudeCode, $name);
-        $this->readings->record(new WindowReading($account, UsageWindow::FiveHour, new Usage($short, $this->clock->now()->modify('+'.$shortResetsInHours.' hours'))));
-        $this->readings->record(new WindowReading($account, UsageWindow::Weekly, new Usage($weekly, $this->clock->now()->modify('+'.$weeklyResetsInHours.' hours'))));
+        $this->readings->record(new WindowReading($account, UsageWindow::FiveHour, $short));
+        $this->readings->record(new WindowReading($account, UsageWindow::Weekly, $weekly));
+    }
+
+    private function rank(string ...$names): RankedAccounts
+    {
+        return new MeasuredRoomRanking($this->holds, $this->guard())->rank(array_values(array_map(static fn (string $name): Account => new Account(Provider::ClaudeCode, $name), $names)));
     }
 
     private function guard(): CeilingStartGuard
     {
         return new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]);
-    }
-
-    private function rank(string ...$names): RankedAccounts
-    {
-        return new MeasuredRoomRanking($this->holds, $this->guard())->rank(array_map(static fn (string $name): Account => new Account(Provider::ClaudeCode, $name), $names));
     }
 
     /**

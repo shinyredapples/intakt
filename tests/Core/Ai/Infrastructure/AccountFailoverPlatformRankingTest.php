@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Closure;
-use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\Provider;
@@ -58,8 +57,8 @@ final class AccountFailoverPlatformRankingTest extends TestCase
 
     public function testAReviewWhoseFirstAccountIsAtItsWeeklyCeilingStartsOnTheSecondWithNoRefusedCallFirst(): void
     {
-        $this->read(Account::DEFAULT, 10.0, 95.0, 5, 60);
-        $this->read('team', 10.0, 20.0, 5, 60);
+        $this->both(Account::DEFAULT, $this->usage(10.0, 5), $this->usage(95.0, 60));
+        $this->both('team', $this->usage(10.0, 5), $this->usage(20.0, 60));
 
         $result = $this->platform()->invoke('big', 'Review.');
 
@@ -69,8 +68,8 @@ final class AccountFailoverPlatformRankingTest extends TestCase
 
     public function testWithRoomOnBothTheAccountWhoseWindowResetsSoonerTakesTheCall(): void
     {
-        $this->read(Account::DEFAULT, 10.0, 20.0, 4, 60);
-        $this->read('team', 10.0, 20.0, 1, 60);
+        $this->both(Account::DEFAULT, $this->usage(10.0, 4), $this->usage(20.0, 60));
+        $this->both('team', $this->usage(10.0, 1), $this->usage(20.0, 60));
 
         self::assertSame('team', $this->platform()->invoke('big', 'Review.')->asText());
         self::assertSame(['team'], $this->called);
@@ -78,12 +77,12 @@ final class AccountFailoverPlatformRankingTest extends TestCase
 
     public function testAnAccountThatCrossesItsShortWindowCeilingBetweenTwoCallsLosesTheNextCall(): void
     {
-        $this->read(Account::DEFAULT, 10.0, 20.0, 1, 60);
-        $this->read('team', 10.0, 20.0, 4, 60);
+        $this->both(Account::DEFAULT, $this->usage(10.0, 1), $this->usage(20.0, 60));
+        $this->both('team', $this->usage(10.0, 4), $this->usage(20.0, 60));
         $platform = $this->platform();
 
         self::assertSame(Account::DEFAULT, $platform->invoke('big', 'Review.')->asText());
-        $this->read(Account::DEFAULT, 92.0, 20.0, 1, 60);
+        $this->both(Account::DEFAULT, $this->usage(92.0, 1), $this->usage(20.0, 60));
 
         self::assertSame('team', $platform->invoke('big', 'Review.')->asText());
         self::assertSame([Account::DEFAULT, 'team'], $this->called);
@@ -91,8 +90,8 @@ final class AccountFailoverPlatformRankingTest extends TestCase
 
     public function testWithEveryAccountAtACeilingNoCallIsSentAndTheWaitIsTheEarliestReset(): void
     {
-        $this->read(Account::DEFAULT, 95.0, 20.0, 3, 60);
-        $this->read('team', 10.0, 95.0, 5, 40);
+        $this->both(Account::DEFAULT, $this->usage(95.0, 3), $this->usage(20.0, 60));
+        $this->both('team', $this->usage(10.0, 5), $this->usage(95.0, 40));
 
         try {
             $this->platform()->invoke('big', 'Review.');
@@ -106,8 +105,8 @@ final class AccountFailoverPlatformRankingTest extends TestCase
 
     public function testACallRefusedMidWayOnTheTopRankedAccountStillFailsOverToTheNext(): void
     {
-        $this->read(Account::DEFAULT, 10.0, 20.0, 5, 60);
-        $this->read('team', 10.0, 20.0, 1, 60);
+        $this->both(Account::DEFAULT, $this->usage(10.0, 5), $this->usage(20.0, 60));
+        $this->both('team', $this->usage(10.0, 1), $this->usage(20.0, 60));
         $platform = new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->answering(Account::DEFAULT), 'team' => $this->answering(static fn (): never => throw new RateLimitExceededException(300))], new NoCooldowns(), $this->clock, new NullLogger(), new NoPinnedProviderCooldowns(), $this->ranking());
 
         self::assertSame(Account::DEFAULT, $platform->invoke('big', 'Review.')->asText());
@@ -115,9 +114,21 @@ final class AccountFailoverPlatformRankingTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->clock = new MockClock(new DateTimeImmutable('2026-03-02 10:00:00 UTC'));
+        $this->clock = new MockClock('2026-03-02 10:00:00 UTC');
         $this->readings = new ReadingsInMemory($this->clock);
         $this->called = [];
+    }
+
+    private function usage(float $percent, int $resetsInHours): Usage
+    {
+        return new Usage($percent, $this->clock->now()->modify('+'.$resetsInHours.' hours'));
+    }
+
+    private function both(string $name, Usage $short, Usage $weekly): void
+    {
+        $account = new Account(Provider::ClaudeCode, $name);
+        $this->readings->record(new WindowReading($account, UsageWindow::FiveHour, $short));
+        $this->readings->record(new WindowReading($account, UsageWindow::Weekly, $weekly));
     }
 
     private function platform(): AccountFailoverPlatform
@@ -125,12 +136,6 @@ final class AccountFailoverPlatformRankingTest extends TestCase
         return new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->answering(Account::DEFAULT), 'team' => $this->answering('team')], new NoCooldowns(), $this->clock, new NullLogger(), new NoPinnedProviderCooldowns(), $this->ranking());
     }
 
-    private function ranking(): MeasuredRoomRanking
-    {
-        return new MeasuredRoomRanking(new HoldsInMemory($this->clock), new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]));
-    }
-
-    // Records which account was sent a call, so a test can show the first one was never tried.
     private function answering(string|Closure $answer): PlatformInterface
     {
         $name = is_string($answer) ? $answer : 'team';
@@ -142,10 +147,8 @@ final class AccountFailoverPlatformRankingTest extends TestCase
         });
     }
 
-    private function read(string $name, float $short, float $weekly, int $shortResetsInHours, int $weeklyResetsInHours): void
+    private function ranking(): MeasuredRoomRanking
     {
-        $account = new Account(Provider::ClaudeCode, $name);
-        $this->readings->record(new WindowReading($account, UsageWindow::FiveHour, new Usage($short, $this->clock->now()->modify('+'.$shortResetsInHours.' hours'))));
-        $this->readings->record(new WindowReading($account, UsageWindow::Weekly, new Usage($weekly, $this->clock->now()->modify('+'.$weeklyResetsInHours.' hours'))));
+        return new MeasuredRoomRanking(new HoldsInMemory($this->clock), new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]));
     }
 }
