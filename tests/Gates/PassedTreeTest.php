@@ -21,6 +21,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Clock\NativeClock;
+use Symfony\Component\Process\Process;
 use UnexpectedValueException;
 
 #[CoversClass(OutputInParts::class)]
@@ -262,6 +263,23 @@ final class PassedTreeTest extends SandboxTestCase
         $elsewhere->write('notes.md', "edited\n");
 
         self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    // Another process retargets the link, because PHP drops its own realpath cache entries when it changes a link itself; only clearstatcache(true) drops those of a link changed elsewhere.
+    public function testALinkPartWayToALinkedFileRetargetedByAnotherProcessRunsTheCheckAgain(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $elsewhere = $this->emptySandbox();
+        $elsewhere->write('old.md', "old\n");
+        $elsewhere->write('new.md', "new\n");
+        $elsewhere->symlink('alias', 'old.md');
+        $root->symlink('notes.md', $elsewhere->root.'/alias');
+        $this->pass($root, $home);
+        $lookup = $this->tree($root, $home);
+
+        new Process([PHP_BINARY, '-r', 'symlink("new.md", $argv[1]."/next"); rename($argv[1]."/next", $argv[1]."/alias");', $elsewhere->root])->mustRun();
+
+        self::assertFalse($lookup->hasPassed());
     }
 
     public function testALinkThatLeadsBackIntoItsOwnFolderGivesNoFingerprint(): void

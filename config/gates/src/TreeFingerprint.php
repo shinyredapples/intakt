@@ -50,7 +50,8 @@ final readonly class TreeFingerprint
             return null;
         }
 
-        clearstatcache();
+        // With the realpath cache too: a link along a route that another process retargeted since the last fingerprint would otherwise still resolve to its old target.
+        clearstatcache(true);
 
         try {
             return $this->joined([
