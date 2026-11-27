@@ -38,7 +38,7 @@ final readonly class HighlightHistory
             return 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$committed->firstErrorLine();
         }
 
-        $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', 'HEAD', '--', HighlightFragments::DIRECTORY.'/'], $root);
+        $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=AT', '--name-only', '--format=%H', 'HEAD', '--', HighlightFragments::DIRECTORY.'/'], $root);
 
         return $log->succeeded() ? new HighlightOrder($this->placesIn($log->output, $this->committedFilesIn($committed->output))) : 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$log->firstErrorLine();
     }
@@ -79,7 +79,7 @@ final readonly class HighlightHistory
         $places = [];
         $position = -1;
 
-        // The log runs oldest first, so a fragment deleted and added again keeps the place of its last addition.
+        // The log runs oldest first, so a fragment deleted and added again keeps the place of its last addition, and a path that became a file by a type change (a gitlink or a symlink before) takes the place of that change.
         foreach (explode("\n", $log) as $line) {
             if (1 === preg_match(self::COMMIT, rtrim($line))) {
                 ++$position;

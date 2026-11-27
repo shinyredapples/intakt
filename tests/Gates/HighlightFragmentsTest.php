@@ -354,6 +354,37 @@ final class HighlightFragmentsTest extends SandboxTestCase
         self::assertSame([self::UNORDERED_CLOCK], $this->assembled()->findings);
     }
 
+    public function testAFragmentThatReplacesAGitlinkInTheCommitAddingAnotherForTheSameRowTiesWithIt(): void
+    {
+        $this->sandbox->startRepository();
+        $this->sandbox->write('docs/highlights.d/layout.md', self::LAYOUT);
+        $this->sandbox->commitAll('docs(highlights): add the layout');
+        $commit = trim($this->sandbox->git('rev-parse', 'HEAD')->output);
+        $this->sandbox->git('update-index', '--add', '--cacheinfo', '160000,'.$commit.',docs/highlights.d/2-earlier.md');
+        $this->sandbox->git('commit', '--quiet', '--message', 'record a gitlink under a fragment name');
+        $this->sandbox->git('rm', '--quiet', '--cached', 'docs/highlights.d/2-earlier.md');
+        $this->sandbox->write('docs/highlights.d/2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+        $this->sandbox->write('docs/highlights.d/10-later.md', "## Tooling\n| Clock | done | T10 (#10) |\n");
+        $this->sandbox->commitAll('docs(highlights): add two fragments for one row');
+
+        self::assertSame([self::UNORDERED_CLOCK], $this->assembled()->findings);
+    }
+
+    public function testAFragmentThatReplacesASymlinkInTheCommitAddingAnotherForTheSameRowTiesWithIt(): void
+    {
+        $this->sandbox->startRepository();
+        $this->sandbox->write('docs/highlights.d/layout.md', self::LAYOUT);
+        $this->sandbox->commitAll('docs(highlights): add the layout');
+        $this->sandbox->symlink('docs/highlights.d/2-earlier.md', 'layout.md');
+        $this->sandbox->commitAll('record a symlink under a fragment name');
+        $this->sandbox->git('rm', '--quiet', 'docs/highlights.d/2-earlier.md');
+        $this->sandbox->write('docs/highlights.d/2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+        $this->sandbox->write('docs/highlights.d/10-later.md', "## Tooling\n| Clock | done | T10 (#10) |\n");
+        $this->sandbox->commitAll('docs(highlights): add two fragments for one row');
+
+        self::assertSame([self::UNORDERED_CLOCK], $this->assembled()->findings);
+    }
+
     public function testARepositoryWithoutCommitsRefusesFragmentsThatSetTheSameRow(): void
     {
         $this->sandbox->startRepository();
