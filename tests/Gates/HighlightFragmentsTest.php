@@ -27,11 +27,11 @@ final class HighlightFragmentsTest extends SandboxTestCase
 {
     private const string LAYOUT = "# Highlights\n\nIntro.\n\n## Tooling\n\n| Feature | Status | Where |\n|---|---|---|\n\n## PHP 8.5 in use\n";
 
-    private const string UNORDERED_CLOCK = 'docs/highlights.d/2-earlier.md and docs/highlights.d/10-later.md set row "Clock" of section "Tooling" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: delete the superseded fragment';
+    private const string UNORDERED_CLOCK = 'docs/highlights.d/2-earlier.md and docs/highlights.d/10-later.md set row "Clock" of section "Tooling" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: remove the superseded row from its fragment, and delete the fragment only if nothing is left in it';
 
-    private const string UNORDERED_LOCK = 'docs/highlights.d/2022-lock-done.md and docs/highlights.d/2832-lock.md set row "Lock" of section "Tooling" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: delete the superseded fragment';
+    private const string UNORDERED_LOCK = 'docs/highlights.d/2022-lock-done.md and docs/highlights.d/2832-lock.md set row "Lock" of section "Tooling" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: remove the superseded row from its fragment, and delete the fragment only if nothing is left in it';
 
-    private const string UNORDERED_SHORT_LOCK = 'docs/highlights.d/20-lock-done.md and docs/highlights.d/90-lock.md set row "Lock" of section "Tooling" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: delete the superseded fragment';
+    private const string UNORDERED_SHORT_LOCK = 'docs/highlights.d/20-lock-done.md and docs/highlights.d/90-lock.md set row "Lock" of section "Tooling" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: remove the superseded row from its fragment, and delete the fragment only if nothing is left in it';
 
     private Sandbox $sandbox;
 
@@ -300,7 +300,7 @@ final class HighlightFragmentsTest extends SandboxTestCase
         $this->sandbox->write('docs/highlights.d/30-latest.md', "## Tooling\n| Clock | final | T30 (#30) |\n");
 
         self::assertSame(
-            ['docs/highlights.d/2-earlier.md, docs/highlights.d/10-later.md and docs/highlights.d/30-latest.md set row "Clock" of section "Tooling" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: delete the superseded fragment'],
+            ['docs/highlights.d/2-earlier.md, docs/highlights.d/10-later.md and docs/highlights.d/30-latest.md set row "Clock" of section "Tooling" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: remove the superseded row from its fragment, and delete the fragment only if nothing is left in it'],
             $this->assembled()->findings,
         );
     }
@@ -385,6 +385,20 @@ final class HighlightFragmentsTest extends SandboxTestCase
         self::assertSame([self::UNORDERED_CLOCK], $this->assembled()->findings);
     }
 
+    public function testAnUncommittedFragmentWrittenOverACommittedSymlinkTiesWithAnotherUncommittedOne(): void
+    {
+        $this->sandbox->startRepository();
+        $this->sandbox->write('docs/highlights.d/layout.md', self::LAYOUT);
+        $this->sandbox->commitAll('docs(highlights): add the layout');
+        $this->sandbox->symlink('docs/highlights.d/2-earlier.md', 'layout.md');
+        $this->sandbox->commitAll('record a symlink under a fragment name');
+        $this->sandbox->run('rm', 'docs/highlights.d/2-earlier.md');
+        $this->sandbox->write('docs/highlights.d/2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+        $this->sandbox->write('docs/highlights.d/10-later.md', "## Tooling\n| Clock | done | T10 (#10) |\n");
+
+        self::assertSame([self::UNORDERED_CLOCK], $this->assembled()->findings);
+    }
+
     public function testARepositoryWithoutCommitsRefusesFragmentsThatSetTheSameRow(): void
     {
         $this->sandbox->startRepository();
@@ -403,7 +417,7 @@ final class HighlightFragmentsTest extends SandboxTestCase
         $this->sandbox->write('docs/highlights.d/2-earlier.md', "## PHP 8.5 in use\n- The pipe operator: `a.php` (planned).\n");
 
         self::assertSame(
-            ['docs/highlights.d/2-earlier.md and docs/highlights.d/10-later.md set row "- The pipe operator: `a.php`" of section "PHP 8.5 in use" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: delete the superseded fragment'],
+            ['docs/highlights.d/2-earlier.md and docs/highlights.d/10-later.md set row "- The pipe operator: `a.php`" of section "PHP 8.5 in use" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: remove the superseded row from its fragment, and delete the fragment only if nothing is left in it'],
             $this->assembled()->findings,
         );
     }

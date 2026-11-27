@@ -176,7 +176,7 @@ final readonly class HighlightFragments
 
         foreach ($this->latestSettersOf($rowsByFragment, $order) as [$section, $key, $names]) {
             if (count($names) > 1) {
-                $findings[] = $this->listOf($names).' set row "'.$key.'" of section "'.$section.'" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: delete the superseded fragment';
+                $findings[] = $this->listOf($names).' set row "'.$key.'" of section "'.$section.'" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: remove the superseded row from its fragment, and delete the fragment only if nothing is left in it';
             }
         }
 

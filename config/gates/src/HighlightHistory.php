@@ -11,6 +11,8 @@ final readonly class HighlightHistory
 
     private const int UNBORN_HEAD = 1;
 
+    private const array REGULAR_FILES = ['100644 blob ', '100755 blob '];
+
     public function __construct(
         private ProcessRunner $runner = new ProcessRunner(),
     ) {
@@ -32,13 +34,20 @@ final readonly class HighlightHistory
             return $unreadable;
         }
 
-        $committed = $this->runner->git(['ls-tree', '--full-name', '--format=%(objecttype) %(path)', 'HEAD', '--', HighlightFragments::DIRECTORY.'/'], $root);
+        // Every later read names the commit HEAD resolved to, so a branch moved between two reads cannot mix two heads.
+        $commit = trim($head->output);
+
+        if (1 !== preg_match(self::COMMIT, $commit)) {
+            return 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: git rev-parse gave no commit ID for HEAD';
+        }
+
+        $committed = $this->runner->git(['ls-tree', '--full-name', '--format=%(objectmode) %(objecttype) %(path)', $commit, '--', HighlightFragments::DIRECTORY.'/'], $root);
 
         if (!$committed->succeeded()) {
             return 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$committed->firstErrorLine();
         }
 
-        $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=AT', '--name-only', '--format=%H', 'HEAD', '--', HighlightFragments::DIRECTORY.'/'], $root);
+        $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=AT', '--name-only', '--format=%H', $commit, '--', HighlightFragments::DIRECTORY.'/'], $root);
 
         return $log->succeeded() ? new HighlightOrder($this->placesIn($log->output, $this->committedFilesIn($committed->output))) : 'cannot read the history of '.HighlightFragments::DIRECTORY.'/: '.$log->firstErrorLine();
     }
@@ -59,10 +68,12 @@ final readonly class HighlightHistory
     {
         $files = [];
 
-        // A folder committed under a fragment's name would otherwise lend its place to a fragment written there again.
+        // Only a regular file counts: a folder, a gitlink or a symlink (git lists a symlink as a blob too) committed under a fragment's name would otherwise lend its place to a fragment written there again.
         foreach (explode("\n", $output) as $line) {
-            if (str_starts_with($line, 'blob ')) {
-                $files[] = substr($line, strlen('blob '));
+            foreach (self::REGULAR_FILES as $prefix) {
+                if (str_starts_with($line, $prefix)) {
+                    $files[] = substr($line, strlen($prefix));
+                }
             }
         }
 
