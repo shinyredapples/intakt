@@ -105,7 +105,7 @@ final readonly class ReviewWithReviewerHandler
             return;
         }
 
-        $verdict = $this->goalposts->applyToVerdict($round->number(), $this->proposalsLowered($lane, $review->verdict->asRecorded()), $brief->open);
+        $verdict = $this->ownerRoutingKept($lane, $this->goalposts->applyToVerdict($round->number(), $this->proposalsLowered($lane, $review->verdict->asRecorded()), $brief->open), $brief->open);
         if ($this->leases->recordVerdict($reviewer, $verdict, $review->substitute)) {
             $this->progress->publishStopOf($reviewer);
         }
@@ -163,5 +163,23 @@ final readonly class ReviewWithReviewerHandler
     private function proposalsLowered(ReviewLane $lane, Verdict $verdict): Verdict
     {
         return ReviewLane::Docs === $lane ? $this->proposals->applyToVerdict($verdict) : $verdict;
+    }
+
+    // After the goalpost rule, because it carries over only the severity: a repeat that drops the proposal marker or names the builder must not put an owner's proposal on the act list.
+    /**
+     * @param list<Finding> $open
+     */
+    private function ownerRoutingKept(ReviewLane $lane, Verdict $verdict, array $open): Verdict
+    {
+        if (ReviewLane::Docs !== $lane) {
+            return $verdict;
+        }
+
+        $proposals = array_column(array_map(static fn (Finding $finding): array => [$finding->id, $finding], array_filter($open, static fn (Finding $finding): bool => $finding->proposesToOwner())), 1, 0);
+
+        return $verdict->withFindings(array_map(
+            static fn (Finding $finding): Finding => $finding->repeat && isset($proposals[$finding->id]) ? $finding->withRoutingOf($proposals[$finding->id]) : $finding,
+            $verdict->findings,
+        ));
     }
 }

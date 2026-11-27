@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\SummarySection;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
+use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\FileStatus;
 
 // One description for the review and the identity check, because a verdict counts only under the panel it was given, and both must choose the same one.
@@ -48,11 +49,17 @@ final readonly class LocalChangeDescription
 
     private function before(LocalGitForge $forge, Change $change, ChangedFile $file): string
     {
-        return FileStatus::Added === $file->status ? '' : $forge->fileAt($change->commits->base, $file->path)->content;
+        return FileStatus::Added === $file->status ? '' : $this->pageAt($forge, $change->commits->base, $file->path);
     }
 
     private function after(LocalGitForge $forge, Change $change, ChangedFile $file): string
     {
-        return FileStatus::Deleted === $file->status ? '' : $forge->fileAtHead($change, $file->path)->content;
+        return FileStatus::Deleted === $file->status ? '' : $this->pageAt($forge, $change->commits->head, $file->path);
+    }
+
+    // A side that holds no regular file holds no page, so a gitlink named like a page neither aborts the read nor touches a summary.
+    private function pageAt(LocalGitForge $forge, CommitId $commit, string $path): string
+    {
+        return $forge->holdsRegularFileAt($commit, $path) ? $forge->fileAt($commit, $path)->content : '';
     }
 }

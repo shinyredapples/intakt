@@ -110,6 +110,12 @@ final readonly class Finding
         return clone ($this, ['fixable_by' => $fixableBy]);
     }
 
+    // The requirement too, because it holds the proposal marker the next round reads the routing from.
+    public function withRoutingOf(self $open): self
+    {
+        return clone ($this, ['severity' => $open->severity, 'fixable_by' => $open->fixable_by, 'requirement' => $open->requirement]);
+    }
+
     public function withMerged(FindingIds $ids): self
     {
         return clone ($this, ['merged' => $ids]);

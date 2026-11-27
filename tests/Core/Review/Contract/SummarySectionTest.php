@@ -88,6 +88,36 @@ final class SummarySectionTest extends TestCase
         self::assertTrue($this->changed($before, str_replace('Old.', 'New.', $before)));
     }
 
+    public function testAShorterBacktickFenceInsideALongerOneDoesNotCloseIt(): void
+    {
+        $before = "## In short\n\n````\n```\n## Not a heading\nOld.\n````\n";
+
+        self::assertTrue($this->changed($before, str_replace('Old.', 'New.', $before)));
+    }
+
+    public function testAShorterTildeFenceInsideALongerOneDoesNotCloseIt(): void
+    {
+        $before = "## In short\n\n~~~~\n~~~\n## Not a heading\nOld.\n~~~~\n";
+
+        self::assertTrue($this->changed($before, str_replace('Old.', 'New.', $before)));
+    }
+
+    public function testASetextSummaryEndsAtTheNextSetextHeadingOfItsLevel(): void
+    {
+        $before = "In short\n--------\n\nOld.\n\nDetails\n-------\n\nRows.\n";
+
+        self::assertTrue($this->changed($before, str_replace('Old.', 'New.', $before)));
+        self::assertFalse($this->changed($before, str_replace('Rows.', 'Lines.', $before)));
+    }
+
+    public function testASetextSummaryUnderlinedWithEqualsSignsIsReadAsAHeading(): void
+    {
+        $before = "In short\n========\n\nOld.\n\n# Details\n\nRows.\n";
+
+        self::assertTrue($this->changed($before, str_replace('Old.', 'New.', $before)));
+        self::assertFalse($this->changed($before, str_replace('Rows.', 'Lines.', $before)));
+    }
+
     public function testWindowsLineEndsAreReadLikeOthers(): void
     {
         $before = "## In short\r\n\r\nOld.\r\n\r\n## Details\r\n\r\nRows.\r\n";

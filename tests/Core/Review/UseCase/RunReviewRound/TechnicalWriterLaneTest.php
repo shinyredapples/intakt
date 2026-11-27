@@ -32,6 +32,7 @@ use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Support\KernelTestCase;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 
@@ -107,6 +108,46 @@ final class TechnicalWriterLaneTest extends KernelTestCase
 
         self::assertSame([], $this->fixture->storedFindings(RoundFixture::CHANGE));
         self::assertSame(self::OFF_THE_PAGES, $this->writersFailure());
+    }
+
+    public function testAFindingOfTheTechnicalWriterOnAPathThatLeavesTheDocsStoresNothing(): void
+    {
+        $this->deliverAll(new Verdict(Decision::Changes, [$this->blockingAt('docs/../CONTRIBUTING.md')], [], []));
+
+        self::assertSame([], $this->fixture->storedFindings(RoundFixture::CHANGE));
+        self::assertSame(self::OFF_THE_PAGES, $this->writersFailure());
+    }
+
+    public function testAnOpenFindingOnAPathThatLeavesTheDocsIsNotShownToTheTechnicalWriter(): void
+    {
+        $this->deliverAll(new Verdict(Decision::Approve, [], [], []), new Verdict(Decision::Changes, [$this->blockingAt('docs/../CONTRIBUTING.md')], [], []));
+        $this->startRound();
+
+        $this->deliverAll(new Verdict(Decision::Approve, [], [], []));
+
+        self::assertSame([ReviewLane::Code->value => ['F1'], ReviewLane::Docs->value => []], $this->openGiven);
+    }
+
+    /**
+     * @return iterable<string, array{?string, FixableBy}>
+     */
+    public static function repeatsThatDropTheOwnerRouting(): iterable
+    {
+        yield 'no proposal marker, builder' => ['SOLID', FixableBy::Builder];
+        yield 'no proposal marker, owner' => ['SOLID', FixableBy::Owner];
+        yield 'no requirement, builder' => [null, FixableBy::Builder];
+    }
+
+    #[DataProvider('repeatsThatDropTheOwnerRouting')]
+    public function testARepeatOfAnOpenOwnerProposalKeepsItsOwnerRoutingWhateverTheModelWrote(?string $requirement, FixableBy $fixableBy): void
+    {
+        $this->deliverAll(new Verdict(Decision::Changes, [new Finding('X', Severity::P1, 'docs/user/cart.md', 1, null, 'Split the chapter.', FixableBy::Builder, false, 'Proposal: user guide structure', null)], [], []));
+        $this->startRound();
+
+        $this->deliverAll(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'docs/user/cart.md', 1, null, 'Split the chapter now.', $fixableBy, true, $requirement, null)], [], []));
+
+        self::assertNull($this->writersFailure());
+        self::assertSame([[Severity::P3, FixableBy::Owner, true]], array_map(static fn (TrackedFinding $tracked): array => [$tracked->latest->severity, $tracked->latest->fixable_by, $tracked->latest->proposesToOwner()], $this->fixture->storedFindings(RoundFixture::CHANGE)));
     }
 
     public function testAFindingOfTheTechnicalWriterOnAPageIsStored(): void

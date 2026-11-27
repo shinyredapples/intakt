@@ -11,6 +11,12 @@ final readonly class DocsPages
 
     public function contains(string $path): bool
     {
-        return array_any(self::GLOBS, static fn (string $glob): bool => new PathGlob($glob)->matches($path));
+        return $this->isCanonical($path) && array_any(self::GLOBS, static fn (string $glob): bool => new PathGlob($glob)->matches($path));
+    }
+
+    // Because a path such as "docs/../CONTRIBUTING.md" matches the globs while it names a file outside them, and git never writes one.
+    private function isCanonical(string $path): bool
+    {
+        return !str_contains($path, '\\') && !array_any(explode('/', $path), static fn (string $segment): bool => in_array($segment, ['', '.', '..'], true));
     }
 }

@@ -111,6 +111,29 @@ final class LocalChangeDescriptionTest extends TestCase
         self::assertSame([], [...$this->described()->summaries]);
     }
 
+    public function testAnAddedGitlinkAtAPagePathIsReadAsNoPage(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitSubmodule('docs/user/vendored.md', str_repeat('a', 40));
+
+        $description = $this->described();
+
+        self::assertSame(['docs/user/vendored.md'], [...$description->paths]);
+        self::assertSame([], [...$description->summaries]);
+    }
+
+    public function testADeletedGitlinkAtAPagePathIsReadAsNoPage(): void
+    {
+        $this->repository->commitSubmodule('docs/user/vendored.md', str_repeat('a', 40));
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->removeSubmodule('docs/user/vendored.md');
+
+        $description = $this->described();
+
+        self::assertSame(['docs/user/vendored.md'], [...$description->paths]);
+        self::assertSame([], [...$description->summaries]);
+    }
+
     public function testTheLabelsOfTheChangeReachItsDescription(): void
     {
         $this->repository->checkoutNewBranch('feature');

@@ -11,7 +11,11 @@ final readonly class SummarySection
 
     private const string SUMMARY = 'in short';
 
-    private const string FENCE = '/^ {0,3}(```|~~~)/';
+    private const string FENCE_OPENS = '/^ {0,3}(`{3,}|~{3,})/';
+
+    private const string FENCE_CLOSES = '/^ {0,3}(`{3,}|~{3,})[ \t]*$/';
+
+    private const string SETEXT = '/^ {0,3}(=+|-+)[ \t]*$/';
 
     // An absent page is an empty one, so an added or deleted page with a summary counts as touching it.
     public function changedBetween(string $before, string $after): bool
@@ -35,23 +39,40 @@ final readonly class SummarySection
         return implode("\n", array_column(array_slice($lines, $start, null === $end ? null : $end + 1), 0));
     }
 
+    // Each line with its heading level, its title and whether it is paragraph text a setext underline can turn into a heading.
     /**
-     * @return list<array{string, int, string}>
+     * @return list<array{string, int, string, bool}>
      */
     private function linesOf(string $page): array
     {
         $split = preg_split('/\r?\n/', $page);
         $lines = [];
-        $fenced = false;
+        $fence = null;
 
         foreach (false === $split ? [] : $split as $line) {
-            // A "#" line inside a code block is code, so it never opens or closes the section.
-            $fenced = 1 === preg_match(self::FENCE, $line) ? !$fenced : $fenced;
-            [$level, $title] = $fenced ? [0, ''] : $this->headingOf($line);
-            $lines[] = [$line, $level, $title];
+            // A heading inside a code block is code, so it never opens or closes the section.
+            if (null !== $fence) {
+                $fence = $this->closes($fence, $line) ? null : $fence;
+                $lines[] = [$line, 0, '', false];
+            } elseif (1 === preg_match(self::FENCE_OPENS, $line, $opening)) {
+                $fence = $opening[1];
+                $lines[] = [$line, 0, '', false];
+            } elseif ([] !== $lines && array_last($lines)[3] && 1 === preg_match(self::SETEXT, $line, $underline)) {
+                $text = array_pop($lines)[0];
+                array_push($lines, [$text, '=' === $underline[1][0] ? 1 : 2, trim($text), false], [$line, 0, '', false]);
+            } else {
+                [$level, $title] = $this->headingOf($line);
+                $lines[] = [$line, $level, $title, 0 === $level && '' !== trim($line)];
+            }
         }
 
         return $lines;
+    }
+
+    // As CommonMark closes a fence: the same character, at least as many, and nothing after them but spaces.
+    private function closes(string $fence, string $line): bool
+    {
+        return 1 === preg_match(self::FENCE_CLOSES, $line, $closing) && $closing[1][0] === $fence[0] && strlen($closing[1]) >= strlen($fence);
     }
 
     // Level 0 for a line that is no heading, so callers compare levels without a null check.
