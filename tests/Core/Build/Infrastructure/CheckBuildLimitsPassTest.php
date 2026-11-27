@@ -57,13 +57,13 @@ final class CheckBuildLimitsPassTest extends TestCase
         $container = $this->containerWith([$name => '%env(int:INTAKT_BUILD_LIMIT)%']);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(sprintf('The build limit %s must be a literal whole number under parameters:, not string.', $name));
+        $this->expectExceptionMessageIs(sprintf('The build limit %s must be a literal whole number under parameters:, not string.', $name));
 
         new CheckBuildLimitsPass()->process($container);
     }
 
     /**
-     * @return iterable<string, array{mixed, string}>
+     * @return iterable<string, array{bool|float|string|null, string}>
      */
     public static function notWholeNumbers(): iterable
     {
@@ -74,12 +74,12 @@ final class CheckBuildLimitsPassTest extends TestCase
     }
 
     #[DataProvider('notWholeNumbers')]
-    public function testALimitThatIsNotAWholeNumberIsRefusedAtContainerBuild(mixed $value, string $type): void
+    public function testALimitThatIsNotAWholeNumberIsRefusedAtContainerBuild(bool|float|string|null $value, string $type): void
     {
         $container = $this->containerWith([BuildServices::IDLE_SECONDS => $value]);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(sprintf('The build limit %s must be a literal whole number under parameters:, not %s.', BuildServices::IDLE_SECONDS, $type));
+        $this->expectExceptionMessageIs(sprintf('The build limit %s must be a literal whole number under parameters:, not %s.', BuildServices::IDLE_SECONDS, $type));
 
         new CheckBuildLimitsPass()->process($container);
     }
@@ -89,7 +89,7 @@ final class CheckBuildLimitsPassTest extends TestCase
         $container = $this->containerWith([BuildServices::TASK_TOTAL_TOKENS => 0]);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('The build limits under parameters: are refused: Every build limit must be at least 1');
+        $this->expectExceptionMessageIs('The build limits under parameters: are refused: Every build limit must be at least 1, not allowance 1000, idle 600 s, ceiling 4000 and per-task total 0.');
 
         new CheckBuildLimitsPass()->process($container);
     }
@@ -99,13 +99,13 @@ final class CheckBuildLimitsPassTest extends TestCase
         $container = $this->containerWith([BuildServices::CEILING_TOKENS => 999]);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('The build limits under parameters: are refused: The runaway ceiling of 999 tokens is below the allowance of 1000 tokens.');
+        $this->expectExceptionMessageIs('The build limits under parameters: are refused: The runaway ceiling of 999 tokens is below the allowance of 1000 tokens.');
 
         new CheckBuildLimitsPass()->process($container);
     }
 
     /**
-     * @param array<string, mixed> $overrides
+     * @param array<string, bool|float|int|string|null> $overrides
      */
     private function containerWith(array $overrides): ContainerBuilder
     {
