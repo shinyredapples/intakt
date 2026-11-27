@@ -46,12 +46,10 @@ final readonly class ReviewerPrompt
         Do not re-flag what `bin/check` passes: a rule a `bin/check` gate enforces and passes is no finding (for example a constructor with more than three parameters, which the parameter limit exempts on purpose), also when the gate is wrong or misses a case: that gap gets a gate issue, not a send-back, so report it at most as a P3 that names the gate in the requirement field.
 
         From the second round on you are given the open findings of earlier rounds, each under a persistent id. List the id of every one that is fixed under "resolved". A finding that is still there goes in "findings" with its id and "repeat" set to true. A new problem gets a new id and "repeat" false. From the second round on, a new P1 or P2 must cite a requirement or set "regression" to true (the change broke something that worked before); otherwise it is lowered to P3. Under "resolved" and in a finding with "repeat" true, use only ids you were given.
-
-        Every finding names the file and line where you saw the problem and the rule it breaks. Answer "approve" only when you found nothing that must change.
-        TEXT;
+        TEXT."\n\n".'Every finding names the file and line where you saw the problem and the rule it breaks. Give every finding a "title" of 3 to 6 plain words that names the problem (for example "'.Finding::TITLE_EXAMPLE.'") and a "kind": "security", "logic", "missing test", "tidy-up" or "other". Answer "approve" only when you found nothing that must change.';
 
     // Every field a finding needs, so a model that left "findings" empty sees the shape it must fill.
-    public const string EXAMPLE_FINDING = '{"id":"F1","severity":"P2","file":"src/Cart.php","line":12,"symbol":"Cart::total","text":"The total adds the discount instead of subtracting it.","fixable_by":"builder","repeat":false,"requirement":"Storytelling","evidence":null,"regression":false,"gate_gap":false}';
+    public const string EXAMPLE_FINDING = '{"id":"F1","severity":"P2","file":"src/Cart.php","line":12,"symbol":"Cart::total","text":"The total adds the discount instead of subtracting it.","fixable_by":"builder","repeat":false,"requirement":"Storytelling","evidence":null,"regression":false,"gate_gap":false,"title":"The discount raises the total","kind":"logic"}';
 
     public const string NAME_FINDINGS_OR_APPROVE = 'An earlier answer to this review gave no approval but its "findings" list was empty. A changes verdict must put every problem that must change into "findings", one object per problem with its file, line and rule, for example: '.self::EXAMPLE_FINDING.'. If nothing must change, answer approve.';
 

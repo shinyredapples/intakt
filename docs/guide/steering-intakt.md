@@ -66,7 +66,7 @@ Today only a task's first build starts on the chosen tier, picked from its label
 
 ## Answering a question
 
-When a Developer needs a decision the task doesn't cover, it doesn't guess: it ends its build with a question, the choices and its recommendation, and Intakt checks that the question is well formed. Today that question is only shown by `intakt:build:run`. (Planned:) Intakt posts it on the issue and moves on to other work. Answer on the issue, from any device. Your answer is written into the task as a decision, and the task starts again from there.
+When a Developer needs a decision the task doesn't cover, it doesn't guess: it ends its build with a question, the choices and its recommendation, and Intakt checks that the question is well formed. Today you can read that question on the task's page and in the status; it isn't posted on the issue yet. (Planned:) Intakt posts it on the issue and moves on to other work. Answer on the issue, from any device. Your answer is written into the task as a decision, and the task starts again from there.
 
 ## Changing course
 
@@ -100,4 +100,4 @@ When two values of one family (two `model:` labels, say) are present, the one ap
 
 ### The status label of a reviewed pull request
 
-Intakt also puts one status label on a reviewed pull request: `status:in-review` while its round is running or waiting for its verdict to be published, and `status:waiting-on-you` once Intakt has published the verdict and the next move is yours. The label follows Intakt's own record of the round, so it is for reading only. If you change it, the next watcher pass that writes it successfully puts it back, and says so in one comment when it undid something you did. Intakt also sets it as soon as a worker picks up a round it queued and right after it publishes a verdict, so you do not wait for a pass.
+Intakt also puts one status label on a reviewed pull request: `status:in-review` while its round is running or waiting for its verdict to be published, and `status:waiting-on-you` once Intakt has published the verdict and the next move is yours. The label follows Intakt's own record of the round, so it is for reading only. The label is written when the round is queued (as soon as a worker picks up its start message; the write is an attempt) and again right after Intakt publishes a verdict. If you change it, every watcher pass tries to put it back, and the first pass that writes it successfully does. A pass that finds another writer holding the lock, or cannot read the round, leaves the repair to a later pass. When that pass undid something you did, it also posts one comment saying so; if posting that comment fails, Intakt does not retry it, and a failed comment can leave the repair unfinished until a later pass, which posts no comment.

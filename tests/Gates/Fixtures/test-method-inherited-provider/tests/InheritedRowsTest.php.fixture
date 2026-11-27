@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+
+final class InheritedRowsTest extends InheritedRowsTestCase
+{
+    #[DataProvider('testRows')]
+    public function testTheRowIsPositive(int $value): void
+    {
+        self::assertGreaterThan(0, $value);
+    }
+}

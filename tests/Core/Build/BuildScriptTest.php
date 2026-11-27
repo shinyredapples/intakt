@@ -818,6 +818,197 @@ final class BuildScriptTest extends TestCase
         self::assertStringContainsString('claude exited with', $this->outputFile('build.log'));
     }
 
+    public function testANonEmptyBuildLogFolderTheCliLeavesWithoutPermissionsStillHandsTheBundleBack(): void
+    {
+        // A recursive removal cannot empty a folder it may not read, so without the restored permissions the log could not be started again.
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            rm -f "$INTAKT_JOB_OUTPUT/build.log"
+            mkdir -p "$INTAKT_JOB_OUTPUT/build.log/inner"
+            echo planted > "$INTAKT_JOB_OUTPUT/build.log/inner/file"
+            echo planted > "$INTAKT_JOB_OUTPUT/build.log/file"
+            chmod 000 "$INTAKT_JOB_OUTPUT/build.log/inner" "$INTAKT_JOB_OUTPUT/build.log"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+        self::assertFileIsReadable($this->output.'/build.log');
+        self::assertStringStartsWith('claude exited with 0', $this->outputFile('build.log'));
+    }
+
+    public function testALinkInABuildLogFolderTheCliLeavesIsRemovedWithoutTouchingItsTarget(): void
+    {
+        file_put_contents($this->history->folder.'/kept', "kept\n");
+        chmod($this->history->folder.'/kept', 0o400);
+        $this->givenTheCli(<<<'SH'
+            rm -f "$INTAKT_JOB_OUTPUT/build.log"
+            mkdir "$INTAKT_JOB_OUTPUT/build.log"
+            ln -s "$RECORD/kept" "$INTAKT_JOB_OUTPUT/build.log/kept"
+            chmod 000 "$INTAKT_JOB_OUTPUT/build.log"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        self::assertSame('0400', substr(sprintf('%o', fileperms($this->history->folder.'/kept')), -4));
+        self::assertSame("kept\n", file_get_contents($this->history->folder.'/kept'));
+        self::assertStringStartsWith('claude exited with 0', $this->outputFile('build.log'));
+    }
+
+    public function testAFileHardLinkedIntoABuildLogFolderTheCliLeavesKeepsItsMode(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            rm -f "$INTAKT_JOB_OUTPUT/build.log"
+            mkdir "$INTAKT_JOB_OUTPUT/build.log"
+            printf kept > "$INTAKT_JOB_OUTPUT/kept"
+            chmod 400 "$INTAKT_JOB_OUTPUT/kept"
+            ln "$INTAKT_JOB_OUTPUT/kept" "$INTAKT_JOB_OUTPUT/build.log/alias"
+            chmod 000 "$INTAKT_JOB_OUTPUT/build.log"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        self::assertSame('0400', substr(sprintf('%o', fileperms($this->output.'/kept')), -4));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+    }
+
+    public function testABuildLogFileTheCliLeavesWithoutPermissionsIsStartedAgainAndTheBundleHandedBack(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            chmod 000 "$INTAKT_JOB_OUTPUT/build.log"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+        self::assertStringStartsWith('claude exited with 0', $this->outputFile('build.log'));
+    }
+
+    public function testABuildLogTheCliTurnsIntoALinkIsRemovedWithoutTouchingItsTarget(): void
+    {
+        new Filesystem()->mkdir($this->history->folder.'/elsewhere/locked');
+        file_put_contents($this->history->folder.'/elsewhere/locked/kept', "kept\n");
+        chmod($this->history->folder.'/elsewhere/locked', 0o500);
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            rm -f "$INTAKT_JOB_OUTPUT/build.log"
+            ln -s "$RECORD/elsewhere" "$INTAKT_JOB_OUTPUT/build.log"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+        $mode = substr(sprintf('%o', fileperms($this->history->folder.'/elsewhere/locked')), -4);
+        chmod($this->history->folder.'/elsewhere/locked', 0o700);
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        self::assertSame('0500', $mode);
+        self::assertSame("kept\n", file_get_contents($this->history->folder.'/elsewhere/locked/kept'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+        self::assertFalse(is_link($this->output.'/build.log'));
+        self::assertStringStartsWith('claude exited with 0', $this->outputFile('build.log'));
+    }
+
+    public function testABuildLogFolderThatCannotBeRemovedEndsWithTheCodeThatHandsNothingBackAndSaysWhy(): void
+    {
+        // A remove that does nothing stands in for a removal the job cannot do.
+        file_put_contents($this->bin.'/rm', "#!/bin/sh\nexit 0\n");
+        chmod($this->bin.'/rm', 0o755);
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            /bin/rm -f "$INTAKT_JOB_OUTPUT/build.log"
+            mkdir -p "$INTAKT_JOB_OUTPUT/build.log/inner"
+            chmod 000 "$INTAKT_JOB_OUTPUT/build.log/inner" "$INTAKT_JOB_OUTPUT/build.log"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(RunBuildJob::OUTPUT_NOT_CLEARED, $run->getExitCode());
+        self::assertStringContainsString('the build log could not be started again', $run->getErrorOutput());
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+    }
+
+    public function testABuildLogPipeThatCannotBeRemovedEndsWithTheCodeThatHandsNothingBackInsteadOfWaitingOnIt(): void
+    {
+        // A remove that does nothing stands in for a removal the job cannot do; the append would then wait on the pipe nobody reads.
+        file_put_contents($this->bin.'/rm', "#!/bin/sh\nexit 0\n");
+        chmod($this->bin.'/rm', 0o755);
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            /bin/rm -f "$INTAKT_JOB_OUTPUT/build.log"
+            mkfifo "$INTAKT_JOB_OUTPUT/build.log"
+            SH);
+        $this->timeout = 20;
+
+        try {
+            $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+        } finally {
+            $this->releaseThePipe($this->output.'/build.log');
+        }
+
+        self::assertSame(RunBuildJob::OUTPUT_NOT_CLEARED, $run->getExitCode());
+        self::assertStringContainsString('the build log could not be started again', $run->getErrorOutput());
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+    }
+
+    /**
+     * @param non-empty-string $remove
+     */
+    #[TestWith(["#!/bin/sh\nexit 0\n"], 'a removal that does nothing')]
+    #[TestWith(["#!/bin/sh\nexit 1\n"], 'a removal that fails')]
+    public function testABuildLogLinkThatCannotBeRemovedEndsWithTheCodeThatHandsNothingBackAndLeavesItsTargetEmpty(string $remove): void
+    {
+        file_put_contents($this->bin.'/rm', $remove);
+        chmod($this->bin.'/rm', 0o755);
+        file_put_contents($this->history->folder.'/target', '');
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            /bin/rm -f "$INTAKT_JOB_OUTPUT/build.log"
+            ln -s "$RECORD/target" "$INTAKT_JOB_OUTPUT/build.log"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(RunBuildJob::OUTPUT_NOT_CLEARED, $run->getExitCode());
+        self::assertStringContainsString('the build log could not be started again', $run->getErrorOutput());
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+        self::assertSame('', file_get_contents($this->history->folder.'/target'));
+    }
+
+    public function testABuildLogLinkToNothingThatCannotBeRemovedEndsWithTheCodeThatHandsNothingBackAndCreatesNoTarget(): void
+    {
+        file_put_contents($this->bin.'/rm', "#!/bin/sh\nexit 0\n");
+        chmod($this->bin.'/rm', 0o755);
+        $this->givenTheCli(<<<'SH'
+            /bin/rm -f "$INTAKT_JOB_OUTPUT/build.log"
+            ln -s "$RECORD/missing" "$INTAKT_JOB_OUTPUT/build.log"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(RunBuildJob::OUTPUT_NOT_CLEARED, $run->getExitCode());
+        self::assertFileDoesNotExist($this->history->folder.'/missing');
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+    }
+
     public function testATimeoutWithoutLongOptionsStillHandsTheBundleBack(): void
     {
         $timeout = (string) new ExecutableFinder()->find('timeout');

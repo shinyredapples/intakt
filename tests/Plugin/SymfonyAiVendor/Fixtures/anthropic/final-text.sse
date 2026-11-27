@@ -8,7 +8,7 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\"findings\":[{\"id\":\"F3\",\"severity\":\"P1\",\"file\":\"...\",\"line\":12,\"symbol\":\"...\",\"text\":\"...\","}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\"fixable_by\":\"builder\",\"repeat\":false,\"requirement\":\"...\",\"evidence\":{\"probe\":\"...\",\"output\":\"...\"},\"regression\":false}],\"verdict\":\"changes\",\"resolved\":[\"F1\",\"F2\"],\"follow_ups\":[\"...\"]}"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\"fixable_by\":\"builder\",\"repeat\":false,\"requirement\":\"...\",\"evidence\":{\"probe\":\"...\",\"output\":\"...\"},\"regression\":false,\"title\":\"A cart loses its discount\",\"kind\":\"logic\"}],\"verdict\":\"changes\",\"resolved\":[\"F1\",\"F2\"],\"follow_ups\":[\"...\"]}"}}
 
 event: content_block_stop
 data: {"type":"content_block_stop","index":0}
