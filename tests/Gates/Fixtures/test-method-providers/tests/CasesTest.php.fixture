@@ -1,0 +1,32 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\DataProviderExternal;
+use PHPUnit\Framework\TestCase;
+
+final class CasesTest extends TestCase
+{
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function testCases(): iterable
+    {
+        yield 'one' => [1];
+    }
+
+    #[DataProvider('testCases')]
+    public function testEachCaseIsPositive(int $case): void
+    {
+        self::assertGreaterThan(0, $case);
+    }
+
+    #[DataProviderExternal(SharedRows::class, methodName: 'testRows')]
+    public function testEachSharedRowIsPositive(int $row): void
+    {
+        self::assertGreaterThan(0, $row);
+    }
+}

@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\TestCase;
+
+final class AttributeTest extends TestCase
+{
+    #[Test]
+    public function works(): void
+    {
+        self::assertTrue(true);
+    }
+
+    #[Test]
+    public function testTheFormIsSent(): void
+    {
+        self::assertTrue(true);
+    }
+
+    public function worksWithoutTheAttribute(): void
+    {
+        self::assertTrue(true);
+    }
+}

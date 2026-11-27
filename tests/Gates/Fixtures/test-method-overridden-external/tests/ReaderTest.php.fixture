@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Override;
+
+final class ReaderTest extends BaseCase
+{
+    #[Override]
+    public function testReadingRowsWorks(int $row = 1): void
+    {
+        self::assertSame(1, $row);
+    }
+}

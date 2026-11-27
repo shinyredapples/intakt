@@ -8,6 +8,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
+use Intakt\Core\Review\Contract\FindingKind;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FollowUpNote;
 use Intakt\Core\Review\Contract\ResolvedFinding;
@@ -29,8 +30,8 @@ final class StoredJsonTest extends KernelTestCase
 {
     private const string TODAYS_FINDING = '{"id":"a","severity":"P2","file":"src/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true}';
 
-    // Written by the stored serializer on main before the answer document existed, so it pins the stored round JSON; the gate_gap marker came after it, in its fixed place after regression.
-    private const string VERDICT_FROM_MAIN = '{"verdict":"changes","findings":[{"id":"a","severity":"P2","file":"src\/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true,"gate_gap":false,"merged":[]}],"resolved":["b"],"follow_ups":["later"]}';
+    // Written by the stored serializer on main before the answer document existed, so it pins the stored round JSON; the gate_gap marker came after it, in its fixed place after regression, and the title and kind after that, before merged.
+    private const string VERDICT_FROM_MAIN = '{"verdict":"changes","findings":[{"id":"a","severity":"P2","file":"src\/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true,"gate_gap":false,"title":null,"kind":null,"merged":[]}],"resolved":["b"],"follow_ups":["later"]}';
 
     public function testAVerdictWrittenThroughTheSerializerReadsBackEqual(): void
     {
@@ -138,7 +139,7 @@ final class StoredJsonTest extends KernelTestCase
     {
         $json = $this->serializer()->serialize($this->finding()->withMerged(new FindingIds('F2')), JsonEncoder::FORMAT);
 
-        self::assertStringEndsWith(',"regression":true,"gate_gap":false,"merged":["F2"]}', $json);
+        self::assertStringEndsWith(',"regression":true,"gate_gap":false,"title":null,"kind":null,"merged":["F2"]}', $json);
     }
 
     public function testAFindingMarkedAsAGateGapIsWrittenWithTheMarkerAndReadsBackWithIt(): void
@@ -172,11 +173,71 @@ final class StoredJsonTest extends KernelTestCase
 
     public function testAFindingRowWithMergedIdsWrittenBeforeTheIdsWereOneValueReadsBackAndIsWrittenAgainUnchanged(): void
     {
-        $row = '[{"id":"a","severity":"P2","file":"src\/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true,"gate_gap":false,"merged":["F2","F3"]}]';
+        $row = '[{"id":"a","severity":"P2","file":"src\/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true,"gate_gap":false,"title":null,"kind":null,"merged":["F2","F3"]}]';
 
         $read = $this->serializer()->deserialize($row, Finding::class.'[]', JsonEncoder::FORMAT);
 
         self::assertSame($row, $this->serializer()->serialize($read, JsonEncoder::FORMAT));
+    }
+
+    public function testAFindingWithATitleAndAKindReadsBackWithBoth(): void
+    {
+        $finding = new Finding(
+            'a',
+            Severity::P2,
+            'src/A.php',
+            7,
+            null,
+            'Broken.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: 'A cart loses its discount',
+            kind: FindingKind::MissingTest,
+        );
+
+        $read = $this->serializer()->deserialize($this->serializer()->serialize([$finding], JsonEncoder::FORMAT), Finding::class.'[]', JsonEncoder::FORMAT);
+
+        self::assertEquals([$finding], $read);
+    }
+
+    public function testAFindingIsWrittenWithItsTitleAndTheValueOfItsKind(): void
+    {
+        $finding = new Finding(
+            'a',
+            Severity::P2,
+            'src/A.php',
+            7,
+            null,
+            'Broken.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: 'A cart loses its discount',
+            kind: FindingKind::TidyUp,
+        );
+
+        self::assertStringContainsString('"title":"A cart loses its discount","kind":"tidy-up"', $this->serializer()->serialize($finding, JsonEncoder::FORMAT));
+    }
+
+    public function testAFindingRowStoredBeforeTitlesAndKindsReadsWithNeither(): void
+    {
+        $read = $this->serializer()->deserialize('['.self::TODAYS_FINDING.']', Finding::class.'[]', JsonEncoder::FORMAT);
+
+        self::assertInstanceOf(Finding::class, $read[0]);
+        self::assertNull($read[0]->title);
+        self::assertNull($read[0]->kind);
+    }
+
+    public function testAFindingRowWithAKindOutsideTheKindsFailsToRead(): void
+    {
+        $row = '['.substr(self::TODAYS_FINDING, 0, -1).',"title":"A cart loses its discount","kind":"style"}]';
+
+        $this->expectException(UnexpectedValueException::class);
+
+        $this->serializer()->deserialize($row, Finding::class.'[]', JsonEncoder::FORMAT);
     }
 
     public function testAFindingRowWithoutMergedIdsReadsWithNone(): void

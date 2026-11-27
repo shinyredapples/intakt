@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\UseCase\ShowTask;
 
 use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
+use Intakt\Core\Dashboard\Infrastructure\ParkedQuestionTexts;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
 use Symfony\Component\HttpFoundation\Request;
@@ -20,6 +22,7 @@ final readonly class ShowTaskController
     public function __construct(
         private Ledger $ledger,
         private LedgerBuildSteps $buildSteps,
+        private ParkedQuestionTexts $questions,
         private Redactor $redactor,
         private LivePageRendering $pages,
     ) {
@@ -40,14 +43,15 @@ final readonly class ShowTaskController
             'steps' => array_map($this->redacted(...), $steps),
             'unreached' => $this->unreachedAfter($steps),
             'final' => array_last(BuildStep::cases())->value,
+            'question' => $this->parkedQuestionOf($steps, $project, $task),
         ]));
     }
 
     // Redacted because a step's failure quotes a git or forge error, which can carry a credential, as the status report does.
     /**
-     * @param array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string} $step
+     * @param array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string} $step
      *
-     * @return array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}
+     * @return array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}
      */
     private function redacted(array $step): array
     {
@@ -66,5 +70,18 @@ final readonly class ShowTaskController
         $last = array_search(array_last($steps)['step'], $cases, true);
 
         return array_slice($cases, false === $last ? count($cases) : $last + 1);
+    }
+
+    // Only for a run that ended asking, and only its own question, because the task's row can hold the question of another run that overlapped it.
+    /**
+     * @param non-empty-list<array{outcome: string, run: ?string}> $steps
+     *
+     * @return array{text: string, choices: list<string>, recommendation: string, parked_at: string}|null
+     */
+    private function parkedQuestionOf(array $steps, string $project, string $task): ?array
+    {
+        $last = array_last($steps);
+
+        return BuildStepOutcome::Asked->value === $last['outcome'] ? $this->questions->of($project, $task, $last['run']) : null;
     }
 }

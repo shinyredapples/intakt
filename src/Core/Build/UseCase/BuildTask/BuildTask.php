@@ -156,7 +156,7 @@ final readonly class BuildTask
             $result = match ($step) {
                 BuildStep::Mirror => $this->updateMirror($request),
                 BuildStep::Clone => $this->makeClone($request),
-                BuildStep::BuildJob => $this->runBuildJob($request, $task),
+                BuildStep::BuildJob => $this->runBuildJob($request, $run, $task),
                 BuildStep::HandBackCheck => $this->handBacks->check($request, $this->bundleIn($results)),
                 BuildStep::PrePushCheck => $this->prePushCheck($request, $task, $results),
                 BuildStep::Push => $this->push($request, $results),
@@ -206,7 +206,7 @@ final readonly class BuildTask
     }
 
     // The outcome of a job that built, for the hand-back check, or of one that asked an accepted question, for the parking; otherwise the failure's text.
-    private function runBuildJob(BuildTaskRequest $request, ListedIssue $task): BuildJobOutcome|BuildQuestion|string
+    private function runBuildJob(BuildTaskRequest $request, BuildRun $run, ListedIssue $task): BuildJobOutcome|BuildQuestion|string
     {
         $incomplete = $this->incompleteBugQuestion($task);
 
@@ -220,8 +220,16 @@ final readonly class BuildTask
             return $failure->getMessage();
         }
 
+        if ($outcome->question instanceof BuildQuestion) {
+            return $outcome;
+        }
+
         // What the job hands back stays untrusted until the hand-back check, so only its verdict reaches the ledger.
-        return $outcome->built() || $outcome->question instanceof BuildQuestion ? $outcome : $outcome->verdict->reason();
+        if (!$outcome->built()) {
+            return $outcome->verdict->reason();
+        }
+
+        return $this->unpark($run) ?? $outcome;
     }
 
     /**
@@ -347,5 +355,17 @@ final readonly class BuildTask
         $brief = new BuildBrief($task->title."\n\n".$task->body, new Decisions(), null, TaskKind::fromLabels($labels));
 
         return new BuildJob($request->project, $request->directory, $request->branch, $brief, $choice->tier, $request->image);
+    }
+
+    // Cleared once a later build job built, because the question an earlier one asked no longer says where the task stands.
+    private function unpark(BuildRun $run): ?string
+    {
+        try {
+            $this->parkedTasks->clear($run);
+        } catch (ParkedTaskNotCleared $notCleared) {
+            return $notCleared->getMessage();
+        }
+
+        return null;
     }
 }

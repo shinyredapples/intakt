@@ -35,6 +35,9 @@ final readonly class ParkedTaskRecord
         BuildQuestion $question,
         #[ORM\Column(name: 'parked_at', type: 'utc_datetime_immutable')]
         private DateTimeImmutable $parkedAt,
+        // Nullable for good, because a row parked before the column existed names no run and a rollback keeps the database.
+        #[ORM\Column(length: 36, nullable: true)]
+        private ?string $run,
     ) {
         $this->question = $question->question;
         $this->choices = $question->choices;
@@ -42,19 +45,11 @@ final readonly class ParkedTaskRecord
     }
 
     /**
-     * @return array{project: string, task: int}
-     */
-    public function keyRow(): array
-    {
-        return ['project' => $this->project, 'task' => $this->task];
-    }
-
-    /**
-     * @return array{project: string, task: int, question: string, choices: non-empty-list<string>, recommendation: string, parked_at: DateTimeImmutable}
+     * @return array{project: string, task: int, question: string, choices: non-empty-list<string>, recommendation: string, parked_at: DateTimeImmutable, run: ?string}
      */
     public function row(): array
     {
-        return ['project' => $this->project, 'task' => $this->task, 'question' => $this->question, 'choices' => $this->choices, 'recommendation' => $this->recommendation, 'parked_at' => $this->parkedAt];
+        return ['project' => $this->project, 'task' => $this->task, 'question' => $this->question, 'choices' => $this->choices, 'recommendation' => $this->recommendation, 'parked_at' => $this->parkedAt, 'run' => $this->run];
     }
 
     /**

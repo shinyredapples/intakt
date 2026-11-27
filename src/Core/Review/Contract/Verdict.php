@@ -125,6 +125,8 @@ final readonly class Verdict
             repeat: false,
             requirement: 'A verdict counts only when the reviewer finished it; a cut-off stream blocks and never counts as approval or changes.',
             evidence: $evidence,
+            title: 'The reviewer stream ended early',
+            kind: FindingKind::Other,
         );
 
         return self::raisedByIntakt($finding);
@@ -143,6 +145,8 @@ final readonly class Verdict
             repeat: false,
             requirement: 'An approval counts only from a reviewer that could read the change.',
             evidence: null,
+            title: 'Approval without reading the change',
+            kind: FindingKind::Other,
         );
 
         return self::raisedByIntakt($finding);
@@ -161,6 +165,8 @@ final readonly class Verdict
             repeat: false,
             requirement: 'An approval counts only from a reviewer that was shown the whole change.',
             evidence: null,
+            title: 'Approval of a cut change',
+            kind: FindingKind::Other,
         );
 
         return self::raisedByIntakt($finding);
@@ -179,6 +185,8 @@ final readonly class Verdict
             repeat: false,
             requirement: 'A reviewer judges only a change it can read.',
             evidence: null,
+            title: 'The reviewer had no tools',
+            kind: FindingKind::Other,
         );
 
         return self::raisedByIntakt($finding);
@@ -197,6 +205,8 @@ final readonly class Verdict
             repeat: false,
             requirement: 'A stopped reviewer gives no verdict; its review counts as blocked, never as approval or changes.',
             evidence: null,
+            title: 'The reviewer was stopped',
+            kind: FindingKind::Other,
         );
 
         return self::raisedByIntakt($finding);
