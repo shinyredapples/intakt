@@ -116,7 +116,7 @@ Locks are short-lived: a job that waits for something outside (CI, you) gives it
 
 Some AI companies are routers: Hugging Face, for example, passes each call on to another company that runs the model. You can name that company, the **router provider**, after a colon in the model's name, such as `moonshotai/Kimi-K3.1-Pro:deepinfra`, and every call for that model then goes to it.
 
-When the router provider says "too many calls" (a rate limit), Intakt pauses it on that account: for as long as the answer asked, for one minute when it gave no time, and never longer than a day. While the pause lasts, Intakt sends that router provider no call from that account, from any worker on this computer. The account pauses as well, as for any rate limit.
+When the router provider says "too many calls" (a rate limit), Intakt pauses it on that account: for as long as the answer asked, for one minute when it gave no time, never longer than a day and never shorter than a second (a zero or past time waits one second). While the pause lasts, Intakt sends that router provider no call from that account, from any worker on this computer. The account pauses as well, as for any rate limit.
 
 What happens to the call then:
 - When another account of the same company is free, the call goes there at once.

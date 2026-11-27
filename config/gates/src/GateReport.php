@@ -38,7 +38,7 @@ final readonly class GateReport
         return true === self::verdictOf($this->gate, $this->line);
     }
 
-    // Because only a kept result that, cut as the line cuts it, gives the line's own findings and omitted count, omits nothing itself and states the line's verdict can stand in for a line the child printed, so the report never shows a gate with two verdicts.
+    // Because only a kept result that is exactly the canonical encoding of what it decodes to (a repeated key would decode to one value and read as another elsewhere) and that, cut as the line cuts it, gives the line's own findings and omitted count, omits nothing itself and states the line's verdict can stand in for a line the child printed, so the report never shows a gate with two verdicts.
     public function keeping(string $kept): self
     {
         if (GateLine::Built === $this->origin) {
@@ -46,7 +46,7 @@ final readonly class GateReport
         }
 
         $whole = json_decode($kept, true);
-        $agrees = is_array($whole) && $this->gate === ($whole['gate'] ?? null) && $this->isPassing() === ($whole['ok'] ?? null) && 0 === ($whole['omitted'] ?? null);
+        $agrees = is_array($whole) && self::isEncodedAs($whole, $kept) && $this->gate === ($whole['gate'] ?? null) && $this->isPassing() === ($whole['ok'] ?? null) && 0 === ($whole['omitted'] ?? null);
         $findings = $agrees ? ($whole['findings'] ?? null) : null;
 
         $strings = is_array($findings) && array_is_list($findings) ? array_values(array_filter($findings, is_string(...))) : null;
@@ -66,6 +66,18 @@ final readonly class GateReport
         $shown = $this->shownOf($this->line);
 
         return 0 !== $shown['omitted'] || array_any($shown['findings'], static fn (mixed $finding): bool => is_string($finding) && GateResult::isCut($finding));
+    }
+
+    /**
+     * @param array<array-key, mixed> $report
+     */
+    private static function isEncodedAs(array $report, string $line): bool
+    {
+        try {
+            return $line === json_encode($report, GateResult::JSON_FLAGS);
+        } catch (JsonException) {
+            return false;
+        }
     }
 
     /**
@@ -108,18 +120,6 @@ final readonly class GateReport
         }
 
         return '...'.$end;
-    }
-
-    /**
-     * @param array<array-key, mixed> $report
-     */
-    private static function isEncodedAs(array $report, string $line): bool
-    {
-        try {
-            return $line === json_encode($report, GateResult::JSON_FLAGS);
-        } catch (JsonException) {
-            return false;
-        }
     }
 
     /**

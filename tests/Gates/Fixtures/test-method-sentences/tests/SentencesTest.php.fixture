@@ -1,0 +1,40 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\TestCase;
+
+final class SentencesTest extends TestCase
+{
+    public function testAnHTTPRequestFails(): void
+    {
+        self::assertTrue(true);
+    }
+
+    public function testA96PxIconOffersIts192PxFile(): void
+    {
+        self::assertTrue(true);
+    }
+
+    public function testANon2xxAnswerFailsTheRead(): void
+    {
+        self::assertTrue(true);
+    }
+
+    public static function testAMissingReadingIsReported(): void
+    {
+        self::assertTrue(true);
+    }
+
+    public function runs(): void
+    {
+        $this->testHelper();
+    }
+
+    private function testHelper(): void
+    {
+        self::assertTrue(true);
+    }
+}

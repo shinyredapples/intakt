@@ -46,9 +46,15 @@ A project never names a model per reviewer. It maps three tiers to a provider an
 
 Each reviewer names a tier. So one changed line moves every reviewer on that tier to a newer model. Use the newest model of each maker for reviews; the example configuration names the ones the project recommends today. The tiers live in the project file ([chapter 9](09-running-it-for-a-team.md#your-project-and-its-panel) says which file that is).
 
+## When a build runs long
+
+A build went past its allowance but keeps fixing tests. It may go on while it makes progress. Two limits are meant to stop it even then: the runaway ceiling for one build, and the per-task total across its continuations. A build stopped by either keeps the commits it made, and they are checked and pushed like any other.
+
+Planned: Intakt does not watch a running build for these limits yet. Today a build ends when its session's time runs out, and it keeps its commits the same way.
+
 ## When a provider says "slow down"
 
-When a provider limits a call, the account that made it cools down until the reset time the provider sent, at most one day. The reviewer moves on at once to the next account of the same provider, if you have one. A tier can also list substitutes from other providers, used only when its own provider cannot answer.
+When a provider limits a call, the account that made it cools down until the reset time the provider sent, at most one day and at least one second (a reset of zero or already past waits one second). The reviewer moves on at once to the next account of the same provider, if you have one. A tier can also list substitutes from other providers, used only when its own provider cannot answer.
 
 ## Reading the cost
 
