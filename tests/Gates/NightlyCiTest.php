@@ -14,7 +14,7 @@ use Symfony\Component\Yaml\Yaml;
  * @phpstan-type Job array{permissions?: array<string, string>, needs?: string|list<string>, if?: string, steps?: list<Step>}
  * @phpstan-type WorkflowFile array{on: array<string, mixed>, concurrency: array{group: string}, permissions: array<string, string>, jobs: array<string, Job>}
  */
-// The nightly and on-demand full run of ci.yml on main and its failure issue; the steps run from the workflow file itself.
+// The nightly and on-demand full run of ci.yml on main and its failure issue; the steps run from the workflow file itself, so a test cannot pass on a copy that drifted.
 #[CoversNothing]
 final class NightlyCiTest extends SandboxTestCase
 {
@@ -29,7 +29,7 @@ final class NightlyCiTest extends SandboxTestCase
         exit 2
         SH;
 
-    // A fake gh: the issues call answers from issues.json through --jq, the issue commands write what they were asked to calls.
+    // A fake gh, so no test needs GitHub: the issues call answers from issues.json through --jq, the issue commands write what they were asked to calls.
     private const string FAKE_GH = <<<'SH'
         #!/bin/sh
         set -eu
@@ -168,7 +168,7 @@ final class NightlyCiTest extends SandboxTestCase
     {
         $sandbox = $this->emptySandbox();
         $sandbox->write('bin/gh', self::FAKE_GH);
-        $sandbox->write('issues.json', json_encode($issues, \JSON_THROW_ON_ERROR));
+        $sandbox->write('issues.json', json_encode($issues, JSON_THROW_ON_ERROR));
 
         return $sandbox;
     }
