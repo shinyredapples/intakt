@@ -62,7 +62,6 @@ final readonly class HeadClones
      *
      * @throws ProcessFailedException
      * @throws RepositoryAttributesRefused
-     * @throws RuntimeException
      */
     // Against the head's own tree, because a path on the file system follows a committed link, which could lead out of the checkout; a link and a submodule have modes of their own.
     public function holdsARegularFileOf(string $clone, CommitId $head, array $paths): bool
