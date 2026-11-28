@@ -163,10 +163,10 @@ final readonly class BuildTask
             // A local of this run, never a property, because a worker keeps the service between runs.
             $results[$step->value] = $result;
 
-            $question = $this->questionIn($result);
+            $asked = AskedQuestion::in($result);
 
-            if ($question instanceof BuildQuestion) {
-                return $this->park($run, $task, $result instanceof BuildJobOutcome ? $result : $question);
+            if ($asked instanceof AskedQuestion) {
+                return $this->park($run, $task, $asked);
             }
 
             $ended = $this->endOf($step, $result);
@@ -301,26 +301,13 @@ final readonly class BuildTask
         return $changeText instanceof ChangeText ? $this->pushes->failureOf($request, $accepted, $changeText) : $changeText;
     }
 
-    private function questionIn(BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null $result): ?BuildQuestion
-    {
-        return $result instanceof BuildJobOutcome ? $result->question : ($result instanceof BuildQuestion ? $result : null);
-    }
-
     // The run ends at the build job without recording its step, because park() records it as asked in the transaction that stores the question.
-    private function park(BuildRun $run, ListedIssue $task, BuildJobOutcome|BuildQuestion $asked): BuildTaskOutcome
+    private function park(BuildRun $run, ListedIssue $task, AskedQuestion $asked): BuildTaskOutcome
     {
-        $question = $asked instanceof BuildJobOutcome ? $asked->question : $asked;
-        $stopCause = $asked instanceof BuildJobOutcome ? $asked->stopCause : null;
-
-        // Never otherwise, because park() is reached only with an accepted question.
-        if (!$question instanceof BuildQuestion) {
-            throw new LogicException('a task is parked only with a question');
-        }
-
         try {
-            $this->parkedTasks->park($run, $question, $stopCause);
+            $this->parkedTasks->park($run, $asked->question, $asked->stopCause);
         } catch (TaskNotParked $notParked) {
-            $this->record($run, EndedStep::of(BuildStep::BuildJob, $notParked->getMessage(), $stopCause));
+            $this->record($run, EndedStep::of(BuildStep::BuildJob, $notParked->getMessage(), $asked->stopCause));
 
             return new BuildTaskOutcome(BuildStep::BuildJob, $notParked->getMessage(), $task);
         }
