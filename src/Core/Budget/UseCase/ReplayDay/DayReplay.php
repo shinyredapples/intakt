@@ -6,7 +6,9 @@ namespace Intakt\Core\Budget\UseCase\ReplayDay;
 
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Budget\Contract\AccountRanking;
 use Intakt\Core\Budget\Contract\Holds;
+use Intakt\Core\Budget\Contract\LeftOutAccount;
 use Intakt\Core\Budget\Contract\MeasuredUse;
 use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Budget\Contract\StartGuard;
@@ -23,6 +25,7 @@ final readonly class DayReplay
         private MeasuredUse $measured,
         private Holds $holds,
         private StartGuard $guard,
+        private AccountRanking $ranking,
     ) {
     }
 
@@ -37,7 +40,8 @@ final readonly class DayReplay
             'hold' => $this->hold($step),
             'start' => $this->start($step),
             'merge' => $this->merge($step),
-            default => throw ScriptLineNotUnderstood::because($step->line, 'a step is read, limit, hold, start or merge'),
+            'rank' => $this->rank($step),
+            default => throw ScriptLineNotUnderstood::because($step->line, 'a step is read, limit, hold, start, merge or rank'),
         };
     }
 
@@ -98,6 +102,21 @@ final readonly class DayReplay
         $this->arguments($step, 0);
 
         return $this->guard->decideMerge()->value;
+    }
+
+    // The accounts as listed are the owner's order, the ranking's last tie-break; each left-out account is printed with its cause and its end, so a replay shows why it was not picked.
+    private function rank(ScriptedStep $step): string
+    {
+        $keys = array_slice($step->words, 1);
+        if ([] === $keys) {
+            throw ScriptLineNotUnderstood::because($step->line, 'rank takes one account or more');
+        }
+
+        $ranked = $this->ranking->rank(array_map(fn (string $key): Account => $this->accountOf($step, $key), $keys));
+        $order = array_map(static fn (Account $account): string => $account->key(), $ranked->inOrder);
+        $leftOut = array_map(static fn (LeftOutAccount $left): string => sprintf('%s %s until %s', $left->account->key(), $left->cause->value, $left->resetsAt?->format('Y-m-d\TH:i') ?? 'unknown'), $ranked->leftOut);
+
+        return sprintf('ranked %s; left out %s', [] === $order ? 'none' : implode(', ', $order), [] === $leftOut ? 'none' : implode(', ', $leftOut));
     }
 
     private function accountOf(ScriptedStep $step, string $key): Account

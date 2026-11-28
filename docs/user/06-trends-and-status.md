@@ -59,6 +59,18 @@ Trends mostly looks back. For the present moment, open **Now** in the menu. The 
 
 When nobody works, the page says so: "No reviewer is working right now: reviewers appear here while they review a change".
 
+## When the Status page says new work is paused
+
+Say the disk of the mirrors folder, or of a project's mirror kept on a disk of its own, runs low on free space or on file slots (inodes). Intakt pauses new work, and the Status page shows a line saying which one ran low, on which folder, and how much is left against the limit. Another folder you keep inside the mirrors folder is not measured.
+
+To clear it:
+
+1. Free space on that disk.
+2. Reload the Status page: the line is gone.
+3. Run again any mirror update or build step that was refused meanwhile, because it does not start by itself.
+
+When the free space cannot be read at all, the page shows a red "Free disk space unknown" line instead, and a mirror update or build clone fails until it can be read.
+
 ## Projects: every project at a glance
 
 Now shows what is moving. To see how each project is doing, open **Projects** in the menu. Every project you configured, and every project that has had a review, gets one card.

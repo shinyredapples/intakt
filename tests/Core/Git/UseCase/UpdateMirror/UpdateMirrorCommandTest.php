@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\UseCase\UpdateMirror;
 
+use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
@@ -109,7 +110,7 @@ final class UpdateMirrorCommandTest extends TestCase
     private function whenTheCommandRuns(string $project, string $remote, Filesystem $filesystem = new Filesystem()): CommandTester
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
-        $mirror = new UpdateMirror(new HardenedGit(), $network, $filesystem, new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors));
+        $mirror = new UpdateMirror(new HardenedGit(), $network, $filesystem, new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors), self::createStub(DiskSpace::class));
         $application = new Application();
         $application->addCommand(new UpdateMirrorCommand($mirror));
         $tester = new CommandTester($application->find('intakt:mirror:update'));

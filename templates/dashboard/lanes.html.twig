@@ -13,6 +13,9 @@
         <p class="lead">{{ working.statusLine }}</p>
     </div>
 </div>
+{% if held_for_space is not null %}
+{% embed 'dashboard/components/banner.html.twig' with {icon: held_for_space.broken ? 'broken' : 'pause', broken: held_for_space.broken, short: held_for_space.short, title: held_for_space.title, text: held_for_space.text} only %}{% endembed %}
+{% endif %}
 {# Reviewers are the only lanes with a source today, so the page lists them; slots, runners and budgets join once they have one. #}
 {% if working.lanes is empty %}
 <p class="working-none" id="working">{{ nobody_working }}</p>

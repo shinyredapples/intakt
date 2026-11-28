@@ -14,4 +14,9 @@ final readonly class DiskHold
         public int $minimum,
     ) {
     }
+
+    public function reason(): string
+    {
+        return sprintf('the disk of %s holds new work: %d free %s, below the floor of %d', $this->folder, $this->free, $this->floor->value, $this->minimum);
+    }
 }

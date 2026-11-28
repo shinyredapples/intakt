@@ -7,6 +7,7 @@ namespace Intakt\Tests\Application;
 use Doctrine\Deprecations\Deprecation;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Build\Infrastructure\CheckBuildLimitsPass;
 use Intakt\Core\Mcp\Infrastructure\AuthorizeToolCallsPass;
 use Intakt\Kernel;
 use Intakt\Tests\Support\KernelTestCase;
@@ -46,6 +47,16 @@ final class KernelTest extends KernelTestCase
         self::assertIsInt($position);
         self::assertSame($earlier::class, $passes[$position - 1]);
         self::assertSame($later::class, $passes[$position + 1]);
+    }
+
+    public function testTheApplicationPassesCheckTheBuildLimits(): void
+    {
+        $container = new ContainerBuilder();
+
+        Kernel::addApplicationPasses($container);
+
+        $passes = array_map(get_class(...), $container->getCompilerPassConfig()->getBeforeOptimizationPasses());
+        self::assertContains(CheckBuildLimitsPass::class, $passes);
     }
 
     public function testTheSchemaToolOfTheEntityManagerTriggersNoSchemaEditorDeprecation(): void
