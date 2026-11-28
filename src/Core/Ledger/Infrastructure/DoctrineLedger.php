@@ -79,7 +79,7 @@ final readonly class DoctrineLedger implements Ledger
         return $this->eventsOf(array_filter($this->recordsOf(['kind' => $kind->value, 'subject' => $subject]), static fn (EventRecord $record): bool => $record->subject() === $subject));
     }
 
-    // The plain comparison lets the index find the rows, and a byte comparison beside it keeps the exact subject before the limit, because a collation that ignores case would otherwise let a newer case variant take the one row.
+    // The plain comparisons let the index find the rows, and byte comparisons beside them keep the exact kind and subject before the limit, because a collation that ignores case would otherwise let a newer case variant take the one row.
     public function newestOfKindAbout(LedgerEventKind $kind, string $subject): ?RecordedEvent
     {
         $manager = $this->registry->getManager();
@@ -87,7 +87,7 @@ final readonly class DoctrineLedger implements Ledger
         $mapping = new ResultSetMappingBuilder($manager);
         $mapping->addRootEntityFromClassMetadata(EventRecord::class, 'r');
         $platform = $manager->getConnection()->getDatabasePlatform();
-        $sql = sprintf('SELECT %s FROM %s r WHERE r.kind = :kind AND r.subject = :subject AND %s ORDER BY r.position DESC', $mapping->generateSelectClause(), $manager->getClassMetadata(EventRecord::class)->getTableName(), $this->exactSubjectOn($platform));
+        $sql = sprintf('SELECT %s FROM %s r WHERE r.kind = :kind AND r.subject = :subject AND %s AND %s ORDER BY r.position DESC', $mapping->generateSelectClause(), $manager->getClassMetadata(EventRecord::class)->getTableName(), $this->exactOn($platform, 'kind'), $this->exactOn($platform, 'subject'));
 
         /** @var list<EventRecord> $newest */
         $newest = $manager->createNativeQuery($platform->modifyLimitQuery($sql, 1), $mapping)->setParameters(['kind' => $kind->value, 'subject' => $subject])->getResult();
@@ -193,13 +193,13 @@ final readonly class DoctrineLedger implements Ledger
     }
 
     // Spelled per platform, because DQL has no collation and each database the install supports names its byte comparison differently; any other one throws, since a guessed comparison could ignore case.
-    private function exactSubjectOn(AbstractPlatform $platform): string
+    private function exactOn(AbstractPlatform $platform, string $column): string
     {
         return match (true) {
-            $platform instanceof SQLitePlatform => 'r.subject = :subject COLLATE BINARY',
-            $platform instanceof AbstractMySQLPlatform => 'CAST(r.subject AS BINARY) = CAST(:subject AS BINARY)',
-            $platform instanceof PostgreSQLPlatform => 'r.subject = :subject COLLATE "C"',
-            default => throw new LogicException(sprintf('The ledger cannot compare subjects exactly on %s.', $platform::class)),
+            $platform instanceof SQLitePlatform => sprintf('r.%1$s = :%1$s COLLATE BINARY', $column),
+            $platform instanceof AbstractMySQLPlatform => sprintf('CAST(r.%1$s AS BINARY) = CAST(:%1$s AS BINARY)', $column),
+            $platform instanceof PostgreSQLPlatform => sprintf('r.%1$s = :%1$s COLLATE "C"', $column),
+            default => throw new LogicException(sprintf('The ledger cannot compare a %s exactly on %s.', $column, $platform::class)),
         };
     }
 

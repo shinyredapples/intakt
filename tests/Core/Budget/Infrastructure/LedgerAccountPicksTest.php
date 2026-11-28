@@ -26,6 +26,7 @@ use Intakt\Tests\Support\Log\RecordingLogger;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -139,6 +140,27 @@ final class LedgerAccountPicksTest extends TestCase
     {
         $picks = $this->picks();
         self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::AccountPicked, '{"provider":"claude_code","picked":null,"left_out":[{"account":"team","cause":"tired","resets_at":null}]}', 'claude_code'))->succeeded());
+
+        self::assertNull($picks->latestOf(Provider::ClaudeCode));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function malformedRows(): iterable
+    {
+        yield 'a null left-out entry' => ['{"provider":"claude_code","picked":null,"left_out":[null]}'];
+        yield 'left-out accounts keyed by name' => ['{"provider":"claude_code","picked":null,"left_out":{"spare":{"account":"spare","cause":"weekly-ceiling","resets_at":null}}}'];
+        yield 'a relative reset' => ['{"provider":"claude_code","picked":null,"left_out":[{"account":"spare","cause":"weekly-ceiling","resets_at":"tomorrow"}]}'];
+        yield 'a reset without its offset' => ['{"provider":"claude_code","picked":null,"left_out":[{"account":"spare","cause":"weekly-ceiling","resets_at":"2026-11-30 12:00:00"}]}'];
+        yield 'no left-out list' => ['{"provider":"claude_code","picked":"team"}'];
+    }
+
+    #[DataProvider('malformedRows')]
+    public function testAMalformedNewestRowReadsAsNoPick(string $payload): void
+    {
+        $picks = $this->picks();
+        self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::AccountPicked, $payload, 'claude_code'))->succeeded());
 
         self::assertNull($picks->latestOf(Provider::ClaudeCode));
     }

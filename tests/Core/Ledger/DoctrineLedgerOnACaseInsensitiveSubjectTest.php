@@ -81,6 +81,17 @@ final class DoctrineLedgerOnACaseInsensitiveSubjectTest extends KernelTestCase
         self::assertCount(1, $this->manager->getUnitOfWork()->getIdentityMap()[EventRecord::class] ?? []);
     }
 
+    public function testTheNewestEventOfTheExactKindSkipsALaterRowWhoseKindDiffersOnlyInCase(): void
+    {
+        foreach (['first', 'newest exact'] as $payload) {
+            self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::AccountPicked, $payload, 'r1'))->succeeded());
+        }
+        $this->manager->getConnection()->insert('ledger_event', ['id' => '019ac9f2-0000-7000-8000-000000000001', 'kind' => 'ACCOUNT_PICKED', 'payload' => 'other case', 'recorded_at' => '2026-11-22 12:00:00', 'subject' => 'r1']);
+        $this->manager->clear();
+
+        self::assertSame('newest exact', $this->ledger->newestOfKindAbout(LedgerEventKind::AccountPicked, 'r1')?->event->payload);
+    }
+
     public function testTheNewestEventOnADatabaseWithoutAKnownExactComparisonIsRefused(): void
     {
         $driver = self::createStub(Driver::class);
@@ -96,7 +107,7 @@ final class DoctrineLedgerOnACaseInsensitiveSubjectTest extends KernelTestCase
     protected function setUp(): void
     {
         $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
-        $connection->executeStatement('CREATE TABLE ledger_event (position INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, id CHAR(36) NOT NULL, kind VARCHAR(32) NOT NULL, payload CLOB NOT NULL, recorded_at DATETIME NOT NULL, subject VARCHAR(255) DEFAULT NULL COLLATE NOCASE)');
+        $connection->executeStatement('CREATE TABLE ledger_event (position INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, id CHAR(36) NOT NULL, kind VARCHAR(32) NOT NULL COLLATE NOCASE, payload CLOB NOT NULL, recorded_at DATETIME NOT NULL, subject VARCHAR(255) DEFAULT NULL COLLATE NOCASE)');
         $connection->executeStatement('CREATE INDEX ledger_event_subject ON ledger_event (kind, subject, position)');
 
         $this->manager = $this->managerOn($connection);

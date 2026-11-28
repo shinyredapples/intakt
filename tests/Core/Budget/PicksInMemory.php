@@ -28,12 +28,4 @@ final class PicksInMemory implements AccountPicks
     {
         return array_last(array_values(array_filter($this->picks, static fn (AccountPick $pick): bool => $provider === $pick->provider)));
     }
-
-    /**
-     * @return list<AccountPick>
-     */
-    public function all(): array
-    {
-        return $this->picks;
-    }
 }
