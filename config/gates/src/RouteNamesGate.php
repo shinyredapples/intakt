@@ -72,61 +72,13 @@ final class RouteNamesGate implements RunsTheChangesCode
             return GateResult::failedBecause($this->name(), 'debug:router printed no route list in JSON, so the routes cannot be read');
         }
 
-        foreach ([$services, $hiddenServices] as $listed) {
-            if (!$listed->succeeded()) {
-                return GateResult::failedBecause($this->name(), 'debug:container exited with '.$listed->exitCode.': '.$listed->firstErrorLine());
-            }
+        $rule = $this->ruleFrom($workspace, $services, $hiddenServices);
+
+        if (is_string($rule)) {
+            return GateResult::failedBecause($this->name(), $rule);
         }
 
-        $classOfService = $this->classOfServiceFrom($services->output, $hiddenServices->output);
-
-        if (null === $classOfService) {
-            return GateResult::failedBecause($this->name(), 'debug:container printed no service list in JSON, so controllers named by service ID cannot be read');
-        }
-
-        $reflectedClasses = $this->reflectedClassesOf($workspace, $classOfService);
-
-        if (null === $reflectedClasses) {
-            return GateResult::failedBecause($this->name(), 'the services\' classes could not be reflected, so their declared spelling cannot be read');
-        }
-
-        return GateResult::withFindings($this->name(), new RouteNamesFollowUseCases($classOfService, $reflectedClasses)->findingsIn($routes));
-    }
-
-    /**
-     * @param array<string, string> $classOfService
-     *
-     * @return list<string>|null
-     */
-    private function reflectedClassesOf(Workspace $workspace, array $classOfService): ?array
-    {
-        $candidates = array_values(array_unique(array_filter(
-            array_map(static fn (string $class): string => ltrim($class, '\\'), $classOfService),
-            static fn (string $class): bool => 0 === strncasecmp($class, self::OWN_NAMESPACE, strlen(self::OWN_NAMESPACE)),
-        )));
-
-        $scratch = ScratchDirectory::create('intakt-route-classes');
-
-        if (!$scratch instanceof ScratchDirectory) {
-            return null;
-        }
-
-        try {
-            // Because many class names exceed what one command line argument may hold, they go through a file.
-            $list = $scratch->path.'/classes.json';
-            file_put_contents($list, json_encode($candidates, JSON_THROW_ON_ERROR));
-            $reflected = $workspace->command([PHP_BINARY, '-r', self::REFLECT, '--', $workspace->root.'/vendor/autoload.php', $list]);
-        } finally {
-            $scratch->discard();
-        }
-
-        $declared = $reflected->succeeded() ? $this->decoded($reflected->output) : null;
-
-        if (!is_array($declared) || !array_is_list($declared)) {
-            return null;
-        }
-
-        return array_values(array_filter($declared, is_string(...)));
+        return GateResult::withFindings($this->name(), $rule->findingsIn($routes));
     }
 
     private function routesFrom(string $json): ?RouteCollection
@@ -157,6 +109,30 @@ final class RouteNamesGate implements RunsTheChangesCode
         } catch (JsonException) {
             return null;
         }
+    }
+
+    // Because the rule needs the services' classes as Symfony serves them, a failure names what could not be read.
+    private function ruleFrom(Workspace $workspace, ProcessResult ...$listings): RouteNamesFollowUseCases|string
+    {
+        foreach ($listings as $listed) {
+            if (!$listed->succeeded()) {
+                return 'debug:container exited with '.$listed->exitCode.': '.$listed->firstErrorLine();
+            }
+        }
+
+        $classOfService = $this->classOfServiceFrom(...array_map(static fn (ProcessResult $listed): string => $listed->output, $listings));
+
+        if (null === $classOfService) {
+            return 'debug:container printed no service list in JSON, so controllers named by service ID cannot be read';
+        }
+
+        $reflectedClasses = $this->reflectedClassesOf($workspace, $classOfService);
+
+        if (null === $reflectedClasses) {
+            return 'the services\' classes could not be reflected, so their declared spelling cannot be read';
+        }
+
+        return new RouteNamesFollowUseCases($classOfService, $reflectedClasses);
     }
 
     /**
@@ -222,5 +198,41 @@ final class RouteNamesGate implements RunsTheChangesCode
         }
 
         return $aliased;
+    }
+
+    /**
+     * @param array<string, string> $classOfService
+     *
+     * @return list<string>|null
+     */
+    private function reflectedClassesOf(Workspace $workspace, array $classOfService): ?array
+    {
+        $candidates = array_values(array_unique(array_filter(
+            array_map(static fn (string $class): string => ltrim($class, '\\'), $classOfService),
+            static fn (string $class): bool => 0 === strncasecmp($class, self::OWN_NAMESPACE, strlen(self::OWN_NAMESPACE)),
+        )));
+
+        $scratch = ScratchDirectory::create('intakt-route-classes');
+
+        if (!$scratch instanceof ScratchDirectory) {
+            return null;
+        }
+
+        try {
+            // Because many class names exceed what one command line argument may hold, they go through a file.
+            $list = $scratch->path.'/classes.json';
+            file_put_contents($list, json_encode($candidates, JSON_THROW_ON_ERROR));
+            $reflected = $workspace->command([PHP_BINARY, '-r', self::REFLECT, '--', $workspace->root.'/vendor/autoload.php', $list]);
+        } finally {
+            $scratch->discard();
+        }
+
+        $declared = $reflected->succeeded() ? $this->decoded($reflected->output) : null;
+
+        if (!is_array($declared) || !array_is_list($declared)) {
+            return null;
+        }
+
+        return array_values(array_filter($declared, is_string(...)));
     }
 }
