@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\BuildTask;
 
-use Intakt\Core\Build\Contract\BuildStep;
-use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Symfony\Component\Uid\Uuid;
 
 // One run of a task, named by an id every step row of the run carries, because two runs of the same task can overlap and the task page shows the steps of one run only.
