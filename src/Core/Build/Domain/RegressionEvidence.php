@@ -27,7 +27,7 @@ final readonly class RegressionEvidence
         $evidence = $this->evidenceIn($headings);
 
         if (null === $evidence) {
-            return $this->joined(rtrim($body).$readable->closing(),"## Evidence\n\n".$this->resultLines(), '');
+            return $this->joined(rtrim($body).$readable->closing(), "## Evidence\n\n".$this->resultLines(), '');
         }
 
         $end = $this->endOf($evidence, $headings, count($lines));
