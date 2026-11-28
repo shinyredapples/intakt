@@ -1013,6 +1013,10 @@ When the escalation's message is parked after its retries, for any error, `escal
 The worker's log and a parked message then name the failure in Intakt's words, never in the provider's, because a provider's message can repeat a key.
 Intakt keeps the verdict for the finding's key and records an `escalation_reviewed` event with the round, the finding id, the key, the outcome and the redacted reasons, which `bin/console intakt:ledger:events` prints.
 A later round with the same P1 on unchanged files reuses the kept verdict (`escalation_verdict_reused`) and asks no model.
+When the escalation review rejects the finding, Intakt starts the next round of the change on the same commit, from the repository and base branch the rejected round was read from; a round that recorded neither gets none.
+That happens once per commit: when the reviewer holds the finding again in that round, no further round is started for it.
+The reviewers of every later round are shown the outcome and reasons of each escalated finding that is still open, and are asked to hold a rejected one again only when the reasons are wrong for the code.
+When the review confirms the finding, no round is started: the next build of the change runs on the strong tier.
 A failed escalation records `escalation_failed` with Intakt's reason and keeps no verdict, so a later round of the same P1 is reviewed again.
 The review runs once per round and finding: a message delivered again asks no model and records nothing more.
 When two rounds of the same P1 are reviewed at once, only the first verdict is kept, and the other round records its reuse.

@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Domain\GoalpostRule;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationsOfChange;
 use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
@@ -30,6 +31,7 @@ final readonly class ReviewWithReviewerHandler
         private ReviewRounds $rounds,
         private GoalpostRule $goalposts,
         private LiveRoundProgress $progress,
+        private EscalationsOfChange $escalations,
     ) {
     }
 
@@ -61,7 +63,7 @@ final readonly class ReviewWithReviewerHandler
         $round = $reviewer->round();
 
         try {
-            $brief = new ReviewBrief(new ChangeUnderReview($round->project(), $round->task(), $round->diff()), $this->rounds->openFindingsOf($round), $round->number());
+            $brief = new ReviewBrief(new ChangeUnderReview($round->project(), $round->task(), $round->diff()), $this->rounds->openFindingsOf($round), $round->number(), $this->escalations->ofOpenFindings($round));
             $request = new ReviewRequest(new Checkout($round->checkoutRoot()), $brief, new ReviewerConversation($reviewer->rolePrompt(), $reviewer->conversationId(), $round->id(), $reviewer->id()));
             $review = $this->vendor->review($round->project(), $reviewer->tier(), $request);
         } catch (ProviderRateLimited $limited) {

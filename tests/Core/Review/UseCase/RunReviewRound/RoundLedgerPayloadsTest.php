@@ -114,6 +114,13 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         self::assertSame('{"round":"'.self::ROUND.'","project":"alpha","reviewers":2,"change":"feat\/x","number":3,"task":"T7","quorum":"one-strong-plus-one"}', $this->written($started));
     }
 
+    public function testAStartWithLabelsIsWrittenWithThemAndReadBack(): void
+    {
+        $started = new ReviewStarted(self::ROUND, 'alpha', 2, 'feat/x', 3, 'T7', labels: ['review:full']);
+
+        self::assertSame('{"round":"'.self::ROUND.'","project":"alpha","reviewers":2,"change":"feat\/x","number":3,"task":"T7","labels":["review:full"]}', $this->written($started));
+    }
+
     public function testAStartWithoutASourceHasNoRepositoryOrBaseKey(): void
     {
         $started = new ReviewStarted(self::ROUND, 'alpha', 1, 'feat/x', 1, 'T7');

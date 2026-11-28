@@ -12,11 +12,15 @@ use Intakt\Core\Review\Contract\ChangeEscalations;
 use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationReviewFailed;
 use Intakt\Core\Review\Contract\EscalationStillPending;
+use Intakt\Core\Review\Contract\EscalationVerdict;
 use Intakt\Core\Review\Contract\EscalationVerdictKept;
 use Intakt\Core\Review\Contract\EscalationVerdictReused;
+use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\RecordedIdentityMalformed;
 use Intakt\Core\Review\Contract\RecurringP1Found;
+use Intakt\Core\Review\Domain\KeptVerdict;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Override;
 
@@ -34,6 +38,7 @@ final readonly class EscalationsOfChange implements ChangeEscalations
 
     public function __construct(
         private ReviewRounds $rounds,
+        private KeptVerdicts $verdicts,
         private Ledger $ledger,
         private LedgerPayloads $payloads,
     ) {
@@ -73,6 +78,33 @@ final readonly class EscalationsOfChange implements ChangeEscalations
         }
 
         return null;
+    }
+
+    // Null while nothing is recorded, and for a failed escalation, because a failure must never count as a rejection.
+    public function outcomeFor(string $round, string $key): ?EscalationOutcome
+    {
+        $recorded = $this->recordedFor($round, $key);
+
+        return null === $recorded || $recorded instanceof EscalationReviewFailed ? null : $recorded->outcome;
+    }
+
+    // Keyed by finding id, because the ids stay the same across rounds and the reviewer that still holds a finding must see why it was confirmed or rejected.
+    /**
+     * @return array<string, EscalationVerdict>
+     */
+    public function ofOpenFindings(ReviewRound $round): array
+    {
+        $open = array_map(static fn (Finding $finding): string => $finding->id, $this->rounds->openFindingsOf($round));
+        $earlier = $this->earlierRoundsOf($round);
+
+        // Nothing read for a first round, because every review asks this and most changes never escalate.
+        if ([] === $open || [] === $earlier) {
+            return [];
+        }
+
+        $kept = array_map($this->verdicts->ofKey(...), $this->keysOf($earlier, $open));
+
+        return array_map(static fn (KeptVerdict $verdict): EscalationVerdict => new EscalationVerdict($verdict->outcome, $verdict->reasons), array_filter($kept));
     }
 
     /**
@@ -178,5 +210,35 @@ final readonly class EscalationsOfChange implements ChangeEscalations
     private function verdictsIn(array $events): array
     {
         return array_values(array_filter($events, static fn (object $event): bool => $event instanceof EscalationVerdictKept || $event instanceof EscalationVerdictReused));
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    private function earlierRoundsOf(ReviewRound $round): array
+    {
+        $earlier = array_filter($this->rounds->ofChange($round), static fn (ReviewRound $other): bool => $other->number() < $round->number());
+
+        return array_fill_keys(array_map(static fn (ReviewRound $other): string => $other->id()->toRfc4122(), array_values($earlier)), true);
+    }
+
+    // The finding's latest recurrence decides, because a finding whose files changed recurs under a new key, and a verdict on the old code must not stand for the new one while its own escalation is queued or failed.
+    /**
+     * @param array<string, true> $rounds
+     * @param list<string>        $open
+     *
+     * @return array<string, string>
+     */
+    private function keysOf(array $rounds, array $open): array
+    {
+        $keys = [];
+
+        foreach ($this->eventsOf($rounds) as $event) {
+            if ($event instanceof RecurringP1Found && in_array($event->finding, $open, true)) {
+                $keys[$event->finding] = $event->key;
+            }
+        }
+
+        return $keys;
     }
 }

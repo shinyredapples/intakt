@@ -14,7 +14,6 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\CatchUpOwed;
-use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\EscalationReviewFailed;
 use Intakt\Core\Review\Contract\EscalationVerdictKept;
@@ -29,6 +28,7 @@ use Intakt\Core\Review\Contract\JudgingFailed;
 use Intakt\Core\Review\Contract\P1Keys;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\RecurringP1Found;
+use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
@@ -61,9 +61,11 @@ final readonly class RoundLedger
     ) {
     }
 
-    // The repository, base, task and quorum go with the start, because the dashboard starts the change's next round and shows its outcome from the ledger alone, and ledger rows are never back-filled.
-    public function reviewStarted(ReviewRound $round, QuorumPolicy $quorum, ?ChangeSource $source): void
+    // The repository, base, task, quorum and labels go with the start, because the dashboard starts the change's next round and shows its outcome from the ledger alone, and ledger rows are never back-filled.
+    public function reviewStarted(ReviewRound $round, QuorumPolicy $quorum, RequestedRound $requested): void
     {
+        $labels = [...$requested->labels];
+
         $this->append(LedgerEventKind::ReviewStarted, new ReviewStarted(
             $round->id()->toRfc4122(),
             $round->project(),
@@ -71,9 +73,10 @@ final readonly class RoundLedger
             $round->change(),
             $round->number(),
             $round->task(),
-            $source?->repository,
-            $source?->base,
+            $requested->source?->repository,
+            $requested->source?->base,
             $quorum,
+            [] === $labels ? null : $labels,
         ));
     }
 

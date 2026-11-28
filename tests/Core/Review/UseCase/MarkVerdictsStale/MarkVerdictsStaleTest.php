@@ -66,6 +66,19 @@ final class MarkVerdictsStaleTest extends KernelTestCase
         self::assertSame(Standing::Current, $this->verdictsAtTheSameHead($other)->standing->standing);
     }
 
+    public function testALaterRoundOfTheChangeOnTheSameHeadIsWithdrawnWithTheMarkedRound(): void
+    {
+        $first = $this->fixture->startAtHead('7', str_repeat('a', 40));
+        $again = $this->fixture->startAtHead('7', str_repeat('a', 40));
+        $moved = $this->fixture->startAtHead('7', str_repeat('b', 40));
+        $commands = new QueuedPublications();
+
+        new MarkVerdictsStaleHandler($this->fixture->transactions(), $commands)(new MarkVerdictsStale($first));
+
+        self::assertSame([true, true, false], array_map(fn (string $round): bool => $this->fixture->round($round)->hasStaleVerdicts(), [$first, $again, $moved]));
+        self::assertEquals([new PublishVerdict($first), new PublishVerdict($again)], $commands->messages);
+    }
+
     public function testAnUnknownRoundCannotBeMarkedStale(): void
     {
         $this->expectException(RoundNotFound::class);

@@ -109,7 +109,7 @@ final readonly class LocalChangeReview
     {
         $panel = $this->panelFor($input, $change);
         $identity = $this->identityOf($input, $change, $panel);
-        $round = new RequestedRound($input->change, $input->round, new ChangeSource($this->absolute($input->repository), $input->base));
+        $round = new RequestedRound($input->change, $input->round, new ChangeSource($this->absolute($input->repository), $input->base), $input->labels ?? new Labels());
 
         return static fn (string $snapshot): ChangeReviewRequest => new ChangeReviewRequest($input->project, $snapshot, $input->task, $change->diff->patch, $round, $identity, $panel);
     }

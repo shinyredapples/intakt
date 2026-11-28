@@ -11,6 +11,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\PanelReviewer;
+use Intakt\Core\Review\Contract\RecordedIdentityMalformed;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\VerdictIdentity;
@@ -92,6 +93,16 @@ final class ReviewRound implements HasPlace
     public function markVerdictsStale(): void
     {
         $this->verdictsStale = true;
+    }
+
+    // Never for a round stored before identities were recorded, because its head is not known.
+    public function sharesHeadWith(self $other): bool
+    {
+        try {
+            return $this->identity()->commits->head->hash === $other->identity()->commits->head->hash;
+        } catch (RecordedIdentityMalformed) {
+            return false;
+        }
     }
 
     public function hasStaleVerdicts(): bool

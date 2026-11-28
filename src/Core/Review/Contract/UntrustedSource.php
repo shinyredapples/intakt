@@ -18,4 +18,5 @@ enum UntrustedSource: string
     case CiLog = 'ci log';
     case PullRequestText = 'pull request text';
     case EscalatedFinding = 'escalated finding';
+    case EscalationVerdicts = 'escalation verdicts';
 }
