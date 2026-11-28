@@ -37,12 +37,6 @@ final readonly class RegressionEvidence
         return $this->joined($this->closed(implode("\n", $kept), ReadableLines::of($kept)->closing()), $this->resultLines(), implode("\n", array_slice($lines, $end)));
     }
 
-    // Only line breaks go before a closer, because the trailing spaces of the last line are content of the code or block it closes.
-    private function closed(string $text, string $closing): string
-    {
-        return '' === $closing ? rtrim($text) : rtrim($text, "\n").$closing;
-    }
-
     /**
      * @param array<int, array{int, string}> $headings
      */
@@ -56,6 +50,12 @@ final readonly class RegressionEvidence
         }
 
         return null;
+    }
+
+    // Only line breaks go before a closer, because the trailing spaces of the last line are content of the code or block it closes.
+    private function closed(string $text, string $closing): string
+    {
+        return '' === $closing ? rtrim($text) : rtrim($text, "\n").$closing;
     }
 
     private function resultLines(): string
