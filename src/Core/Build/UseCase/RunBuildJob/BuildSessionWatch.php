@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\RunBuildJob;
 
+use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildProgress;
 use Intakt\Core\Build\Domain\BuildStopRule;
@@ -48,7 +49,7 @@ final class BuildSessionWatch implements JobWatch
         $this->watch = $this->rule->observe($this->watch, $progress);
         $cause = $this->rule->stopCause($this->watch);
 
-        if (null === $cause) {
+        if (!$cause instanceof BuildStopCause) {
             return false;
         }
 

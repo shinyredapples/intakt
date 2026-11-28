@@ -12,8 +12,8 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
-use Intakt\Core\Build\Domain\BuildStopRule;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\BuildStopRule;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\QuestionRefused;
@@ -48,10 +48,10 @@ use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunBuildJobCommand::class)]

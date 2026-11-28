@@ -31,7 +31,6 @@ use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
-use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
@@ -82,18 +81,6 @@ final class WatchedBuildJobTest extends TestCase
 
     /** @var list<bool> */
     private array $answers = [];
-
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-01-01 00:00:00');
-        $this->folder = sys_get_temp_dir().'/intakt-watched-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/clone');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
 
     public function testABuildIdleOverItsAllowanceIsStoppedForNoProgressAndKeepsItsCommits(): void
     {
@@ -185,6 +172,18 @@ final class WatchedBuildJobTest extends TestCase
         self::assertSame(self::TICK, new BuildSessionWatch($this->job(), new BuildStopRule($this->clock), new RecordedBuildStops(), new BuildLimits(1, 1, 1, 1))->intervalSeconds());
     }
 
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-01-01 00:00:00');
+        $this->folder = sys_get_temp_dir().'/intakt-watched-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/clone');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
+    }
+
     /**
      * @param list<string> $logs the log as the job holds it at each look, until the watch asks to end the session
      */
@@ -196,7 +195,7 @@ final class WatchedBuildJobTest extends TestCase
             foreach ($logs as $log) {
                 $this->clock->sleep($watch->intervalSeconds());
                 $this->answers[] = $watch->endsSession(OutputFiles::of(['build.log' => $log]));
-                if (true === end($this->answers)) {
+                if (end($this->answers)) {
                     break;
                 }
             }

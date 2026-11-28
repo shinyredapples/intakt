@@ -12,9 +12,9 @@ use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
-use Intakt\Core\Build\Domain\BuildStopRule;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\BuildStopCause;
+use Intakt\Core\Build\Domain\BuildStopRule;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\QuestionRefused;
@@ -52,8 +52,8 @@ use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
-use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunBuildJob::class)]

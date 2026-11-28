@@ -73,9 +73,9 @@ final readonly class BuildLogReading
     }
 
     /**
-     * @param array<mixed>      $block
-     * @param array<string,bool> $open    tool call id => whether it runs the tests or the checks
-     * @param list<string>      $changes
+     * @param array<mixed>         $block
+     * @param array<string,bool>   $open    tool call id => whether it runs the tests or the checks
+     * @param list<string>         $changes
      * @param array<string,string> $failing
      */
     private static function take(array $block, array &$open, array &$changes, array &$failing): void
