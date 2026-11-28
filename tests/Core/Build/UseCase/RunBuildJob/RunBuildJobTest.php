@@ -81,6 +81,8 @@ final class RunBuildJobTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/build.sh';
 
+    private const string PRECHECK = __DIR__.'/../../../../../docker/job/precheck.sh';
+
     private string $folder = '';
 
     private ?JobSpec $ran = null;
@@ -92,6 +94,8 @@ final class RunBuildJobTest extends TestCase
     private mixed $toolTimeLimit = 1500;
 
     private string $script = self::SCRIPT;
+
+    private string $precheck = self::PRECHECK;
 
     private RecordedBuildStops $stops;
 
@@ -193,14 +197,40 @@ final class RunBuildJobTest extends TestCase
         self::assertGreaterThan((int) [...$this->ran->command][9], $this->ran->limits->seconds);
     }
 
-    public function testTheBuildClonedAndThePromptAreTheJobsOnlyInputs(): void
+    public function testTheBuildCloneThePromptAndTheBuildersCheckAreTheJobsOnlyInputs(): void
     {
         (void) $this->runBuilds(OutputFiles::of([]))->run($this->job());
 
         self::assertNotNull($this->ran);
         self::assertSame([$this->folder.'/clone', RunBuildJob::CLONE], [$this->ran->inputs[0]->hostPath, $this->ran->inputs[0]->containerPath]);
         self::assertSame(RunBuildJob::PROMPT, $this->ran->inputs[1]->containerPath);
-        self::assertCount(2, $this->ran->inputs);
+        self::assertSame([(string) realpath(self::PRECHECK), BuilderPrompt::PRECHECK], [$this->ran->inputs[2]->hostPath, $this->ran->inputs[2]->containerPath]);
+        self::assertCount(3, $this->ran->inputs);
+    }
+
+    public function testABuildersCheckThatIsNoFileLeavesNoPromptFileAndNeverReachesTheRunner(): void
+    {
+        $this->precheck = $this->folder.'/missing.sh';
+        $runner = $this->createMock(JobRunner::class);
+        $runner->expects($this->never())->method('run');
+
+        try {
+            (void) $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+            self::fail('a missing check script must stop the build');
+        } catch (IOException $failure) {
+            self::assertSame(sprintf('The builder\'s check script "%s" is not a readable file.', $this->precheck), $failure->getMessage());
+        }
+
+        self::assertDirectoryDoesNotExist($this->folder.'/prompts');
+    }
+
+    public function testABuildersCheckThatIsAFolderIsRefusedLikeAMissingOne(): void
+    {
+        $this->precheck = $this->folder.'/clone';
+
+        $this->expectExceptionObject(new IOException(sprintf('The builder\'s check script "%s" is not a readable file.', $this->folder.'/clone')));
+
+        (void) $this->runBuilds(OutputFiles::of([]))->run($this->job());
     }
 
     public function testThePromptFileHoldsTheFencedTaskWhileTheJobRunsAndIsRemovedAfterwards(): void
@@ -627,6 +657,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, $this->gate ?? new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $this->script, $this->promptFolder ?? $this->folder.'/prompts', $this->stops, new BuildLimits(1, 1, 1, 1));
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, $this->gate ?? new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $this->script, $this->precheck, $this->promptFolder ?? $this->folder.'/prompts', $this->stops, new BuildLimits(1, 1, 1, 1));
     }
 }

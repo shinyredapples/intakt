@@ -2,6 +2,7 @@
 # The build job's command: the builder works in a clone of its own, and only a bundle and the pull request text leave the job.
 # Usage: build.sh <build clone> <prompt file> <branch> <model> <max turns> <allowance seconds> <gates at once> <tool time limit seconds>
 # Copies the build clone's branches into TMPDIR, runs Claude Code there with the prompt on its input, then bundles the branch's new commits.
+# The session sees the branch and its starting commit as INTAKT_BUILD_BRANCH and INTAKT_BUILD_BASE, which the builder's own check (precheck.sh, mounted at /input/precheck.sh) reads.
 # Each of the session's tool calls may run up to <tool time limit seconds>, so the builder's own bin/check ends inside its call instead of going to the background.
 # The builder's bin/check runs <gates at once> gates at the same time, a count the orchestrator hands over only when it is below what bin/check picks from the job's limits; when it is empty, INTAKT_GATE_SLOTS is left as the job's environment has it (unset unless the image sets it), so bin/check uses the job's limits (its CPUs and memory) to size its gates at once itself.
 # The session ends at its turn limit or when the allowance is used up, and the script outlives it, so what it committed before is still bundled.
@@ -117,6 +118,10 @@ if ! bundle_git="$(system_command git)"; then
 fi
 
 base="$(git rev-parse HEAD)"
+# For the builder's own check (precheck.sh), which compares the branch with where the session started; the bundle step below reads the shell variable, never these.
+INTAKT_BUILD_BRANCH="$branch"
+INTAKT_BUILD_BASE="$base"
+export INTAKT_BUILD_BRANCH INTAKT_BUILD_BASE
 # The bytes of a QUESTION.json the checkout already holds, read before the session and kept in a variable the builder cannot write:
 # the checkout's bytes and not the commit's, because a checkout that converts line endings holds other bytes than the commit.
 # Hashed by sha256sum and not by git, because git's hash follows the clone's settings (its object format, its filters), which the builder can write.

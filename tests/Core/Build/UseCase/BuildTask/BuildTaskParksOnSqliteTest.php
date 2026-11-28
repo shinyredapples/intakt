@@ -132,6 +132,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 final class BuildTaskParksOnSqliteTest extends KernelTestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/build.sh';
+    private const string PRECHECK = __DIR__.'/../../../../../docker/job/precheck.sh';
 
     private const string QUESTION = '{"question":"PLANT-question: keep the old flag?","choices":["keep it","drop it"],"recommendation":"drop it"}';
 
@@ -248,7 +249,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts', new RecordedBuildStops(), new BuildLimits(1, 1, 1, 1));
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, self::PRECHECK, $this->folder.'/prompts', new RecordedBuildStops(), new BuildLimits(1, 1, 1, 1));
         $files = new HandBackFile($checkout, new Filesystem(), $this->folder.'/hand-backs');
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);
