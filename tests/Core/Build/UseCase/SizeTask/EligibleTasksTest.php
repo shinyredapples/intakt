@@ -10,6 +10,7 @@ use Intakt\Core\Build\UseCase\SizeTask\EligibleTasks;
 use Intakt\Core\Build\UseCase\SizeTask\TaskNotSized;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
+use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
@@ -23,6 +24,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(SizingRequest::class)]
 #[UsesClass(EligibilityLabels::class)]
 #[UsesClass(ProjectEligibilityLabel::class)]
+#[UsesClass(ProjectNamesNoEligibilityLabel::class)]
 #[UsesClass(ListedIssue::class)]
 #[UsesClass(IssueHistory::class)]
 #[UsesClass(IssueLabels::class)]
@@ -39,7 +41,7 @@ final class EligibleTasksTest extends TestCase
     public function testATaskWithoutTheEligibilityLabelIsRefused(): void
     {
         $fixture = $this->fixture();
-        $fixture->issue->open = SampleIssue::listed(7, SampleIssue::OWNER, SampleIssue::BODY, 'idea');
+        $fixture->issue->open = $fixture->issue->listedAs(SampleIssue::OWNER, SampleIssue::BODY, 'idea');
 
         $this->expectExceptionObject(TaskNotSized::unreadable('alpha', 7, 'it lacks the label "ready"'));
 
@@ -49,7 +51,7 @@ final class EligibleTasksTest extends TestCase
     public function testATaskWhoseAuthorHasNoWriteAccessIsRefused(): void
     {
         $fixture = $this->fixture();
-        $fixture->issue->open = SampleIssue::listed(7, 'stranger', SampleIssue::BODY);
+        $fixture->issue->open = $fixture->issue->listedAs('stranger', SampleIssue::BODY);
 
         $this->expectExceptionObject(TaskNotSized::unreadable('alpha', 7, 'its author has no write access'));
 
@@ -88,7 +90,7 @@ final class EligibleTasksTest extends TestCase
 
     public function testAProjectWithoutAnEligibilityLabelIsRefused(): void
     {
-        $this->expectException(TaskNotSized::class);
+        $this->expectExceptionObject(ProjectNamesNoEligibilityLabel::named('beta'));
 
         $this->fixture()->eligibleTasks()->requestFor('beta', 7);
     }

@@ -225,7 +225,7 @@ final class SizeTaskTest extends TestCase
     {
         $fixture = $this->fixture();
         (void) $fixture->sizing($this->vendor($this->verdict([ReadinessGap::AcceptanceCondition], SizeTier::Small, 20)))->run('alpha', 7);
-        $fixture->issue->open = SampleIssue::listed(7, SampleIssue::OWNER, 'Users see their items on /cart. Done when the page lists them.');
+        $fixture->issue->open = $fixture->issue->listedAs(SampleIssue::OWNER, 'Users see their items on /cart. Done when the page lists them.');
         $fixture->issue->history = new IssueHistory(SampleIssue::OWNER, [new LabelApplication(SampleIssue::LABEL, SampleIssue::OWNER)], 'Users see their items on /cart. Done when the page lists them.', new IssueLabels(SampleIssue::LABEL));
 
         $outcome = $fixture->sizing($this->vendor($this->verdict([], SizeTier::Small, 20)))->run('alpha', 7);

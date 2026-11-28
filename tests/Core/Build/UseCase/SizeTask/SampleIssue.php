@@ -28,15 +28,15 @@ final class SampleIssue implements IssueReads, IssueHistories
 
     public ?ForgeReadFailed $failure = null;
 
-    public function __construct(int $number = 7)
+    public function __construct(private readonly int $number = 7)
     {
-        $this->open = self::listed($number, self::OWNER, self::BODY);
+        $this->open = $this->listedAs(self::OWNER, self::BODY);
         $this->history = new IssueHistory(self::OWNER, [new LabelApplication(self::LABEL, self::OWNER)], self::BODY, new IssueLabels(self::LABEL));
     }
 
-    public static function listed(int $number, string $author, string $body, string ...$labels): ListedIssue
+    public function listedAs(string $author, string $body, string ...$labels): ListedIssue
     {
-        return new ListedIssue($number, 'Add a cart page', $body, new IssueLabels(...([] === $labels ? [self::LABEL] : $labels)), $author, new DateTimeImmutable('2026-11-20 10:00:00 UTC'), null, false);
+        return new ListedIssue($this->number, 'Add a cart page', $body, new IssueLabels(...([] === $labels ? [self::LABEL] : $labels)), $author, new DateTimeImmutable('2026-11-20T10:00:00Z'), null, false);
     }
 
     #[Override]

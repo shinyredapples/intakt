@@ -7,7 +7,6 @@ namespace Intakt\Core\Build\UseCase\SizeTask;
 use Closure;
 use Intakt\Core\Build\Contract\SizingRequest;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
-use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
@@ -36,7 +35,7 @@ final readonly class EligibleTasks
         try {
             $task = $this->issues->readOpen($project, $number);
             $refusal = $task instanceof ListedIssue ? $this->refusalOf($project, $task) : 'it is not an open issue';
-        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked|ProjectNamesNoEligibilityLabel $failure) {
+        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
             throw TaskNotSized::unreadable($project, $number, $failure->getMessage());
         }
 

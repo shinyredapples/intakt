@@ -53,7 +53,7 @@ final class InMemoryLedger implements Ledger
     {
         $about = array_filter($this->events, static fn (LedgerEvent $event): bool => $kind === $event->kind && $subject === $event->subject);
 
-        return new RecordedEvents(array_values(array_map(static fn (LedgerEvent $event): RecordedEvent => new RecordedEvent(Uuid::v7(), $event, new DateTimeImmutable('2026-11-28 12:00:00 UTC')), $about)));
+        return new RecordedEvents(array_values(array_map(static fn (LedgerEvent $event): RecordedEvent => new RecordedEvent(Uuid::v7(), $event, new DateTimeImmutable('2026-11-28T12:00:00Z')), $about)));
     }
 
     #[Override]
