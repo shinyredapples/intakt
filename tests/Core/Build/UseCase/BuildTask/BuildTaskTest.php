@@ -12,6 +12,8 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\SplitUmbrellas;
+use Intakt\Core\Build\Contract\UmbrellaTasks;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
@@ -386,6 +388,8 @@ final class BuildTaskTest extends TestCase
 
     private RecordedBuildStops $stops;
 
+    private UmbrellaTasks $umbrellas;
+
     public function testARemoteNamingAnotherGitHubRepositoryThanTheConfiguredOneIsRefusedBeforeAnythingIsRecordedPushedOrAskedOfTheForge(): void
     {
         $this->configuredRepository = 'acme/alpha';
@@ -417,6 +421,29 @@ final class BuildTaskTest extends TestCase
 
         self::assertSame('project "alpha" has no open issue 7', $outcome->failure);
         self::assertSame(['task'], array_column($this->stepsIn($ledger), 'step'));
+    }
+
+    public function testANamedTaskWhoseSplitPlanIsRecordedFailsAtTheTaskStepAndRunsNoOtherStep(): void
+    {
+        $this->umbrellas = new UmbrellaTasks(7);
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::Task, $outcome->last);
+        self::assertSame('issue 7 of project "alpha" is split into parts, which are built in its place', $outcome->failure);
+        self::assertSame([['task', 'issue 7 of project "alpha" is split into parts, which are built in its place']], array_map(static fn (array $step): array => [$step['step'], $step['failure'] ?? null], $this->stepsIn($ledger)));
+    }
+
+    public function testANamedTaskThatIsNotAnUmbrellaGoesOnPastTheTaskStep(): void
+    {
+        $this->umbrellas = new UmbrellaTasks(8);
+        $ledger = new InMemoryLedger();
+
+        (void) $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame('mirror', $this->stepsIn($ledger)[1]['step'] ?? null);
+        self::assertNull($this->stepsIn($ledger)[0]['failure'] ?? null);
     }
 
     public function testATaskWhoseStepsAllPassEndsWithTheBranchPushedSignedFromTheCheckedHead(): void
@@ -1609,6 +1636,7 @@ final class BuildTaskTest extends TestCase
     {
         $this->locks = new LockFactory(new InMemoryStore());
         $this->stops = new RecordedBuildStops();
+        $this->umbrellas = new UmbrellaTasks();
         $this->handBackFiles = new Filesystem();
         $this->changes = new RecordingChangeOpening();
         $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
@@ -1831,7 +1859,10 @@ final class BuildTaskTest extends TestCase
 
         $texts = new PullRequestTextCheck($checkout, new RoutePullRequestText(new PullRequestTextRoutes($this->textLedger ?? $ledger, $this->textLocks ?? $this->locks)));
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, $this->regressionTests ?? new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
+        $umbrellas = self::createStub(SplitUmbrellas::class);
+        $umbrellas->method('of')->willReturnCallback(fn (string $project): UmbrellaTasks => 'alpha' === $project ? $this->umbrellas : new UmbrellaTasks());
+
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, $this->regressionTests ?? new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks, $umbrellas);
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.

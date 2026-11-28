@@ -11,6 +11,7 @@ use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\Decisions;
+use Intakt\Core\Build\Contract\SplitUmbrellas;
 use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuildQuestion;
@@ -63,6 +64,7 @@ final readonly class BuildTask
         private Ledger $ledger,
         private PushRemoteCheck $remoteCheck,
         private LockFactory $locks,
+        private SplitUmbrellas $umbrellas,
     ) {
     }
 
@@ -138,7 +140,14 @@ final readonly class BuildTask
             return $failure->getMessage();
         }
 
-        return $issue ?? sprintf('project "%s" has no open issue %d', $request->project, $request->issue);
+        if (!$issue instanceof ListedIssue) {
+            return sprintf('project "%s" has no open issue %d', $request->project, $request->issue);
+        }
+
+        // Checked at admission as well as at intake, because an operator can name any open issue and the umbrella is never built: docs/design/05-architecture/03-choosing-work.md
+        return $this->umbrellas->of($request->project)->contains($request->issue)
+            ? sprintf('issue %d of project "%s" is split into parts, which are built in its place', $request->issue, $request->project)
+            : $issue;
     }
 
     /**

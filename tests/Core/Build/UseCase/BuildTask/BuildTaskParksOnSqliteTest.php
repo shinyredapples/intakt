@@ -14,6 +14,8 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\SplitUmbrellas;
+use Intakt\Core\Build\Contract\UmbrellaTasks;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildStep;
@@ -348,8 +350,10 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $files = new HandBackFile($checkout, new Filesystem(), $this->folder.'/hand-backs');
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);
+        $umbrellas = self::createStub(SplitUmbrellas::class);
+        $umbrellas->method('of')->willReturn(new UmbrellaTasks());
 
-        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($checkout, self::createStub(PullRequestTextRound::class)), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()));
+        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($checkout, self::createStub(PullRequestTextRound::class)), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()), $umbrellas);
     }
 
     private function question(): string
