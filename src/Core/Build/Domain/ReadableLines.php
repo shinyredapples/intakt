@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\Domain;
 
-// Only code fences, indented code, thematic breaks, list item lines and ATX and setext headings are read, because they are what decides where a heading is; other Markdown is left alone.
+// Only code fences, indented code, HTML blocks, thematic breaks, list item lines and ATX and setext headings are read, because they are what decides where a heading is; other Markdown is left alone.
 final readonly class ReadableLines
 {
     /**
@@ -16,6 +16,8 @@ final readonly class ReadableLines
         public ?string $openFence,
         private array $paragraph,
         private TextPlace $place,
+        private ?HtmlBlock $html = null,
+        public ?string $openElement = null,
     ) {
     }
 
@@ -33,10 +35,34 @@ final readonly class ReadableLines
         return $read;
     }
 
+    // What closes the fence, the HTML block and the element still open after the last line read, because lines added after them would be read as their content.
+    public function closing(): string
+    {
+        $closers = array_filter([$this->openFence, $this->html?->closer(), null === $this->openElement ? null : '</'.$this->openElement.'>'], static fn (?string $closer): bool => null !== $closer);
+
+        return implode('', array_map(static fn (string $closer): string => "\n".$closer, $closers));
+    }
+
     private function after(int $number, string $line): self
+    {
+        $next = $this->read($number, $line);
+
+        // An end tag in code is rendered as text, so only one read as HTML closes the element.
+        if (null !== $next->openElement && !$this->isCode($next, $line) && 1 === preg_match('/<\/'.preg_quote($next->openElement, '/').'[ \t]*>/i', $line)) {
+            return clone($next, ['openElement' => null]);
+        }
+
+        return $next;
+    }
+
+    private function read(int $number, string $line): self
     {
         if (null !== $this->openFence) {
             return $this->closes($line, $this->openFence) ? clone($this, ['openFence' => null]) : $this;
+        }
+
+        if ($this->html instanceof HtmlBlock) {
+            return $this->html->endsAt($line) ? clone($this, ['html' => null]) : $this;
         }
 
         $first = array_key_first($this->paragraph);
@@ -60,7 +86,7 @@ final readonly class ReadableLines
     {
         $level = '=' === ltrim($line)[0] ? 1 : 2;
 
-        return new self($this->headings + [$first => [$level, trim(implode("\n", array_map(trim(...), $this->paragraph)))]], null, [], TextPlace::Apart);
+        return new self($this->headings + [$first => [$level, trim(implode("\n", array_map(trim(...), $this->paragraph)))]], null, [], TextPlace::Apart, null, $this->openElement);
     }
 
     private function opened(int $number, string $line): self
@@ -68,22 +94,29 @@ final readonly class ReadableLines
         $fence = $this->opening($line);
 
         if (null !== $fence) {
-            return new self($this->headings, $fence, [], TextPlace::Apart);
+            return new self($this->headings, $fence, [], TextPlace::Apart, null, $this->openElement);
+        }
+
+        $html = HtmlBlock::opening($line);
+
+        // A line with only a tag cannot interrupt a paragraph, because CommonMark keeps it as the paragraph's text.
+        if ($html instanceof HtmlBlock && (HtmlBlock::Tag !== $html || [] === $this->paragraph)) {
+            return $this->htmlOpened($html, $line);
         }
 
         $heading = $this->headingOf($line);
 
         if (null !== $heading) {
-            return new self($this->headings + [$number => $heading], null, [], TextPlace::Apart);
+            return new self($this->headings + [$number => $heading], null, [], TextPlace::Apart, null, $this->openElement);
         }
 
         if ($this->isItem($line)) {
-            return new self($this->headings, null, [], TextPlace::BelowItem);
+            return new self($this->headings, null, [], TextPlace::BelowItem, null, $this->openElement);
         }
 
         $paragraph = $this->paragraphAfter($this->paragraph, $number, $line);
 
-        return new self($this->headings, null, $paragraph, [] === $paragraph ? TextPlace::Apart : $this->place);
+        return new self($this->headings, null, $paragraph, [] === $paragraph ? TextPlace::Apart : $this->place, null, $this->openElement);
     }
 
     private function opening(string $line): ?string
@@ -94,6 +127,14 @@ final readonly class ReadableLines
 
         // A backtick fence's info string holds no backtick, because such a line is an inline code span.
         return '`' === $match[1][0] && str_contains($match[2], '`') ? null : $match[1];
+    }
+
+    // The block is open unless its end marker is already on the line that opened it.
+    private function htmlOpened(HtmlBlock $html, string $line): self
+    {
+        $open = !$html->endsOnOpeningLine() || !$html->endsAt($line);
+
+        return new self($this->headings, null, [], TextPlace::Apart, $open ? $html : null, HtmlBlock::elementOpenedBy($line) ?? $this->openElement);
     }
 
     /**
@@ -133,15 +174,25 @@ final readonly class ReadableLines
      */
     private function paragraphAfter(array $paragraph, int $number, string $line): array
     {
-        if ('' === trim($line) || $this->isBreak($line)) {
+        if (1 === preg_match(HtmlBlock::BLANK, $line) || $this->isBreak($line)) {
             return [];
         }
 
-        // Up to three spaces and a tab start indented code like four spaces, because a tab moves to the next multiple of four columns.
-        if ([] === $paragraph && 1 === preg_match('/^(?: {0,3}\t| {4})/', $line)) {
+        if ([] === $paragraph && $this->isIndented($line)) {
             return [];
         }
 
         return $paragraph + [$number => $line];
+    }
+
+    // Up to three spaces and a tab start indented code like four spaces, because a tab moves to the next multiple of four columns.
+    private function isIndented(string $line): bool
+    {
+        return 1 === preg_match('/^(?: {0,3}\t| {4})/', $line);
+    }
+
+    private function isCode(self $next, string $line): bool
+    {
+        return null !== $this->openFence || null !== $next->openFence || (!$this->html instanceof HtmlBlock && [] === $this->paragraph && $this->isIndented($line));
     }
 }

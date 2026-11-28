@@ -22,6 +22,11 @@ parameters:
     !php/const Intakt\Core\Build\Contract\BuildServices::SLOTS: 1
     # The seconds one tool call of the builder's session may run (at least 1, below the session's 3000-second allowance), above the slowest bin/check --fast, because checks of 7 to 9 minutes on a shared host ran past the CLI's 10-minute default and went to the background (docs/reference/user-manual.md#running-a-build).
     !php/const Intakt\Core\Build\Contract\BuildServices::TOOL_TIME_LIMIT: 1500
+    # The limits that end a build over its allowance (docs/reference/user-manual.md#the-build-limits); literal whole numbers of at least 1, the ceiling not below the allowance, checked when the container is built. Starting points to tune from recorded stop causes, because no sizing sets them yet.
+    !php/const Intakt\Core\Build\Contract\BuildServices::ALLOWANCE_TOKENS: 5000000
+    !php/const Intakt\Core\Build\Contract\BuildServices::IDLE_SECONDS: 600
+    !php/const Intakt\Core\Build\Contract\BuildServices::CEILING_TOKENS: 20000000
+    !php/const Intakt\Core\Build\Contract\BuildServices::TASK_TOTAL_TOKENS: 50000000
     # Trusted dependency installs live here, written only by the orchestrator's own process and never mounted into a build job (docs/architecture/check-job.md#the-dependency-snapshot-store).
     !php/const Intakt\Core\HandBack\Contract\HandBackServices::DEPENDENCY_SNAPSHOTS_DIRECTORY: '%kernel.project_dir%/var/dependency-snapshots'
     # The snapshots the store keeps (at least 1); the least recently used one past the count is evicted unless a check holds it.
@@ -69,6 +74,14 @@ services:
     # Built by the host's processor count when first needed, because the cached container may come from another machine.
     Intakt\Core\Build\Domain\GatesAtOnce:
         factory: ['@Intakt\Core\Build\Infrastructure\HostProcessors', 'gatesAtOnce']
+
+    # Wired here, because a Domain class carries no container attributes; CheckBuildLimitsPass refuses a bad value before this runs.
+    Intakt\Core\Build\Domain\BuildLimits:
+        arguments:
+            - '%intakt.build.allowance_tokens%'
+            - '%intakt.build.idle_seconds%'
+            - '%intakt.build.ceiling_tokens%'
+            - '%intakt.build.task_total_tokens%'
 
     # Only the App's identity, because Intakt acts as itself, never with the owner's token (docs/guide/setting-up-intakt.md).
     Intakt\Plugin\GitHubForge\Infrastructure\AppJwt:

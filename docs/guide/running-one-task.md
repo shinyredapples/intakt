@@ -8,6 +8,21 @@ php bin/console intakt:build:task <project> <issue number> --remote=<remote> --b
 
 `<remote>` is where the project's code lives, `<branch>` the branch the work goes on, `<folder>` a new folder for the work (it must not exist yet) and `<image>` the project's job image, the container the Developer works in. The exact rules for each are in the [user guide](../reference/user-manual.md#building-one-task).
 
+## Before you build: is the task ready?
+
+You can ask Intakt first whether a task is ready and how big it is:
+
+```
+php bin/console intakt:build:size <project> <issue number>
+```
+
+1. Intakt checks that the issue is one it may work on: it carries the project's eligibility label and not the `idea` label, and the people who wrote it and labeled it can write to the repository.
+2. A model reads the task once and answers whether it says what changes, how to tell it is done, and that it is one change. It also guesses the size: `small`, `medium`, `large`, or `split` (too big for one build).
+3. If something is missing, Intakt parks the task and posts one comment on the issue naming what to add. Edit the issue, then run the command again. If the command fails after parking, run it again: it finds a comment it already posted and does not post it twice.
+4. Once the edited task is ready, Intakt removes that question again.
+
+The command prints `outcome ready`, `outcome parked`, `outcome invalid` (the answer was unusable, nothing happened) or `outcome already_sized` (the task's latest verdict is on this same text). Splitting a task that is too big is planned.
+
 ## The steps
 
 The command runs seven steps, always in this order:
@@ -38,7 +53,7 @@ One check comes before every step: when the project has a `github` entry, `--rem
 
 ## Finding the steps in the ledger
 
-Every step writes one line to the **ledger**, Intakt's permanent record, with the project, the issue number, the step and whether it `passed`, `failed` (with the reason) or, for a parked task, `asked`. A parked task adds one more line, `task_parked`. The issue's text and the question are never in it. To read it, run:
+Every step writes one line to the **ledger**, Intakt's permanent record, with the project, the issue number, the step and whether it `passed`, `failed` (with the reason) or, for a parked task, `asked`. A parked task adds one more line, `task_parked`. When the build job returns after its session was stopped (no progress for too long, or a token limit reached), its line also names why, as `no_progress`, `runaway_ceiling` or `per_task_total`; a job that was not stopped records none. The issue's text and the question are never in it. To read it, run:
 
 ```
 php bin/console intakt:ledger:events
@@ -46,4 +61,4 @@ php bin/console intakt:ledger:events
 
 Each line shows when it was written, its id, its kind and its details; the step lines are the ones of kind `build_step_ended`. The push writes a few lines of its own just before its step line (`push_intended`, `branch_pushed` or `push_refused`, `change_intended`, `change_opened`).
 
-You don't have to read the ledger to see where a task is: `php bin/console intakt:status` shows the last step of each task (for a task parked on a question, `build_job` as `asked`), and the dashboard's page for the task (`/tasks/<project>/<issue number>`) shows every step of its latest run, the run whose `task` step was recorded last, even while an older run of the same task is still writing steps ([a tour of the dashboard](a-tour-of-the-dashboard.md)). Steps recorded by an older Intakt carry no run id, so for those the page starts a new run at each `task` step, at a step that comes after a failed one and at a step that does not come later than the one before: it never shows a step twice or a step after a failed one, but two runs of that time that overlapped can still look like one.
+You don't have to read the ledger to see where a task is: `php bin/console intakt:status` shows the last step of each task's latest run (for a task parked on a question, `build_job` as `asked`), and the dashboard's page for the task (`/tasks/<project>/<issue number>`) shows every step of its latest run, the run whose `task` step was recorded last, even while an older run of the same task is still writing steps ([a tour of the dashboard](a-tour-of-the-dashboard.md)). Steps recorded by an older Intakt carry no run id, so for those the page starts a new run at each `task` step, at a step that comes after a failed one and at a step that does not come later than the one before: it never shows a step twice or a step after a failed one, but two runs of that time that overlapped can still look like one.

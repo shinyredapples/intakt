@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\UseCase\MakeBuildClone;
 
+use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
@@ -251,7 +252,7 @@ final class MakeBuildCloneCommandTest extends TestCase
     private function givenTheProjectHasAMirror(): void
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
-        new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors))->update('alpha', $this->remote->path);
+        new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors), self::createStub(DiskSpace::class))->update('alpha', $this->remote->path);
     }
 
     private function displayOnOneLine(CommandTester $tester): string
@@ -274,7 +275,7 @@ final class MakeBuildCloneCommandTest extends TestCase
     private function commandReadingTasksWith(Filesystem $taskFiles): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new MakeBuildCloneCommand(new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors)), $taskFiles));
+        $application->addCommand(new MakeBuildCloneCommand(new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors), self::createStub(DiskSpace::class)), $taskFiles));
 
         return new CommandTester($application->find('intakt:build:clone'));
     }
