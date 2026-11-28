@@ -21,7 +21,7 @@ final readonly class IgnoredFilesGate implements Gate
 
     private const string DIFFERS = 'working-tree .gitignore differs from the index; stage or revert it so the gate judges the rules that will be committed';
 
-    private const string MARKED = 'marked assume-unchanged or skip-worktree; clear the mark (git update-index --no-assume-unchanged --no-skip-worktree) so the gate can compare it with the index';
+    private const string MARKED = 'marked assume-unchanged or skip-worktree; clear each mark with its own command (git update-index --no-assume-unchanged <path>, then git update-index --no-skip-worktree <path>) so the gate can compare it with the index';
 
     private const string UNTRACKED = 'untracked .gitignore above tracked files; add or remove it so the gate judges the rules that will be committed';
 

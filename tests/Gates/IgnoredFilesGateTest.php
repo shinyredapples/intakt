@@ -260,7 +260,7 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         $run = $sandbox->runGate(new IgnoredFilesGate());
 
         self::assertTrue($run->failed('ignored'), $run->output());
-        self::assertStringContainsString('.gitignore: marked assume-unchanged or skip-worktree; clear the mark', $run->findingsOf('ignored'));
+        self::assertStringContainsString('.gitignore: marked assume-unchanged or skip-worktree; clear each mark with its own command',$run->findingsOf('ignored'));
     }
 
     public function testASkipWorktreeGitignoreFailsTheGate(): void
@@ -271,6 +271,21 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         $run = $sandbox->runGate(new IgnoredFilesGate());
 
         self::assertStringContainsString('.gitignore: marked assume-unchanged or skip-worktree', $run->findingsOf('ignored'));
+    }
+
+    public function testTheCommandsTheMarkedFindingSuggestsClearBothMarksSoTheGatePasses(): void
+    {
+        $sandbox = $this->startedChange("*.log\n");
+        $sandbox->git('update-index', '--assume-unchanged', '.gitignore');
+        $sandbox->git('update-index', '--skip-worktree', '.gitignore');
+        preg_match_all('/git update-index (--no-[a-z-]+)/', $sandbox->runGate(new IgnoredFilesGate())->findingsOf('ignored'), $suggested);
+
+        foreach ($suggested[1] as $flag) {
+            $sandbox->git('update-index', $flag, '.gitignore');
+        }
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertTrue($run->passed('ignored'), $run->output());
     }
 
     public function testAnIgnoredGitignoreWithUnstagedChangesGivesExactlyOneFinding(): void
