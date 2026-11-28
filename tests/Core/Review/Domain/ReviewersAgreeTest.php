@@ -250,6 +250,30 @@ final class ReviewersAgreeTest extends TestCase
         ], self::LITERALS));
     }
 
+    public function testFindingsThatDifferOnlyInANulByteBeforeABlankLineAreNotShared(): void
+    {
+        self::assertFalse($this->agree([
+            $this->changes($this->finding("The cart loses its discount.\0\n\nThe total is wrong.")),
+            $this->changes($this->finding("The cart loses its discount.\n\nThe total is wrong.")),
+        ]));
+    }
+
+    public function testFindingsThatDifferOnlyInANulByteAtTheEndAreNotShared(): void
+    {
+        self::assertFalse($this->agree([
+            $this->changes($this->finding("The cart loses its discount.\0")),
+            $this->changes($this->finding('The cart loses its discount.')),
+        ]));
+    }
+
+    public function testFindingsThatDifferOnlyInWhiteSpaceAroundABlankLineAreShared(): void
+    {
+        self::assertTrue($this->agree([
+            $this->changes($this->finding("The cart loses its discount.\n\nThe total is wrong.")),
+            $this->changes($this->finding("  The cart loses its discount. \t\n \n\t The total is wrong. \n")),
+        ]));
+    }
+
     public function testFindingsThatDifferOnlyInWhiteSpaceInsideACodeSpanHoldingOneLineBreakAreNotShared(): void
     {
         self::assertFalse($this->agree([

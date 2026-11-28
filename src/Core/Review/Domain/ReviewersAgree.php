@@ -118,6 +118,7 @@ final readonly class ReviewersAgree
             $cursor = $end;
         }
 
-        return trim($words.substr($text, $cursor));
+        // Only the space that collapsed white space leaves, because PHP's default list also drops a NUL, which is text and not white space.
+        return trim($words.substr($text, $cursor), ' ');
     }
 }
