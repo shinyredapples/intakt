@@ -38,7 +38,7 @@ final class RouteNamesGate implements RunsTheChangesCode
 
         $routes = $this->routesFrom($result->output);
 
-        if (null === $routes) {
+        if (!$routes instanceof RouteCollection) {
             return GateResult::failedBecause($this->name(), 'debug:router printed no route list in JSON, so the routes cannot be read');
         }
 
