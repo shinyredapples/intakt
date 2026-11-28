@@ -139,7 +139,7 @@ final class SplitTaskTest extends TestCase
 
         self::assertSame([['alpha', 7, 'This task was split into #100, #101, #102. It stays open as their umbrella.']], $fixture->comments->posted);
         self::assertSame([LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], $this->kindsOfTheSplitIn($fixture));
-        self::assertSame(['project' => 'alpha', 'task' => '7', 'parts' => [100, 101, 102]], array_diff_key(array_last($fixture->ledger->payloads()), ['run' => true]));
+        self::assertSame(['project' => 'alpha', 'task' => '7', 'parts' => [100, 101, 102]], array_diff_key(array_last($fixture->ledger->payloads()) ?? [], ['run' => true]));
     }
 
     public function testASplitTaskIsNeverSplitOrSizedAgainAlsoAfterAnEdit(): void
@@ -386,7 +386,7 @@ final class SplitTaskTest extends TestCase
         return $parent->parts->filed[0];
     }
 
-    // Without the forge's own lines of each filed part, which the forge's tests cover.
+    // Without the forge's own lines of each filed part, because the forge's tests cover them and these tests name the split's records.
     /**
      * @return list<LedgerEventKind>
      */
