@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Contract\RefusalLogging;
 use Intakt\Core\Dashboard\Domain\ProjectCard;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Lock\LockFactory;
@@ -80,7 +81,7 @@ final readonly class LiveProjectCards
         $cards = $this->cards->now();
 
         // A send the hub did not take fails like a failed render, because a worker that yielded counts on these cards reaching the open pages.
-        if (!$this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $this->twig->render(self::TEMPLATE, ['projects' => $cards])))) {
+        if (!$this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $this->twig->render(self::TEMPLATE, ['projects' => $cards]), RefusalLogging::ByCaller))) {
             throw new ProjectCardsNotSent();
         }
 

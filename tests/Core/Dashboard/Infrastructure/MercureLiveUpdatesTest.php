@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Contract\RefusalLogging;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -20,6 +21,7 @@ use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 
 #[CoversClass(MercureLiveUpdates::class)]
 #[UsesClass(LiveEvent::class)]
+#[UsesClass(RefusalLogging::class)]
 final class MercureLiveUpdatesTest extends TestCase
 {
     private const string HUB = 'http://localhost/.well-known/mercure';
@@ -110,6 +112,14 @@ final class MercureLiveUpdatesTest extends TestCase
 
         self::assertFalse($delivered);
         self::assertCount(1, $this->loggedWarnings());
+    }
+
+    public function testARefusalItsCallerLogsItselfIsReportedAndNotLogged(): void
+    {
+        $delivered = $this->updates(new MockHttpClient(new MockResponse('down', ['http_code' => 503])))->publish(new LiveEvent(self::TOPIC, self::STREAM, RefusalLogging::ByCaller));
+
+        self::assertFalse($delivered);
+        self::assertSame([], $this->log->cleanLogs());
     }
 
     protected function setUp(): void

@@ -20,7 +20,10 @@ use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Dashboard\Domain\TierLine;
 use Intakt\Core\Dashboard\Domain\WorkingCard;
 use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 
 // Every figure comes from one read of the ledger, so one head never counts as both running and failing and a cost never holds a call its tokens lack; the replay marks, how an unjudged round ended and the tiers are read apart. A configured project the ledger never named still gets its card.
@@ -35,6 +38,7 @@ final readonly class ProjectCards
         private TierResolver $tiers,
         private Redactor $redactor,
         private ConfiguredProjects $configured,
+        private RoundPayloads $payloads,
     ) {
     }
 
@@ -44,7 +48,7 @@ final readonly class ProjectCards
     public function now(): array
     {
         $events = $this->ledger->readInOrder();
-        $reviews = $this->reviewsOf($this->reviewPages->boardOf($events));
+        $reviews = $this->judgedLastFirst($this->reviewsOf($this->reviewPages->boardOf($events)), $events);
         $failing = $this->failingHeads->in($events);
 
         return array_map(fn (string $name): ProjectCard => $this->cardOf(
@@ -60,6 +64,32 @@ final readonly class ProjectCards
     private function reviewsOf(Board $board): array
     {
         return array_merge(...array_map($board->cardsIn(...), BoardColumn::cases()));
+    }
+
+    // Equal judging times keep the ledger's order of judgments this way, because the sort of the last decided changes keeps the order it is given on a tie and the judgment recorded last must never be the one cut off.
+    /**
+     * @param list<Review> $reviews
+     *
+     * @return list<Review>
+     */
+    private function judgedLastFirst(array $reviews, RecordedEvents $events): array
+    {
+        $order = [];
+        $place = 0;
+
+        foreach ($events as $recorded) {
+            $judge = LedgerEventKind::JudgeDone === $recorded->event->kind ? $this->payloads->judgeOf($recorded) : null;
+
+            if ($judge instanceof JudgeDone) {
+                $order[$judge->round] ??= $place;
+            }
+
+            ++$place;
+        }
+
+        usort($reviews, static fn (Review $one, Review $other): int => ($order[$other->lastJudgedRound()->round ?? ''] ?? -1) <=> ($order[$one->lastJudgedRound()->round ?? ''] ?? -1));
+
+        return $reviews;
     }
 
     /**
@@ -81,10 +111,23 @@ final readonly class ProjectCards
             [] === $retrying ? null : $this->redactor->redact(array_first($retrying)->fault->cause),
             array_reduce($reviews, static fn (TokenFigures $sum, Review $review): TokenFigures => $sum->plus($review->tokens()), TokenFigures::none()),
             array_reduce($reviews, static fn (Cost $sum, Review $review): Cost => $sum->plus($review->cost()), Cost::none()),
-            array_map(WorkingCard::ofReview(...), array_values(array_filter($running, static fn (Review $review): bool => BoardColumn::InReview === $review->column()))),
+            array_map(WorkingCard::ofReview(...), $this->newestFirst(array_values(array_filter($running, static fn (Review $review): bool => BoardColumn::InReview === $review->column())))),
             $this->recentOutcomes($reviews),
             $this->tierLines($name),
         );
+    }
+
+    // In the board's order, because the working cards read like the board's and the reviews come here in the order of their judgments.
+    /**
+     * @param list<Review> $reviews
+     *
+     * @return list<Review>
+     */
+    private function newestFirst(array $reviews): array
+    {
+        usort($reviews, static fn (Review $one, Review $other): int => $other->latest()->startedAt <=> $one->latest()->startedAt);
+
+        return $reviews;
     }
 
     // The newest first, because the board orders its cards so and the owner reads what ended last.

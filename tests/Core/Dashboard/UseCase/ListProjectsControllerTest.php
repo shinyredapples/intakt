@@ -253,6 +253,21 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         self::assertSame('Round round-1', $page->filter('[data-project="alpha"] a[href="/reviews/round-1"]')->text());
     }
 
+    public function testTheDecisionRecordedLastStaysOnTheCardWhenDecisionTimesTie(): void
+    {
+        foreach (range(1, 4) as $index) {
+            $this->ledger->startRoundOf('change-'.$index, 'round-'.$index, 1);
+        }
+        foreach (range(1, 4) as $index) {
+            $this->ledger->judgeRound('round-'.$index);
+        }
+
+        $page = $this->browser->request('GET', '/projects');
+
+        self::assertCount(1, $page->filter('[data-project="alpha"] a[href="/reviews/round-4"]'));
+        self::assertCount(0, $page->filter('[data-project="alpha"] a[href="/reviews/round-1"]'));
+    }
+
     public function testACardKeepsItsIdWhenAProjectSortedBeforeItGetsACard(): void
     {
         $this->browser->disableReboot();

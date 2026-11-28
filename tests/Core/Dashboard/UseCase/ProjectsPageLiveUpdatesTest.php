@@ -289,6 +289,25 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame([], $log->cleanLogs());
     }
 
+    public function testAHubRefusalTheRetryRecoversLeavesNoWarning(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $sends = 0;
+        $hub = new MockHub('http://localhost/.well-known/mercure', new StaticTokenProvider('token'), static function () use (&$sends): string {
+            if (1 === ++$sends) {
+                throw new RuntimeException('The hub refused the update.');
+            }
+
+            return 'id-'.$sends;
+        });
+        $log = new BufferingLogger();
+
+        $this->cardsOfAnotherWorker(new MercureLiveUpdates($hub, $log), $log)->publishLatest();
+
+        self::assertSame(2, $sends);
+        self::assertSame([], $log->cleanLogs());
+    }
+
     public function testCardsTheHubRefusedTwiceAreLoggedAsNotPublished(): void
     {
         $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
