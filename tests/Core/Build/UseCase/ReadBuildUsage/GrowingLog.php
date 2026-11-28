@@ -23,7 +23,8 @@ final class GrowingLog
     {
         $file = $this->fileOf($path);
         file_put_contents($file, str_repeat("x\n", intdiv(self::GROWTH, 2)), FILE_APPEND);
-        $this->file = fopen($file, 'rb') ?: null;
+        $opened = fopen($file, 'rb');
+        $this->file = false === $opened ? null : $opened;
 
         return null !== $this->file;
     }

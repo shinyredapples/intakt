@@ -39,7 +39,7 @@ final readonly class SessionUsage
         $decoded = json_decode(trim($answer), true, 2);
         $reading = is_array($decoded) && is_string($decoded[self::READING] ?? null) ? UsageReading::tryFrom($decoded[self::READING]) : null;
 
-        if (!$reading instanceof UsageReading || !$reading->canBeAnsweredByTheReader() || !is_array($decoded)) {
+        if (!$reading instanceof UsageReading || !$reading->canBeAnsweredByTheReader()) {
             return new self(UsageReading::ReaderFailed, null);
         }
 

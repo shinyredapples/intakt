@@ -8,6 +8,7 @@ use Intakt\Core\Build\Domain\BuildUsage;
 use Intakt\Core\Build\Domain\SessionLog;
 use Intakt\Core\Build\Domain\SessionUsage;
 use Intakt\Core\Build\Domain\UsageReading;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\TestCase;
@@ -151,7 +152,7 @@ final class SessionLogTest extends TestCase
 
     public function testAUsageWithoutCountsCannotBeMarkedAsRead(): void
     {
-        $this->expectExceptionMessage('A usage that was read carries its counts.');
+        $this->expectException(InvalidArgumentException::class);
 
         SessionUsage::withoutUsage(UsageReading::Read);
     }

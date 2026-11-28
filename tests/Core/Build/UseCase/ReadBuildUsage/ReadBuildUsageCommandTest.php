@@ -89,7 +89,7 @@ final class ReadBuildUsageCommandTest extends TestCase
 
     public function testALinkToALogIsNeverRead(): void
     {
-        new Filesystem()->symlink(realpath(self::LOGS.'/sample.log') ?: '', $this->folder.'/build.log');
+        new Filesystem()->symlink((string) realpath(self::LOGS.'/sample.log'), $this->folder.'/build.log');
 
         $tester = $this->usageCommand($this->folder.'/build.log');
 
