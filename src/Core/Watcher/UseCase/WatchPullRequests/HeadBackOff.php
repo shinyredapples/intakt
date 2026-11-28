@@ -40,9 +40,21 @@ final readonly class HeadBackOff
             return null;
             // Boundary: backs off only this head on any failure of its step, because it must not end the tick for the heads after it.
         } catch (Throwable $failure) {
-            $this->backOffAlone($project, $head, $failure);
+            $this->failed->isHeldByTheDisk($failure) ? $this->waitForRoom($project, $head, $failure) : $this->backOffAlone($project, $head, $failure);
 
             return null;
+        }
+    }
+
+    // Not logged as a failure, because a disk hold is a wait; contained like the rate-limit wait, because a row that rejects the wait must not end the tick for the heads after it.
+    private function waitForRoom(string $project, OpenChange $head, Throwable $hold): void
+    {
+        try {
+            $this->failed->backOff($project, $head, $hold);
+            // Boundary: logs a wait that cannot be stored and reopens the entity manager, so the head stays due and the next heads still run.
+        } catch (Throwable $notStored) {
+            $this->logger->error('A head\'s wait for room on the disk could not be stored; it stays due for the next tick.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'exception' => $notStored]);
+            $this->reopenEntityManager();
         }
     }
 

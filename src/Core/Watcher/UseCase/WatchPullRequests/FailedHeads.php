@@ -40,9 +40,14 @@ final readonly class FailedHeads
     ) {
     }
 
+    public function isHeldByTheDisk(Throwable $failure): bool
+    {
+        return $this->causedBy($failure, NewWorkHeld::class);
+    }
+
     public function backOff(string $project, OpenChange $head, Throwable $failure): void
     {
-        if ($this->causedBy($failure, NewWorkHeld::class)) {
+        if ($this->isHeldByTheDisk($failure)) {
             $this->waitForRoomOnTheDisk($project, $head);
 
             return;
