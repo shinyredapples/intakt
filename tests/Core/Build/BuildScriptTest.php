@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build;
 
+use Intakt\Core\Build\Domain\SessionLog;
+use Intakt\Core\Build\Domain\UsageReading;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\HandBack\Contract\HandBackRefusal;
 use Intakt\Tests\Core\HandBack\BuildHistory;
@@ -114,6 +116,103 @@ final class BuildScriptTest extends TestCase
             ['-p', '--model', 'claude-opus-5-5', '--max-turns', '7', '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions', '--settings', '{"env":{"BASH_DEFAULT_TIMEOUT_MS":"1800000","BASH_MAX_TIMEOUT_MS":"1800000"}}'],
             explode("\n", trim((string) file_get_contents($this->history->folder.'/arguments'))),
         );
+    }
+
+    public function testTheSessionsToolResultsStayOutOfTheBuildLogAndOnlyTheIdAndUsageOfEachMessageAreHandedBack(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo '{"type":"system","subtype":"init","model":"claude-opus-5-5"}'
+            echo '{"type":"assistant","message":{"id":"msg_01","model":"claude-opus-5-5","content":[{"type":"text","text":"Reading."}],"usage":{"input_tokens":1,"output_tokens":2,"cache_read_input_tokens":3,"cache_creation_input_tokens":4}}}'
+            echo '{"type":"user","message":{"content":[{"type":"tool_result","content":"SYNTHETIC_PRIVATE_TOOL_RESULT"}]}}'
+            echo '{"type":"result","subtype":"success","result":"SYNTHETIC_PRIVATE_RESULT","usage":{"input_tokens":1}}'
+            echo 'the CLI reports an error' >&2
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringNotContainsString('SYNTHETIC_PRIVATE', $this->outputFile('build.log'));
+        self::assertStringContainsString("the CLI reports an error\n", $this->outputFile('build.log'));
+        self::assertSame(
+            '{"type":"assistant","message":{"id":"msg_01","usage":{"input_tokens":1,"output_tokens":2,"cache_read_input_tokens":3,"cache_creation_input_tokens":4}}}'."\n",
+            $this->outputFile('usage.log'),
+        );
+    }
+
+    public function testAToolResultLargerThanTheReadersLineLimitStillLeavesTheUsageOfEveryMessage(): void
+    {
+        $this->givenTheCli(sprintf(<<<'SH'
+            cat '%s'
+            printf '{"type":"user","message":{"content":[{"type":"tool_result","content":"'
+            head -c %d /dev/zero | tr '\0' x
+            printf '"}]}}\n'
+            SH, (string) realpath(__DIR__.'/Fixtures/build-logs/cut.log'), SessionLog::MAX_LINE_BYTES));
+
+        $run = $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertLessThan(1024, strlen($this->outputFile('usage.log')));
+        self::assertSame(460500, SessionLog::usageIn($this->outputFile('usage.log'))->usage?->total());
+    }
+
+    public function testALineOverTheFiltersLimitLeavesARecordWithoutAnIdSoTheUsageIsMalformed(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo '{"type":"assistant","message":{"id":"msg_01","usage":{"input_tokens":1,"output_tokens":2,"cache_read_input_tokens":3,"cache_creation_input_tokens":4}}}'
+            head -c 67108865 /dev/zero | tr '\0' x
+            echo
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringEndsWith('{"type":"assistant","message":{}}'."\n", $this->outputFile('usage.log'));
+        self::assertSame(UsageReading::Malformed, SessionLog::usageIn($this->outputFile('usage.log'))->reading);
+    }
+
+    #[TestWith(['ln -s "$RECORD/usage" "$TMPDIR/session.jsonl"'])]
+    #[TestWith(['mkfifo "$TMPDIR/session.jsonl"'])]
+    public function testAStreamTheSessionReplacedByALinkOrANamedPipeIsNotFilteredAndNoUsageIsHandedBack(string $replace): void
+    {
+        $this->givenTheCli(<<<SH
+            echo '{"type":"assistant","message":{"id":"msg_01","usage":{"input_tokens":1,"output_tokens":2,"cache_read_input_tokens":3,"cache_creation_input_tokens":4}}}' > "\$RECORD/usage"
+            rm -f "\$TMPDIR/session.jsonl"
+            {$replace}
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileDoesNotExist($this->output.'/usage.log');
+        self::assertStringContainsString("no usage is handed back: the session's stream could not be filtered\n", $this->outputFile('build.log'));
+    }
+
+    public function testAUsageLogTheSessionPlantedIsReplacedByTheFilteredStream(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo '{"type":"assistant","message":{"id":"planted","usage":{"input_tokens":9,"output_tokens":9,"cache_read_input_tokens":9,"cache_creation_input_tokens":9}}}' > "$INTAKT_JOB_OUTPUT/usage.log"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame('', $this->outputFile('usage.log'));
+    }
+
+    public function testANodeTheBuilderCouldWriteIsNotRunAndNoUsageIsHandedBack(): void
+    {
+        $node = (string) new ExecutableFinder()->find('node');
+        file_put_contents($this->work.'/node', "#!/bin/sh\ntouch \"\$RECORD/planted-node\"\nexec '{$node}' \"\$@\"\n");
+        chmod($this->work.'/node', 0o755);
+        symlink($this->work.'/node', $this->bin.'/node');
+        $this->givenTheCli("echo '{\"type\":\"assistant\"}'");
+
+        $run = $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileDoesNotExist($this->history->folder.'/planted-node');
+        self::assertFileDoesNotExist($this->output.'/usage.log');
+        self::assertStringContainsString("no usage is handed back: the image's node is not in its system folders\n", $this->outputFile('build.log'));
     }
 
     public function testTheSessionIsStartedWithASettingsArgumentWhoseEnvGivesBothBashTimeoutsTheToolTimeLimitInMilliseconds(): void
@@ -1625,13 +1724,14 @@ final class BuildScriptTest extends TestCase
         self::assertFileDoesNotExist($this->output.'/question.json');
     }
 
-    public function testTheClisOutputGoesToTheLog(): void
+    public function testTheClisErrorOutputGoesToTheLogAndItsStreamDoesNot(): void
     {
         $this->givenTheCli('echo "{\"type\":\"result\"}"; echo "warning" >&2');
 
         $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
 
-        self::assertStringContainsString("{\"type\":\"result\"}\nwarning\n", $this->outputFile('build.log'));
+        self::assertStringContainsString("warning\n", $this->outputFile('build.log'));
+        self::assertStringNotContainsString('{"type":"result"}', $this->outputFile('build.log'));
     }
 
     public function testABranchTheBuildCloneDoesNotHoldRunsNoCli(): void

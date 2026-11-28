@@ -1,12 +1,12 @@
 #!/bin/sh
-# The build job's command: the builder works in a clone of its own, and only a bundle and the pull request text leave the job.
+# The build job's command: the builder works in a clone of its own, and only a bundle, the pull request text and the session's usage leave the job.
 # Usage: build.sh <build clone> <prompt file> <branch> <model> <max turns> <allowance seconds> <gates at once> <tool time limit seconds>
 # Copies the build clone's branches into TMPDIR, runs Claude Code there with the prompt on its input, then bundles the branch's new commits.
 # The session sees the branch and its starting commit as INTAKT_BUILD_BRANCH and INTAKT_BUILD_BASE, which the builder's own check (precheck.sh, mounted at /input/precheck.sh) reads.
 # Each of the session's tool calls may run up to <tool time limit seconds>, so the builder's own bin/check ends inside its call instead of going to the background.
 # The builder's bin/check runs <gates at once> gates at the same time, a count the orchestrator hands over only when it is below what bin/check picks from the job's limits; when it is empty, INTAKT_GATE_SLOTS is left as the job's environment has it (unset unless the image sets it), so bin/check uses the job's limits (its CPUs and memory) to size its gates at once itself.
 # The session ends at its turn limit or when the allowance is used up, and the script outlives it, so what it committed before is still bundled.
-# Writes build.log, handback.bundle (only when the branch has new commits), pull-request.md (only when PR.md is a regular file) and question.json (only when QUESTION.json is a regular file) into INTAKT_JOB_OUTPUT.
+# Writes build.log, usage.log (the id and usage of each of the session's messages), handback.bundle (only when the branch has new commits), pull-request.md (only when PR.md is a regular file) and question.json (only when QUESTION.json is a regular file) into INTAKT_JOB_OUTPUT.
 set -u
 
 source="$1"
@@ -21,6 +21,67 @@ tool_time_limit="$8"
 output="${INTAKT_JOB_OUTPUT:-/output}"
 clone="${TMPDIR:-/work}/clone"
 log="$output/build.log"
+usage="$output/usage.log"
+# The CLI's stream of the session, in the work area and never in the output: it holds every tool result, and only the usage read from it leaves the job.
+stream="${TMPDIR:-/work}/session.jsonl"
+# Keeps the id and usage of each assistant record of the stream, one record per line, and drops everything else the stream holds.
+# The stream is opened without following a link or waiting on a named pipe, and read only when it is a regular file, because the builder could put either in its place.
+# A line past 64 MiB is not parsed but written as a record without an id, so the reader reports the usage as malformed instead of counting that message as nothing.
+usage_filter='const fs = require("fs");
+const c = fs.constants;
+const most = 64 * 1024 * 1024;
+const fd = fs.openSync(process.argv[1], c.O_RDONLY | c.O_NOFOLLOW | c.O_NONBLOCK);
+if (!fs.fstatSync(fd).isFile()) {
+    process.exit(1);
+}
+const chunk = Buffer.alloc(1024 * 1024);
+const out = [];
+let parts = [];
+let size = 0;
+let over = false;
+const add = (from, to) => {
+    if (over) {
+        return;
+    }
+    size += to - from;
+    if (size > most) {
+        over = true;
+        parts = [];
+        return;
+    }
+    parts.push(Buffer.from(chunk.subarray(from, to)));
+};
+const line = () => {
+    if (over) {
+        out.push(JSON.stringify({type: "assistant", message: {}}));
+    } else {
+        let record = null;
+        try {
+            record = JSON.parse(Buffer.concat(parts).toString());
+        } catch {
+        }
+        if (record !== null && typeof record === "object" && record.type === "assistant") {
+            const message = record.message !== null && typeof record.message === "object" ? record.message : {};
+            out.push(JSON.stringify({type: "assistant", message: {id: message.id, usage: message.usage}}));
+        }
+    }
+    parts = [];
+    size = 0;
+    over = false;
+};
+for (let read; (read = fs.readSync(fd, chunk, 0, chunk.length, null)) > 0;) {
+    const view = chunk.subarray(0, read);
+    let at = 0;
+    for (let end; (end = view.indexOf(10, at)) !== -1; at = end + 1) {
+        add(at, end);
+        line();
+    }
+    add(at, read);
+}
+if (size > 0 || over) {
+    line();
+}
+fs.writeSync(1, out.map((record) => record + "\n").join(""));'
 # The only folders commands are looked up in after the session, because the builder can change files in any folder of the PATH the job starts with that it can write, such as a relative entry or one in HOME.
 system_path=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
@@ -116,6 +177,8 @@ if ! bundle_git="$(system_command git)"; then
     echo 'the image'"'"'s git is not in its system folders' >> "$log"
     exit 1
 fi
+# The same for the node that filters the usage after the session; without one the build still runs, and only its usage is not handed back.
+usage_node="$(system_command node)" || usage_node=''
 
 base="$(git rev-parse HEAD)"
 # For the builder's own check (precheck.sh), which compares the branch with where the session started; the bundle step below reads the shell variable, never these.
@@ -150,7 +213,7 @@ BASH_MAX_TIMEOUT_MS="$BASH_DEFAULT_TIMEOUT_MS"
 export BASH_DEFAULT_TIMEOUT_MS BASH_MAX_TIMEOUT_MS
 time_limit_settings="$(printf '{"env":{"BASH_DEFAULT_TIMEOUT_MS":"%s","BASH_MAX_TIMEOUT_MS":"%s"}}' "$BASH_DEFAULT_TIMEOUT_MS" "$BASH_MAX_TIMEOUT_MS")"
 # In a session of its own, so the processes it leaves running can be ended with it.
-setsid claude -p --model "$model" --max-turns "$turns" --output-format stream-json --verbose --dangerously-skip-permissions --settings "$time_limit_settings" < "$prompt" >> "$log" 2>&1 &
+setsid claude -p --model "$model" --max-turns "$turns" --output-format stream-json --verbose --dangerously-skip-permissions --settings "$time_limit_settings" < "$prompt" > "$stream" 2>> "$log" &
 session=$!
 # The allowance ends the session only, never this script, so a cut session still reaches the bundle below; the watchdog is in a session of its own too, so its sleep goes with it.
 # It reports the cut by its exit status, not by a file, because the builder can write anywhere a file could be and so stop the kill or fake a cut.
@@ -266,19 +329,33 @@ if ! replace_settings >> "$log" 2>&1; then
 fi
 
 # Only what this script writes after the session is handed back.
-for planted in "$output/pull-request.md" "$output/handback.bundle" "$output/question.json"; do
+for planted in "$output/pull-request.md" "$output/handback.bundle" "$output/question.json" "$usage"; do
     if [ -d "$planted" ] && [ ! -L "$planted" ]; then
         restore_folders "$planted"
     fi
 done
-rm -rf -- "$output/pull-request.md" "$output/handback.bundle" "$output/question.json"
+rm -rf -- "$output/pull-request.md" "$output/handback.bundle" "$output/question.json" "$usage"
 
 # The orchestrator reads this exit code as no result, because a planted file left here would otherwise be handed back.
 if [ -e "$output/pull-request.md" ] || [ -L "$output/pull-request.md" ] \
     || [ -e "$output/handback.bundle" ] || [ -L "$output/handback.bundle" ] \
-    || [ -e "$output/question.json" ] || [ -L "$output/question.json" ]; then
+    || [ -e "$output/question.json" ] || [ -L "$output/question.json" ] \
+    || [ -e "$usage" ] || [ -L "$usage" ]; then
     echo 'the output folder could not be cleared' >> "$log"
     exit 3
+fi
+
+# Before the bundle and whatever becomes of it, because a session that hands back nothing still spent its tokens.
+# Bounded like the bundle, because the builder wrote the stream; a filter that failed or was cut may have written only part of the usage, which would count less than the session spent, so none is handed back then.
+if [ -z "$usage_node" ]; then
+    echo 'no usage is handed back: the image'"'"'s node is not in its system folders' >> "$log"
+elif ! "$bundle_timeout" -k 5 "$bundle_time_limit" "$usage_node" -e "$usage_filter" "$stream" > "$usage" 2>> "$log"; then
+    echo 'no usage is handed back: the session'"'"'s stream could not be filtered' >> "$log"
+    rm -f -- "$usage"
+    if [ -e "$usage" ] || [ -L "$usage" ]; then
+        echo 'the output folder could not be cleared' >> "$log"
+        exit 3
+    fi
 fi
 
 # A link is not followed, because it could point the text at any file the job can read.

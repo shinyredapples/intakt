@@ -131,17 +131,26 @@ final class RunBuildJobTest extends TestCase
         self::assertSame("log\n", $outcome->log);
     }
 
-    public function testTheUsageOfTheCliMessagesInTheBuildLogIsCarriedInTheOutcome(): void
+    public function testTheUsageOfTheCliMessagesInTheUsageLogIsCarriedInTheOutcome(): void
     {
-        $log = "claude starts\n".'{"type":"assistant","message":{"id":"msg_01","usage":{"input_tokens":5,"output_tokens":6,"cache_read_input_tokens":7,"cache_creation_input_tokens":8}}}'."\nclaude exited with 0\n";
+        $usage = '{"type":"assistant","message":{"id":"msg_01","usage":{"input_tokens":5,"output_tokens":6,"cache_read_input_tokens":7,"cache_creation_input_tokens":8}}}'."\n";
+
+        $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n", 'build.log' => "claude exited with 0\n", 'usage.log' => $usage]))->run($this->job());
+
+        self::assertEquals(SessionUsage::read(new BuildUsage(5, 6, 7, 8)), $outcome->usage);
+        self::assertSame("claude exited with 0\n", $outcome->log);
+    }
+
+    public function testUsageRecordsInTheBuildLogAreNotCounted(): void
+    {
+        $log = '{"type":"assistant","message":{"id":"msg_01","usage":{"input_tokens":5,"output_tokens":6,"cache_read_input_tokens":7,"cache_creation_input_tokens":8}}}'."\n";
 
         $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n", 'build.log' => $log]))->run($this->job());
 
-        self::assertEquals(SessionUsage::read(new BuildUsage(5, 6, 7, 8)), $outcome->usage);
-        self::assertSame($log, $outcome->log);
+        self::assertSame(UsageReading::NotReported, $outcome->usage?->reading);
     }
 
-    public function testAKilledJobWithoutCliMessagesCarriesAUsageThatWasNotReported(): void
+    public function testAKilledJobWithoutAUsageLogCarriesAUsageThatWasNotReported(): void
     {
         $outcome = $this->runBuilds(OutputFiles::of(['build.log' => "claude cut after 3000 seconds, its commits are kept\n"]), end: new JobEnd(JobCause::MemoryKilled, 137))->run($this->job());
 
