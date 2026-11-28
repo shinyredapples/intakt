@@ -156,7 +156,7 @@ final readonly class TraitAliasCollector implements Collector
     private function visibilityInTraitsOf(ClassReflection $wrapper, string $original, ReflectionMethod $reflected): int
     {
         $source = array_find($wrapper->getTraits(), static fn (ClassReflection $trait): bool => $trait->getNativeReflection()->hasMethod($original));
-        $public = null === $source ? $reflected->isPublic() : $source->getNativeReflection()->getMethod($original)->isPublic();
+        $public = $source?->getNativeReflection()->getMethod($original)->isPublic() ?? $reflected->isPublic();
 
         return $public ? Modifiers::PUBLIC : Modifiers::PRIVATE;
     }
