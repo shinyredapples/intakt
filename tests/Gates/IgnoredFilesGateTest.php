@@ -480,6 +480,87 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
     }
 
+    public function testAnUnstagedEditFromAnIdentKeywordToAFreeFormIdStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryIgnoring("# \$Id\$\n*.log\n");
+        $sandbox->write('.gitignore', "# \$Id: x \$\n*.log\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAnUnstagedEditToAnObjectIdShapedIdKeywordWithoutTheIdentAttributeStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryIgnoring("# \$Id\$\n*.log\n");
+        $sandbox->write('.gitignore', '# $Id: '.str_repeat('a', 40)." \$\n*.bak\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAGitignoreCheckedOutInTheEncodingTheCommittedAttributesNamePasses(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInLatin1();
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame("caf\xE9.log\n", file_get_contents($sandbox->root.'/.gitignore'));
+        self::assertSame('', $sandbox->git('status', '--porcelain')->output, 'the checkout is clean');
+        self::assertSame([], $result->findings);
+    }
+
+    public function testAnUnstagedRuleEditInAnEncodedGitignoreStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInLatin1();
+        $sandbox->write('.gitignore', "caf\xE9.bak\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAnEncodedGitignoreWhoseCharsetPhpCannotDecodeCountsAsDiffering(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInLatin1();
+        $sandbox->write('.gitattributes', ".gitignore text working-tree-encoding=NO-SUCH-CHARSET\n");
+        $sandbox->git('add', '.gitattributes');
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAnUnstagedAttributesEditDoesNotChangeTheEncodingAnEncodedGitignoreIsReadIn(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInLatin1();
+        $sandbox->write('.gitattributes', "*.md text\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([], $result->findings);
+    }
+
+    public function testAGitlinkAtAGitignorePathGivesNoDifferingRuleFinding(): void
+    {
+        $sandbox = $this->repositoryWithAGitlinkNamedGitignore();
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([], $result->findings);
+    }
+
+    public function testAnUnstagedRuleEditBesideAGitlinkNamedGitignoreStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryWithAGitlinkNamedGitignore();
+        $sandbox->write('.gitignore', "*.bak\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
     public function testRestoringADifferingRuleFileWithLiteralPathspecsKeepsTheEditOfASimilarlyNamedOne(): void
     {
         $sandbox = $this->emptySandbox();
@@ -505,6 +586,28 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         $sandbox->commitAll('chore: expand the ident keyword in the rules');
         unlink($sandbox->root.'/.gitignore');
         $sandbox->git('checkout', '--', '.gitignore');
+
+        return $sandbox;
+    }
+
+    private function repositoryCheckingOutRulesInLatin1(): Sandbox
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('.gitattributes', ".gitignore text working-tree-encoding=ISO-8859-1\n");
+        $sandbox->write('.gitignore', "caf\xE9.log\n");
+        $sandbox->commitAll('chore: check out the rules in latin1');
+        unlink($sandbox->root.'/.gitignore');
+        $sandbox->git('checkout', '--', '.gitignore');
+
+        return $sandbox;
+    }
+
+    private function repositoryWithAGitlinkNamedGitignore(): Sandbox
+    {
+        $sandbox = $this->repositoryIgnoring("*.log\n");
+        $commit = trim($sandbox->git('rev-parse', 'HEAD')->output);
+        $sandbox->git('update-index', '--add', '--cacheinfo', '160000,'.$commit.',sub/.gitignore');
 
         return $sandbox;
     }

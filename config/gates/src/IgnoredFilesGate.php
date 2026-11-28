@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use ValueError;
+
 // Refuses tracked files that the `.gitignore` files exclude; local excludes (.git/info/exclude, core.excludesFile) do not count, because they differ per clone.
 final readonly class IgnoredFilesGate implements Gate
 {
@@ -79,7 +81,7 @@ final readonly class IgnoredFilesGate implements Gate
      */
     private function stagedRuleFiles(Workspace $workspace): array
     {
-        // Because git reads no .gitignore that is a symbolic link, neither here nor in CI, a tracked link carries no rules to compare; only stage 0, so a conflicted file is not compared three times.
+        // Because git reads no .gitignore that is a symbolic link or a submodule (gitlink), neither here nor in CI, such an entry carries no rules to compare; only stage 0, so a conflicted file is not compared three times.
         $result = $workspace->git(['ls-files', '-s', '-z']);
 
         if (!$result->succeeded()) {
@@ -88,7 +90,7 @@ final readonly class IgnoredFilesGate implements Gate
 
         $staged = [];
         foreach (explode("\0", $result->output) as $entry) {
-            if (1 === preg_match('/\A(?<mode>\d+) (?<blob>[0-9a-f]+) 0\t(?<path>(?:.*\/)?\.gitignore)\z/s', $entry, $match) && '120000' !== $match['mode']) {
+            if (1 === preg_match('/\A(?<mode>\d+) (?<blob>[0-9a-f]+) 0\t(?<path>(?:.*\/)?\.gitignore)\z/s', $entry, $match) && !in_array($match['mode'], ['120000', '160000'], true)) {
                 $staged[$match['path']] = $match['blob'];
             }
         }
@@ -116,7 +118,7 @@ final readonly class IgnoredFilesGate implements Gate
         return array_combine($paths, explode("\n", rtrim($result->output, "\n")));
     }
 
-    // Because the hardened call hashes without the repository's attributes (a clean filter it names would run), a checkout that eol=crlf, core.autocrlf or ident converted hashes differently from its clean blob; both sides are cleaned as git cleans those two conversions.
+    // Because the hardened call hashes without the repository's attributes (a clean filter it names would run), a checkout that working-tree-encoding, eol=crlf, core.autocrlf or ident converted hashes differently from its clean blob; the working tree is decoded and both sides are cleaned as git cleans those conversions.
     private function sameRulesAfterCheckoutConversion(Workspace $workspace, string $path, string $blob): bool
     {
         $result = $workspace->git(['cat-file', 'blob', $blob]);
@@ -126,15 +128,38 @@ final readonly class IgnoredFilesGate implements Gate
         }
 
         $workingTree = file_get_contents($workspace->root.'/'.$path);
+        $decoded = false === $workingTree ? null : $this->decodedFromItsWorkingTreeEncoding($workspace, $path, $workingTree);
 
-        return false !== $workingTree && $this->cleaned($workingTree) === $this->cleaned($result->output);
+        return null !== $decoded && $this->cleaned($decoded) === $this->cleaned($result->output);
     }
 
-    // Because git drops the carriage return before each line break of a .gitignore and its ident clean conversion collapses an expanded `$Id: ... $` to `$Id$`, neither changes the rules.
+    // Because git stores a file whose working-tree-encoding names a charset as UTF-8 and checks it out in that charset; check-attr only reports and runs no filter, --cached reads the staged attributes (those CI checks out with) past the hardened empty attribute source, and a charset PHP cannot decode leaves the file differing rather than guessed.
+    private function decodedFromItsWorkingTreeEncoding(Workspace $workspace, string $path, string $text): ?string
+    {
+        $result = $workspace->git(['check-attr', '--cached', '-z', 'working-tree-encoding', '--', $path]);
+
+        if (!$result->succeeded()) {
+            throw new ScopeFailure('git check-attr failed: '.$result->firstErrorLine());
+        }
+
+        $encoding = explode("\0", $result->output)[2] ?? 'unspecified';
+
+        if (in_array($encoding, ['unspecified', 'unset', 'set'], true)) {
+            return $text;
+        }
+
+        try {
+            return mb_convert_encoding($text, 'UTF-8', $encoding);
+        } catch (ValueError) {
+            return null;
+        }
+    }
+
+    // Because git drops the carriage return before each line break of a .gitignore and its ident clean conversion collapses the `$Id: <object id> $` it wrote to `$Id$`, neither changes the rules; any other `$Id: ... $` text is a rule edit.
     private function cleaned(string $rules): string
     {
         return str_replace("\r\n", "\n", $rules)
-            |> (static fn (string $text): string => (string) preg_replace('/\$Id:[^$\n]*\$/', '$Id$', $text));
+            |> (static fn (string $text): string => (string) preg_replace('/\$Id: (?:[0-9a-f]{40}|[0-9a-f]{64}) \$/', '$Id$', $text));
     }
 
     // Because the full report must name a file the reader can untrack, a path JSON would mangle (not UTF-8), a line break or control would split or hide (C0, DEL, C1 such as U+0085, U+2028, U+2029) or a format character would reorder (U+202E) is quoted as git quotes it; \z, not $, so a trailing newline counts.
