@@ -42,6 +42,7 @@ use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\JobReviewer;
 use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
@@ -659,7 +660,7 @@ final class CodexReviewerTest extends KernelTestCase
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, $clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $clock, $servers ?? $this->servers());
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, $clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $clock, $servers ?? $this->servers(), self::createStub(JobReviewer::class));
     }
 
     private function request(): ReviewRequest

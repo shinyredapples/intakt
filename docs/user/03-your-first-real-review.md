@@ -57,7 +57,7 @@ To watch more, open the Full record: its live log shows each reviewer at work, t
 
 The live log shows `[redacted]` in place of a recognized credential (a known token or key format) in a searched text or a path. The summary's list of files read does the same for a path.
 
-A reviewer's heading, its role and model, appears with that reviewer's first live update: a tool call, streamed text, an answer or a retry notice. When a reviewer is asked again, the new try's text replaces the old one and the heading already shown stays as it is; a reload shows the model of the latest try. Everything else updates by itself without a reload.
+A reviewer's heading, its role and model, appears with that reviewer's first live update: a tool call, streamed text, an answer or a retry notice. When a reviewer is asked again, the new try's text replaces the old one and the heading already shown stays as it is; a reload shows the model of the latest try. Everything else updates by itself without a reload. A reviewer that runs in a review job shows no live updates yet.
 
 ## While you wait
 

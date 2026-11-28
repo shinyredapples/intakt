@@ -1,6 +1,6 @@
 #!/bin/sh
 # The review job's command: one reviewer reads a read-only checkout of the exact head and reaches only its vendor through the job's proxy.
-# Usage: review.sh <checkout> <head> <prompt file> <provider> <model>
+# Usage: review.sh <checkout> <head> <prompt file> <provider> <model> [<login file>]
 # Refuses with exit 1, before the CLI runs, a git older than 2.40, a checkout that is a link or writable, carries a repository setting a clone does not write,
 # is not at <head> or differs from it, and a job without the proxy; otherwise runs the provider's CLI (claude_code or codex) in the checkout.
 # Writes review.log (refusals and the CLI's errors) and answer (the CLI's standard output) into INTAKT_JOB_OUTPUT.
@@ -16,8 +16,8 @@ refuse() {
     exit 1
 }
 
-if [ "$#" -ne 5 ]; then
-    refuse 'usage: review.sh <checkout> <head> <prompt file> <provider> <model>'
+if [ "$#" -ne 5 ] && [ "$#" -ne 6 ]; then
+    refuse 'usage: review.sh <checkout> <head> <prompt file> <provider> <model> [<login file>]'
 fi
 
 checkout="$1"
@@ -25,6 +25,7 @@ head="$2"
 prompt="$3"
 provider="$4"
 model="$5"
+login="${6:-}"
 index="${TMPDIR:-/work}/review-index"
 hooks="${TMPDIR:-/work}/review-hooks"
 attributes="${TMPDIR:-/work}/review-attributes"
@@ -170,11 +171,26 @@ require_no_change() {
     rm -f -- "$index"
 }
 
-# Only file reads for Claude Code, and no settings, so neither the head's settings nor a hook can give it more.
+# From the file into the CLI's environment alone, never on a command line; an API key or another address of the image would win over the login.
+use_the_login() {
+    if [ -n "$login" ]; then
+        unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL
+        CLAUDE_CODE_OAUTH_TOKEN="$(cat -- "$login")"
+        export CLAUDE_CODE_OAUTH_TOKEN
+    fi
+}
+
+# Only reads of the checkout for Claude Code, and no settings, so neither the head's settings nor a hook can give it more. dontAsk refuses whatever the
+# allow rule does not name, a committed link out of the checkout included, because the CLI checks the place a link leads to as well; the deny rules
+# name where the login is (its file, the CLI's environment) and what else the job holds, so no read of them works whatever another rule allows.
+# In a rule, // starts an absolute path.
 run_claude_code() {
+    use_the_login
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
     export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
-    claude -p --model "$model" --output-format stream-json --verbose --tools Read,Grep,Glob --allowedTools Read,Grep,Glob \
+    claude -p --model "$model" --output-format stream-json --verbose --tools Read,Grep,Glob --permission-mode dontAsk \
+        --allowedTools "Read(/$checkout/**)" \
+        --disallowedTools "Read(/${login:-/input/login})" "Read(/$prompt)" "Read(/$output/**)" "Read(/$HOME/**)" 'Read(//proc/**)' 'Read(//dev/**)' 'Read(//sys/**)' \
         --setting-sources '' --strict-mcp-config --no-session-persistence
 }
 
@@ -194,6 +210,9 @@ case "$provider" in
 esac
 if [ ! -f "$prompt" ] || [ ! -r "$prompt" ]; then
     refuse 'the prompt cannot be read'
+fi
+if [ "$#" -eq 6 ] && { [ ! -f "$login" ] || [ ! -r "$login" ] || [ ! -s "$login" ]; }; then
+    refuse 'the login cannot be read'
 fi
 require_a_recent_git
 prepare_empty_git_files

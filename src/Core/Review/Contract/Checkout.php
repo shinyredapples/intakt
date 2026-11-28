@@ -44,6 +44,12 @@ final readonly class Checkout
         return $real;
     }
 
+    // Exposed because a review job clones the head from this checkout instead of reading it through the path checks.
+    public function root(): string
+    {
+        return $this->root;
+    }
+
     public function relative(string $realPath): string
     {
         return ltrim(substr($realPath, strlen($this->root)), '/');

@@ -358,6 +358,11 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(AiServices::DISABLED_ACCOUNTS, $disabledAccounts);
     $container->parameters()->set(AiServices::ACCOUNTS, $enabledAccounts);
     $container->parameters()->set(AiServices::LISTED_ACCOUNTS, $listedAccounts);
+    // The token variable of each enabled Claude Code account, read when the container runs, so a review job signs in with the login of the account it runs on and no token enters the compiled container.
+    $container->parameters()->set(AiServices::CLAUDE_CODE_TOKENS, array_map(
+        static fn (string $name): string => $env([...new Account(Provider::ClaudeCode, $name)->variables()][0]),
+        array_combine($enabledAccounts[Provider::ClaudeCode->value] ?? [], $enabledAccounts[Provider::ClaudeCode->value] ?? []),
+    ));
     // The base URL variable of each enabled OpenAI-compatible account, read when the container runs, so the connectivity check probes the owner's own endpoints.
     $container->parameters()->set(AiServices::COMPATIBLE_BASE_URLS, array_map(
         static fn (string $name): string => $env([...new Account(Provider::OpenAiCompatible, $name)->variables()][0]),

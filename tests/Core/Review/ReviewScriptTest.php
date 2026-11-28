@@ -40,18 +40,40 @@ final class ReviewScriptTest extends TestCase
 
     public function testAClaudeCodeReviewOfACleanCheckoutRunsTheCliInTheCheckoutWithThePromptAndOnlyFileReads(): void
     {
-        $this->givenTheCli('claude', 'printf "%s\n" "$@" > "$RECORD/arguments"; pwd > "$RECORD/directory"; cat > "$RECORD/input"; echo answered');
+        $this->givenTheCli('claude', 'printf "%s\n" "$@" > "$RECORD/arguments"; pwd > "$RECORD/directory"; cat > "$RECORD/input"; printf "%s" "$HOME" > "$RECORD/home"; echo answered');
 
         $run = $this->whenTheReviewRuns();
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('review.log'));
         self::assertSame(
-            ['-p', '--model', 'claude-opus-5-5', '--output-format', 'stream-json', '--verbose', '--tools', 'Read,Grep,Glob', '--allowedTools', 'Read,Grep,Glob', '--setting-sources', '', '--strict-mcp-config', '--no-session-persistence'],
+            ['-p', '--model', 'claude-opus-5-5', '--output-format', 'stream-json', '--verbose', '--tools', 'Read,Grep,Glob', '--permission-mode', 'dontAsk', '--allowedTools', 'Read(/'.$this->checkout.'/**)', '--disallowedTools', 'Read(//input/login)', 'Read(/'.$this->prompt.')', 'Read(/'.$this->output.'/**)', 'Read(/'.$this->recorded('home').'/**)', 'Read(//proc/**)', 'Read(//dev/**)', 'Read(//sys/**)', '--setting-sources', '', '--strict-mcp-config', '--no-session-persistence'],
             $this->recordedLines('arguments'),
         );
         self::assertSame([$this->checkout], $this->recordedLines('directory'));
         self::assertSame("Review the head.\n", $this->recorded('input'));
         self::assertSame("answered\n", $this->outputFile('answer'));
+    }
+
+    public function testTheLoginReachesTheClisEnvironmentAloneAndWinsOverAnApiKeyOfTheImage(): void
+    {
+        $this->givenTheCli('claude', 'printf "%s\n" "$@" > "$RECORD/arguments"; printf "%s\n" "$CLAUDE_CODE_OAUTH_TOKEN" "${ANTHROPIC_API_KEY-unset}" > "$RECORD/environment"');
+        $login = $this->work.'-login';
+        new Filesystem()->dumpFile($login, 'PLANT-login-token');
+
+        $run = $this->runOnAReadOnlyCheckout([$this->checkout, $this->head, $this->prompt, 'claude_code', 'claude-opus-5-5', $login], ['ANTHROPIC_API_KEY' => 'PLANT-key']);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('review.log'));
+        self::assertSame(['PLANT-login-token', 'unset'], $this->recordedLines('environment'));
+        self::assertStringNotContainsString('PLANT-login-token', $this->recorded('arguments'));
+        self::assertContains('Read(/'.$login.')', $this->recordedLines('arguments'));
+        new Filesystem()->remove($login);
+    }
+
+    public function testALoginThatCannotBeReadIsRefused(): void
+    {
+        $run = $this->runOnAReadOnlyCheckout([$this->checkout, $this->head, $this->prompt, 'claude_code', 'claude-opus-5-5', $this->work.'/no-login'], []);
+
+        $this->assertRefused($run, 'the login cannot be read');
     }
 
     public function testACodexReviewSwitchesOffEveryToolTheInProcessCodexReviewerSwitchesOff(): void
@@ -776,16 +798,16 @@ final class ReviewScriptTest extends TestCase
         return is_file($this->output.'/'.$name) ? (string) file_get_contents($this->output.'/'.$name) : '';
     }
 
+    private function recorded(string $name): string
+    {
+        return (string) file_get_contents($this->folder.'/'.$name);
+    }
+
     /**
      * @return list<string>
      */
     private function recordedLines(string $name): array
     {
         return explode("\n", rtrim($this->recorded($name), "\n"));
-    }
-
-    private function recorded(string $name): string
-    {
-        return (string) file_get_contents($this->folder.'/'.$name);
     }
 }

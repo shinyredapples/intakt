@@ -73,7 +73,7 @@ projects:
         # Optional: the files and folders (everything below one counts) a change may only touch with an approval, from the repository's root;
         # .gitmodules and submodules always count. `php bin/console intakt:protected:list alpha <head>` lists what a head touches.
         protected_paths: [bin/check, config/gates/, .github, AGENTS.md]
-        # Optional: the image a review job of this project runs in, as `intakt:job:build-image --kind=review` tagged it; no review uses review jobs yet.
+        # Optional: the image a review job of this project runs in, as `intakt:job:build-image --kind=review` tagged it; used for `claude_code` reviewers when INTAKT_CONTAINER_ENGINE is set.
         review_job: { image: intakt-job/alpha:review }
     beta:
         # Optional: reviewer-for-loop reviews the heads of a build loop such as the one that developed Intakt, its verdicts count and it only publishes its verdict on each head

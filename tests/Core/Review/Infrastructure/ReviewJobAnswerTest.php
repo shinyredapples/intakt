@@ -14,6 +14,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 
 #[CoversClass(ReviewJobAnswer::class)]
 #[CoversClass(ClaudeCodeJobEvents::class)]
@@ -41,6 +42,26 @@ final class ReviewJobAnswerTest extends TestCase
         ]));
 
         self::assertSame('last', $answer->text);
+    }
+
+    #[DataProvider('failedAnswersWithUsage')]
+    public function testAFailedAnswerKeepsTheUsageTheCliReported(string $output): void
+    {
+        try {
+            ReviewJobAnswer::read(Provider::ClaudeCode, $output);
+            self::fail('A failed answer was taken as one.');
+        } catch (ReviewJobFailure $failure) {
+            self::assertSame([[100, 20]], array_map(static fn (TokenUsageInterface $part): array => [$part->getPromptTokens(), $part->getCompletionTokens()], $failure->usage));
+        }
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function failedAnswersWithUsage(): iterable
+    {
+        yield 'an empty result' => ['{"type":"result","is_error":false,"result":"","usage":{"input_tokens":100,"output_tokens":20}}'];
+        yield 'an error' => ['{"type":"result","is_error":true,"result":"rate limited","usage":{"input_tokens":100,"output_tokens":20}}'];
     }
 
     /**
@@ -125,7 +146,7 @@ final class ReviewJobAnswerTest extends TestCase
     {
         $answer = ReviewJobAnswer::read(Provider::ClaudeCode, $this->claudeStream(self::read('toolu_1', ReviewJob::CHECKOUT.'/src/Cart.php'), self::readResult('toolu_1', false)));
 
-        self::assertTrue($answer->readTheCheckout);
+        self::assertSame(['src/Cart.php'], $answer->readFiles);
         self::assertSame('looks fine', $answer->text);
     }
 
@@ -156,14 +177,14 @@ final class ReviewJobAnswerTest extends TestCase
     #[DataProvider('streamsWithoutARead')]
     public function testAClaudeCodeStreamWithoutASuccessfulReadOfACheckoutFileShowsNoRead(array $events): void
     {
-        self::assertFalse(ReviewJobAnswer::read(Provider::ClaudeCode, $this->claudeStream(...$events))->readTheCheckout);
+        self::assertSame([], ReviewJobAnswer::read(Provider::ClaudeCode, $this->claudeStream(...$events))->readFiles);
     }
 
     public function testTheModelsTextClaimingAReadShowsNoRead(): void
     {
         $output = (string) json_encode(['type' => 'result', 'is_error' => false, 'result' => 'I used Read on '.ReviewJob::CHECKOUT.'/src/Cart.php and it looks fine']);
 
-        self::assertFalse(ReviewJobAnswer::read(Provider::ClaudeCode, $output)->readTheCheckout);
+        self::assertSame([], ReviewJobAnswer::read(Provider::ClaudeCode, $output)->readFiles);
     }
 
     public function testClaudeCodesUsageIsReadFromItsFinalResult(): void
@@ -174,6 +195,34 @@ final class ReviewJobAnswerTest extends TestCase
 
         self::assertCount(1, $usage);
         self::assertSame([4, 700, 39500], [$usage[0]->getPromptTokens(), $usage[0]->getCompletionTokens(), $usage[0]->getCachedTokens()]);
+    }
+
+    public function testAFinalResultsUsageStandsForTheMessagesBeforeIt(): void
+    {
+        $output = implode("\n", [
+            '{"type":"assistant","message":{"id":"msg_1","usage":{"input_tokens":100,"output_tokens":20}}}',
+            '{"type":"result","is_error":false,"result":"fine","usage":{"input_tokens":120,"output_tokens":30}}',
+        ]);
+
+        $usage = ReviewJobAnswer::usageIn(Provider::ClaudeCode, $output);
+
+        self::assertCount(1, $usage);
+        self::assertSame([120, 30], [$usage[0]->getPromptTokens(), $usage[0]->getCompletionTokens()]);
+    }
+
+    public function testOnlyTheLastLineMayBeCutOffWhereUsageIsRead(): void
+    {
+        $message = '{"type":"assistant","message":{"id":"msg_1","usage":{"input_tokens":100,"output_tokens":20}}}';
+
+        self::assertCount(1, ReviewJobAnswer::usageIn(Provider::ClaudeCode, $message."\n".'{"type":"assis'));
+        self::assertSame([], ReviewJobAnswer::usageIn(Provider::ClaudeCode, '{"type":"assis'."\n".$message));
+    }
+
+    public function testACutOffLastLineStillRefusesTheAnswer(): void
+    {
+        $this->expectException(ReviewJobFailure::class);
+
+        ReviewJobAnswer::read(Provider::ClaudeCode, '{"type":"result","is_error":false,"result":"fine"}'."\n".'{"type":"assis');
     }
 
     public function testAnEmptyUsageBlockCountsAsNoUsageReported(): void
@@ -218,7 +267,7 @@ final class ReviewJobAnswerTest extends TestCase
         $answer = ReviewJobAnswer::read(Provider::Codex, $output);
 
         self::assertSame([[1200, 50, 800], [1300, 60, 0]], array_map(static fn ($usage): array => [$usage->getPromptTokens(), $usage->getCompletionTokens(), $usage->getCachedTokens()], $answer->usage));
-        self::assertFalse($answer->readTheCheckout);
+        self::assertSame([], $answer->readFiles);
     }
 
     /**

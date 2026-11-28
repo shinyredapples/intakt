@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Closure;
 use Intakt\Core\Ai\Contract\Provider;
 use Symfony\AI\Platform\Bridge\Codex\TokenUsageExtractor;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
@@ -16,23 +17,26 @@ final readonly class ReviewJobAnswer
     private const string TYPE = 'type';
 
     /**
+     * @param list<string>              $readFiles
      * @param list<TokenUsageInterface> $usage
      */
     private function __construct(
         public string $text,
-        // Read from the CLI's own events, never from the model's text, so the vendor counts an approve only when the job read a file of the checkout.
-        public bool $readTheCheckout,
+        // The checkout's paths the CLI's own events show as read, never the model's text; whether the head holds them as regular files is checked against the head, because a read follows a committed link.
+        public array $readFiles,
         // What the CLI reported it spent; empty when it reported nothing, so the vendor leaves the call unsettled instead of settling it as zero.
         public array $usage,
     ) {
     }
 
     /**
+     * @param (Closure(string): string)|null $redacted
+     *
      * @throws ReviewJobFailure
      */
-    public static function read(Provider $provider, string $output): self
+    public static function read(Provider $provider, string $output, ?Closure $redacted = null): self
     {
-        $events = self::events($output) ?? [];
+        $events = self::redacted(self::events($output) ?? [], $redacted);
         $claudeCode = new ClaudeCodeJobEvents($events);
         $text = match ($provider) {
             Provider::ClaudeCode => $claudeCode->answer(),
@@ -40,14 +44,25 @@ final readonly class ReviewJobAnswer
             default => null,
         };
 
+        $usage = self::usageOf($provider, $events);
+
         if (null === $text || '' === $text) {
-            throw ReviewJobFailure::unreadableAnswer($provider);
+            throw ReviewJobFailure::unreadableAnswer($provider, $usage);
         }
 
-        return Provider::ClaudeCode === $provider
-            ? new self($text, $claudeCode->readACheckoutFile(), $claudeCode->usage())
-            // No read counts, because the job's Codex has its shell and every other tool off, so its events can show no file it read.
-            : new self($text, false, self::codexUsage($events));
+        // No read counts for Codex, because the job's Codex has its shell and every other tool off, so its events can show no file it read.
+        return new self($text, Provider::ClaudeCode === $provider ? $claudeCode->readFiles() : [], $usage);
+    }
+
+    // Apart from read(), because a CLI that failed reports what it spent and answers nothing; its last line may be cut off, because a CLI killed by its time or memory limit stops mid-write, and every line before it must still be an event.
+    /**
+     * @param (Closure(string): string)|null $redacted
+     *
+     * @return list<TokenUsageInterface>
+     */
+    public static function usageIn(Provider $provider, string $output, ?Closure $redacted = null): array
+    {
+        return self::usageOf($provider, self::redacted(self::events(self::withoutCutLastLine($output)) ?? [], $redacted));
     }
 
     /**
@@ -58,12 +73,56 @@ final readonly class ReviewJobAnswer
     {
         $events = [];
 
-        foreach (array_filter(explode("\n", $output), static fn (string $line): bool => '' !== trim($line)) as $line) {
-            $event = json_decode($line, true);
-            if (!is_array($event) || array_is_list($event)) {
+        foreach (self::linesOf($output) as $line) {
+            $event = self::eventOf($line);
+            if (null === $event) {
                 return null;
             }
             $events[] = $event;
+        }
+
+        return $events;
+    }
+
+    private static function withoutCutLastLine(string $output): string
+    {
+        $lines = self::linesOf($output);
+        $last = array_pop($lines);
+
+        return null === $last || null !== self::eventOf($last) ? $output : implode("\n", $lines);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function linesOf(string $output): array
+    {
+        return array_values(array_filter(explode("\n", $output), static fn (string $line): bool => '' !== trim($line)));
+    }
+
+    /**
+     * @return array<mixed>|null
+     */
+    private static function eventOf(string $line): ?array
+    {
+        $event = json_decode($line, true);
+
+        return is_array($event) && !array_is_list($event) ? $event : null;
+    }
+
+    // After decoding, because JSON may escape any character of a value, and before anything else reads the events.
+    /**
+     * @param list<array<mixed>>             $events
+     * @param (Closure(string): string)|null $redacted
+     *
+     * @return list<array<mixed>>
+     */
+    private static function redacted(array $events, ?Closure $redacted): array
+    {
+        if ($redacted instanceof Closure) {
+            array_walk_recursive($events, static function (mixed &$value) use ($redacted): void {
+                $value = is_string($value) ? $redacted($value) : $value;
+            });
         }
 
         return $events;
@@ -93,6 +152,20 @@ final readonly class ReviewJobAnswer
         }
 
         return $answer;
+    }
+
+    /**
+     * @param list<array<mixed>> $events
+     *
+     * @return list<TokenUsageInterface>
+     */
+    private static function usageOf(Provider $provider, array $events): array
+    {
+        return match ($provider) {
+            Provider::ClaudeCode => new ClaudeCodeJobEvents($events)->usage(),
+            Provider::Codex => self::codexUsage($events),
+            default => [],
+        };
     }
 
     // Each completed turn reports its own usage, so every one is kept.

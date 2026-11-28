@@ -37,6 +37,7 @@ use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\JobReviewer;
 use Intakt\Core\Review\Contract\NoReviewServerAccess;
 use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
@@ -592,6 +593,6 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), $servers ?? $this->servers());
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), $servers ?? $this->servers(), self::createStub(JobReviewer::class));
     }
 }

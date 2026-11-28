@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use DateTimeInterface;
+use Intakt\Core\Ai\Contract\AccountLogin;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\EgressHosts;
@@ -20,18 +22,27 @@ use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
+use Intakt\Core\Platform\Contract\HeldCredentialSpans;
+use Intakt\Core\Platform\Contract\RedactedSpans;
+use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Review\Contract\ReviewJobRequest;
 use InvalidArgumentException;
 use NoDiscard;
+use SensitiveParameter;
+use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Finder\Finder;
 
-// Not called by the review flow yet, because the choice between this and the in-process reviewer belongs to part 2 of #2017.
 final readonly class ReviewJob
 {
     public const string CHECKOUT = '/input/checkout';
 
     public const string PROMPT = '/input/prompt.md';
+
+    public const string LOGIN = '/input/login';
 
     public const string ANSWER = 'answer';
 
@@ -46,10 +57,17 @@ final readonly class ReviewJob
     // Fixed, because sizing the limits for each review is plan task T60 (#1710).
     private const int SECONDS = 1800;
 
+    private const int LEFT_BEHIND_AFTER_SECONDS = self::SECONDS + 60;
+
+    private const string PROMPT_PREFIX = 'review-';
+
+    private const string LOGIN_PREFIX = 'login-';
+
     public function __construct(
         private ReviewJobImages $images,
         private JobRunner $jobs,
         private Filesystem $filesystem,
+        private ClockInterface $clock,
         #[Autowire('%kernel.project_dir%/docker/job/review.sh')]
         private string $reviewScript,
         // Under the project folder like the jobs' output directories, because the engine mounts host paths.
@@ -71,14 +89,18 @@ final readonly class ReviewJob
         $egress = $this->egressOf($request->model->provider);
         $image = $this->images->imageFor($request->project);
         $checkout = new JobInput($this->folder($request->checkout), self::CHECKOUT);
-        $prompt = $this->promptFileFor($request);
+        $this->removeInputsLeftBehind();
+        $prompt = $this->inputFile(self::PROMPT_PREFIX, '.md', $request->prompt);
+        $login = null;
 
         try {
-            $spec = new JobSpec($this->idOf($request), $image, $this->commandFor($request), [$checkout, new JobInput($prompt, self::PROMPT)], new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS), $egress);
+            $login = $request->login instanceof AccountLogin ? $this->inputFile(self::LOGIN_PREFIX, '', $request->login->token) : null;
+            $inputs = [$checkout, new JobInput($prompt, self::PROMPT), ...(null === $login ? [] : [new JobInput($login, self::LOGIN)])];
+            $spec = new JobSpec($this->idOf($request), $image, $this->commandFor($request), $inputs, new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS), $egress);
 
-            return $this->answerOf($request->model->provider, $this->ranJob($spec));
+            return $this->answerOf($request, $this->ranJob($spec));
         } finally {
-            $this->filesystem->remove($prompt);
+            $this->filesystem->remove(array_filter([$prompt, $login], is_string(...)));
         }
     }
 
@@ -103,12 +125,27 @@ final readonly class ReviewJob
         return $absolute;
     }
 
-    // A file of its own for each run, readable by the orchestrator's user only, so two reviews never share one.
-    private function promptFileFor(ReviewJobRequest $request): string
+    // Because a killed worker never reaches the finally that removes its login; past the job's time limit, so no running job still reads the file.
+    private function removeInputsLeftBehind(): void
+    {
+        if (!is_dir($this->promptFolder)) {
+            return;
+        }
+        $leftBehind = new Finder()->files()->in($this->promptFolder)->depth('== 0')->name([self::LOGIN_PREFIX.'*', self::PROMPT_PREFIX.'*'])->date('before '.$this->clock->now()->modify(sprintf('-%d seconds', self::LEFT_BEHIND_AFTER_SECONDS))->format(DateTimeInterface::ATOM));
+
+        try {
+            $this->filesystem->remove($leftBehind);
+        } catch (IOException) {
+            // Ignored, because another worker may be removing the same file, and a file that stays is tried again before the next review.
+        }
+    }
+
+    // A file of its own for each run, readable by the orchestrator's user only, so two reviews never share one; the login is a file too, because a command line is shown in process lists and messages.
+    private function inputFile(string $prefix, string $suffix, #[SensitiveParameter] string $content): string
     {
         $this->filesystem->mkdir($this->promptFolder, 0o700);
-        $file = $this->filesystem->tempnam($this->promptFolder, 'review-', '.md');
-        $this->filesystem->appendToFile($file, $request->prompt);
+        $file = $this->filesystem->tempnam($this->promptFolder, $prefix, $suffix);
+        $this->filesystem->appendToFile($file, $content);
 
         return $file;
     }
@@ -124,7 +161,7 @@ final readonly class ReviewJob
 
     private function commandFor(ReviewJobRequest $request): JobCommand
     {
-        return new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->reviewScript), 'intakt-review', self::CHECKOUT, $request->head, self::PROMPT, $request->model->provider->value, $request->model->model);
+        return new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->reviewScript), 'intakt-review', self::CHECKOUT, $request->head, self::PROMPT, $request->model->provider->value, $request->model->model, ...($request->login instanceof AccountLogin ? [self::LOGIN] : []));
     }
 
     private function ranJob(JobSpec $spec): ?JobResult
@@ -137,48 +174,70 @@ final readonly class ReviewJob
         }
     }
 
-    private function answerOf(Provider $provider, ?JobResult $result): ReviewJobAnswer
+    private function answerOf(ReviewJobRequest $request, ?JobResult $result): ReviewJobAnswer
     {
         if (!$result instanceof JobResult) {
             throw ReviewJobFailure::withoutResult();
         }
 
         return match ($result->end->cause) {
-            JobCause::MemoryKilled => throw ReviewJobFailure::outOfMemory(),
-            JobCause::TimedOut => throw ReviewJobFailure::outOfTime(),
+            JobCause::MemoryKilled => throw ReviewJobFailure::outOfMemory($this->usageIn($request, $result->output)),
+            JobCause::TimedOut => throw ReviewJobFailure::outOfTime($this->usageIn($request, $result->output)),
             // The CLI cannot set the script's exit code, which is not 0 only for a refusal before the CLI ran.
             JobCause::Exited => 0 === $result->end->exitCode
-                ? $this->answered($provider, $result->output)
-                : throw ReviewJobFailure::refused($this->refusalIn($result->output) ?? sprintf('it exited with %d', $result->end->exitCode)),
+                ? $this->answered($request, $result->output)
+                : throw ReviewJobFailure::refused($this->refusalIn($request, $result->output) ?? sprintf('it exited with %d', $result->end->exitCode)),
         };
     }
 
-    private function answered(Provider $provider, JobOutput $output): ReviewJobAnswer
+    /**
+     * @return list<TokenUsageInterface>
+     */
+    private function usageIn(ReviewJobRequest $request, JobOutput $output): array
     {
-        $status = $this->cliStatusIn($provider, $output);
+        return ReviewJobAnswer::usageIn($request->model->provider, $output->contents(self::ANSWER) ?? '', fn (string $text): string => $this->withoutLogin($request, $text));
+    }
+
+    private function answered(ReviewJobRequest $request, JobOutput $output): ReviewJobAnswer
+    {
+        $provider = $request->model->provider;
+        $status = $this->cliStatusIn($request, $output) ?? throw ReviewJobFailure::withoutCliExit($provider, $this->usageIn($request, $output));
 
         if (0 !== $status) {
-            throw ReviewJobFailure::cliFailed($provider, $status);
+            throw ReviewJobFailure::cliFailed($provider, $status, $this->usageIn($request, $output));
         }
 
-        return ReviewJobAnswer::read($provider, $output->contents(self::ANSWER) ?? '');
+        return ReviewJobAnswer::read($provider, $output->contents(self::ANSWER) ?? '', fn (string $text): string => $this->withoutLogin($request, $text));
     }
 
     // The script refuses before the CLI runs, so the log holds only its own lines and git's.
-    private function refusalIn(JobOutput $output): ?string
+    private function refusalIn(ReviewJobRequest $request, JobOutput $output): ?string
     {
-        $refusals = array_filter(explode("\n", $output->contents(self::LOG) ?? ''), static fn (string $line): bool => str_starts_with($line, self::REFUSAL));
+        $refusals = array_filter(explode("\n", $this->withoutLogin($request, $output->contents(self::LOG) ?? '')), static fn (string $line): bool => str_starts_with($line, self::REFUSAL));
         $last = array_last($refusals);
 
         return null === $last ? null : substr($last, strlen(self::REFUSAL));
     }
 
     // The last such line, because the script writes it after the CLI ended, and the CLI's own errors in the log come before it.
-    private function cliStatusIn(Provider $provider, JobOutput $output): int
+    private function cliStatusIn(ReviewJobRequest $request, JobOutput $output): ?int
     {
-        preg_match_all('/^'.preg_quote($provider->value, '/').' exited with (\d+)$/m', $output->contents(self::LOG) ?? '', $exits);
+        preg_match_all('/^'.preg_quote($request->model->provider->value, '/').' exited with (\d+)$/m', $this->withoutLogin($request, $output->contents(self::LOG) ?? ''), $exits);
         $status = array_last($exits[1]);
 
-        return null === $status ? throw ReviewJobFailure::withoutCliExit($provider) : (int) $status;
+        return null === $status ? null : (int) $status;
+    }
+
+    // Only the login's value, not the other shapes of a log line, because a cut header in the answer could take the verdict with it; they are redacted where the verdict is stored.
+    private function withoutLogin(ReviewJobRequest $request, string $text): string
+    {
+        $login = $request->login;
+        if (!$login instanceof AccountLogin) {
+            return $text;
+        }
+        $spans = new HeldCredentialSpans()->in($text, $login->token);
+
+        // A failed match would leave the rest unredacted, so nothing of the text goes on.
+        return $spans instanceof RedactedSpans ? $spans->replacedIn($text) : Redaction::MARKER;
     }
 }

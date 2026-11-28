@@ -34,7 +34,7 @@ Planned, not built yet: a compose file and an image you supply as sources, image
 
 ## A check before every job
 
-This part is built. The check before a push is built to run in a job container, but it has not yet run on a live container engine, and no build or review runs in one yet. Before a job starts its real work, it checks that its box works as promised: it writes a small file into the folder it hands its results back in and into its scratch area and reads it back, makes sure it can read every input it was given, and tries each internet address it is allowed to reach. If something does not work (for example a folder that was not mounted properly), the job does not stop: it carries on in a reduced mode, says so at the top of its log, and Intakt writes each failed check and its reason into its ledger. When the output folder itself is broken, the ledger gets a single `output` failure, and the input and egress reasons appear only in the log. So a broken folder is named at the start instead of making the job fail halfway for no clear reason.
+This part is built. The check before a push is built to run in a job container, but it has not yet run on a live container engine, and no build runs in one yet. A review runs in one only when you set `INTAKT_CONTAINER_ENGINE=docker` (see below). Before a job starts its real work, it checks that its box works as promised: it writes a small file into the folder it hands its results back in and into its scratch area and reads it back, makes sure it can read every input it was given, and tries each internet address it is allowed to reach. If something does not work (for example a folder that was not mounted properly), the job does not stop: it carries on in a reduced mode, says so at the top of its log, and Intakt writes each failed check and its reason into its ledger. When the output folder itself is broken, the ledger gets a single `output` failure, and the input and egress reasons appear only in the log. So a broken folder is named at the start instead of making the job fail halfway for no clear reason.
 
 ## When a job runs out of memory
 
@@ -60,7 +60,7 @@ Intakt finds them in your project's config, your `compose.yaml`, the services yo
 
 ## Can reviewers use them?
 
-Planned, not built yet: today a reviewer reads the change and runs nothing. Once built, a review job gets the same sidecars as the check job, so a reviewer can:
+Planned, not built yet: today a reviewer reads the change and runs nothing. When you tell Intakt it may use Docker (`INTAKT_CONTAINER_ENGINE=docker`), each Claude Code reviewer already works in a review job of its own: a box holding a read-only copy of exactly the commit under review, which can reach only that reviewer's AI company. Without that setting, as in the `docker compose` demo, reviewers read the change from inside Intakt. Once built, a review job gets the same sidecars as the check job, so a reviewer can:
 - run the project's tests against a **real database**;
 - start **the changed application itself** in its box and call it, to see that it boots and answers;
 - (planned) write a small test of its own for an edge case and run it there.

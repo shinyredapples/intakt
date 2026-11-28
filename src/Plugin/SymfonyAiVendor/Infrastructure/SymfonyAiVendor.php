@@ -18,6 +18,9 @@ use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\Evidence;
+use Intakt\Core\Review\Contract\JobReview;
+use Intakt\Core\Review\Contract\JobReviewer;
+use Intakt\Core\Review\Contract\JobVerdict;
 use Intakt\Core\Review\Contract\Judge;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
@@ -60,6 +63,7 @@ final readonly class SymfonyAiVendor implements Vendor
         private VendorAccountLimit $accounts,
         private ClockInterface $clock,
         private ReviewServerAccesses $servers,
+        private JobReviewer $jobs,
     ) {
     }
 
@@ -128,6 +132,12 @@ final readonly class SymfonyAiVendor implements Vendor
 
     private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
     {
+        $job = $request->job;
+        // Only Claude Code, because the job's Codex has no tool that reads a file, so every approval of it would be unread, and an API-key provider has no CLI in the review image.
+        if ($job instanceof JobReview && Provider::ClaudeCode === $answering->provider) {
+            return $this->jobVerdictOn($reservation, fn (): JobVerdict => $this->jobs->review($request, $job, $answering));
+        }
+
         try {
             $options = $this->serverOptions($answering, $request);
         } catch (NoReviewServerAccess) {
@@ -158,7 +168,7 @@ final readonly class SymfonyAiVendor implements Vendor
         $stopped = $request->conversation;
         $conversation = new ReviewerConversation($stopped->rolePrompt, new UuidV7(UuidV7::generate($this->clock->now())), $stopped->round, $stopped->reviewerId, askedAgain: true);
 
-        return new ReviewRequest($request->checkout, $request->brief, $conversation);
+        return new ReviewRequest($request->checkout, $request->brief, $conversation, $request->job);
     }
 
     // Told what its answer lacked, so the same reviewer names its findings or approves instead of repeating an empty changes answer.
@@ -174,7 +184,7 @@ final readonly class SymfonyAiVendor implements Vendor
             askedToNameFindings: true,
         );
 
-        return new ReviewRequest($request->checkout, $request->brief, $conversation);
+        return new ReviewRequest($request->checkout, $request->brief, $conversation, $request->job);
     }
 
     // A second cut keeps the first cut's reason, so the reviewer ends as it did before the retry; a provider failure of the retry follows its own rule, so an outage is handled as one, and no other failure of it is retried, because retriedOnce() catches only the first try's.
@@ -226,7 +236,31 @@ final readonly class SymfonyAiVendor implements Vendor
         );
     }
 
-    // Only a subscription CLI is given the review server, because every other provider reaches it through the reviewer's own toolbox; the judge reads no repository.
+    // The job's own usage settles the call, because the platform is never called for it; a job that reported none, or whose answer is no verdict, is left unsettled, never settled as zero.
+    /**
+     * @param Closure(): JobVerdict $review
+     */
+    private function jobVerdictOn(UsageReservation $reservation, Closure $review): Verdict
+    {
+        try {
+            $answer = $review();
+            // Boundary: leaves the call unsettled and rethrows it typed, because any job failure must reach the callers as a vendor failure.
+        } catch (Throwable $failure) {
+            $this->usage->leaveUnsettled($reservation, $failure);
+
+            throw $this->typed($failure);
+        }
+
+        if ([] === $answer->usage) {
+            $this->usage->leaveUnsettled($reservation, JobReportedNoUsage::inItsOutput());
+        } else {
+            $this->usage->settleReported($reservation, $answer->usage, $answer->account);
+        }
+
+        return $this->jobReadOrRefused($answer, $this->namingAFinding($answer->verdict()));
+    }
+
+    // Only a subscription CLI in the app's own process is given the review server, because every other provider reaches it through the reviewer's own toolbox and a review job's CLI reads its checkout directly; the judge reads no repository.
     /**
      * @return array<string, mixed>
      */
@@ -269,6 +303,12 @@ final readonly class SymfonyAiVendor implements Vendor
         return $verdict->withholdsApprovalWithoutFinding() ? throw ChangesWithoutFindings::fromTheReviewer() : $verdict;
     }
 
+    // Decided here in plain code like readOrRefused(), because a mounted checkout is no read: the approve counts only when the job CLI's own events show a file of the checkout read.
+    private function jobReadOrRefused(JobVerdict $answer, Verdict $verdict): Verdict
+    {
+        return !$verdict->mayCountAsApproval() || $answer->readTheCheckout ? $verdict : Verdict::unreadApproval();
+    }
+
     private function judgementOn(ResolvedModel $answering, UsageReservation $reservation, JudgeRequest $request): Judgement
     {
         $platform = new TierRoutedPlatform($this->tiers, $answering);
@@ -292,7 +332,7 @@ final readonly class SymfonyAiVendor implements Vendor
         return $judgement;
     }
 
-    // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI reads the change only through the review server this call gave it.
+    // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI in the app's own process reads the change only through the review server this call gave it.
     private function readOrRefused(TierRoutedPlatform $platform, Verdict $verdict): Verdict
     {
         if (!$verdict->mayCountAsApproval() || $platform->answering->provider->readsTheCheckout()) {

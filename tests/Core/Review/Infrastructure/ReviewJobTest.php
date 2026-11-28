@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AccountLogin;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Job\Contract\JobCause;
@@ -13,6 +15,7 @@ use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobOutputFile;
 use Intakt\Core\Job\Contract\JobOutputRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
@@ -24,12 +27,16 @@ use Intakt\Core\Review\Infrastructure\ReviewJob;
 use Intakt\Core\Review\Infrastructure\ReviewJobAnswer;
 use Intakt\Core\Review\Infrastructure\ReviewJobFailure;
 use Intakt\Core\Review\Infrastructure\ReviewJobImages;
+use Intakt\Core\Review\Infrastructure\ReviewJobStage;
 use Intakt\Tests\Core\Job\OutputFiles;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(ReviewJob::class)]
@@ -51,6 +58,8 @@ use Symfony\Component\Filesystem\Filesystem;
 final class ReviewJobTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../docker/job/review.sh';
+
+    private const string NOW = '2026-11-25 10:00:00';
 
     private const string HEAD = '0123456789abcdef0123456789abcdef01234567';
 
@@ -249,6 +258,64 @@ final class ReviewJobTest extends TestCase
         (void) $this->reviews(new JobResult(new JobEnd(JobCause::TimedOut, 137), $this->answered(self::CLAUDE_ANSWER)->output))->run($this->request());
     }
 
+    /**
+     * @return iterable<string, array{JobEnd}>
+     */
+    public static function endsWithoutAnExitLine(): iterable
+    {
+        yield 'timed out' => [new JobEnd(JobCause::TimedOut, 137)];
+        yield 'out of memory' => [new JobEnd(JobCause::MemoryKilled, 137)];
+        yield 'exited without an exit line' => [new JobEnd(JobCause::Exited, 0)];
+    }
+
+    #[DataProvider('endsWithoutAnExitLine')]
+    public function testAJobCutOffAfterItsCliRanKeepsTheUsageItReported(JobEnd $end): void
+    {
+        $output = OutputFiles::of([ReviewJob::LOG => '', ReviewJob::ANSWER => '{"type":"result","is_error":false,"result":"ok","usage":{"input_tokens":100,"output_tokens":20}}']);
+
+        try {
+            (void) $this->reviews(new JobResult($end, $output))->run($this->request());
+            self::fail('A job that was cut off was taken as an answer.');
+        } catch (ReviewJobFailure $failure) {
+            self::assertSame(ReviewJobStage::AfterTheCli, $failure->stage);
+            self::assertSame([100, 20], [$failure->usage[0]->getPromptTokens(), $failure->usage[0]->getCompletionTokens()]);
+        }
+    }
+
+    // A timeout or out-of-memory kill must still settle what the job used: a killed CLI writes no result event, repeats a message's usage in each content block event and may cut off its last line mid-write.
+    #[DataProvider('endsWithoutAnExitLine')]
+    public function testAJobKilledBeforeItsResultKeepsTheUsageOfEachMessageOnce(JobEnd $end): void
+    {
+        $output = OutputFiles::of([ReviewJob::LOG => '', ReviewJob::ANSWER => implode("\n", [
+            '{"type":"system","subtype":"init"}',
+            '{"type":"assistant","message":{"id":"msg_1","content":[{"type":"text","text":"Reading"}],"usage":{"input_tokens":100,"output_tokens":20,"cache_read_input_tokens":40}}}',
+            '{"type":"assistant","message":{"id":"msg_1","content":[{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"'.ReviewJob::CHECKOUT.'/src/Cart.php"}}],"usage":{"input_tokens":100,"output_tokens":20,"cache_read_input_tokens":40}}}',
+            '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"<?php"}]}}',
+            '{"type":"assistant","message":{"id":"msg_2","content":[{"type":"text","text":"The cart"}],"usage":{"input_tokens":300,"output_tokens":7}}}',
+            '{"type":"assistant","message":{"id":"msg_3","content":[{"type":"te',
+        ])]);
+
+        try {
+            (void) $this->reviews(new JobResult($end, $output))->run($this->request());
+            self::fail('A job that was cut off was taken as an answer.');
+        } catch (ReviewJobFailure $failure) {
+            self::assertSame([[100, 20, 40], [300, 7, null]], array_map(static fn (TokenUsageInterface $usage): array => [$usage->getPromptTokens(), $usage->getCompletionTokens(), $usage->getCachedTokens()], $failure->usage));
+        }
+    }
+
+    public function testInputFilesAKilledWorkerLeftBehindAreRemovedAndFreshOnesStay(): void
+    {
+        $files = new Filesystem();
+        foreach (['login-old' => 1870, 'review-old.md' => 1870, 'login-fresh' => 1700, 'review-fresh.md' => 1700, 'other-old' => 1870] as $name => $age) {
+            $files->dumpFile($this->folder.'/prompts/'.$name, 'PLANT');
+            $files->touch($this->folder.'/prompts/'.$name, new MockClock(self::NOW)->now()->getTimestamp() - $age);
+        }
+
+        (void) $this->reviewsAnswering('fine')->run($this->requestWithLogin());
+
+        self::assertSame(['login-fresh', 'other-old', 'review-fresh.md'], array_values(array_diff((array) scandir($this->folder.'/prompts'), ['.', '..'])));
+    }
+
     public function testAnOutputTheRunnerRefusesIsNoResult(): void
     {
         $runner = self::createStub(JobRunner::class);
@@ -268,6 +335,18 @@ final class ReviewJobTest extends TestCase
         $this->expectExceptionMessageIsOrContains('The reviewer\'s CLI claude_code exited with 1.');
 
         (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 0), $output))->run($this->request());
+    }
+
+    public function testACliThatExitedWithAFailingStatusKeepsTheUsageItReported(): void
+    {
+        $output = OutputFiles::of([ReviewJob::LOG => "claude_code exited with 1\n", ReviewJob::ANSWER => '{"type":"result","is_error":true,"result":"","usage":{"input_tokens":100,"output_tokens":20}}']);
+
+        try {
+            (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 0), $output))->run($this->request());
+            self::fail('A failed CLI was taken as an answer.');
+        } catch (ReviewJobFailure $failure) {
+            self::assertSame([100, 20], [$failure->usage[0]->getPromptTokens(), $failure->usage[0]->getCompletionTokens()]);
+        }
     }
 
     public function testACliLineTheCliForgedBeforeTheScriptsOwnDoesNotCount(): void
@@ -297,6 +376,34 @@ final class ReviewJobTest extends TestCase
         $this->expectExceptionMessageIsOrContains('The reviewer\'s CLI claude_code gave no answer the review job can read.');
 
         (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 0), $output))->run($this->request());
+    }
+
+    public function testTheLoginIsAReadOnlyInputOfItsOwnAndOnNoCommandLine(): void
+    {
+        (void) $this->reviewsAnswering('fine')->run($this->requestWithLogin());
+
+        self::assertSame(ReviewJob::LOGIN, $this->ran?->inputs[2]->containerPath);
+        self::assertStringNotContainsString('PLANT-login-token', implode(' ', [...$this->ran->command]));
+        self::assertFileDoesNotExist($this->ran->inputs[2]->hostPath);
+    }
+
+    public function testAnAnswerQuotingTheLoginComesOutRedacted(): void
+    {
+        $answer = $this->reviewsAnswering('it is PLANT-login-token and \u0050LANT-login-token')->run($this->requestWithLogin());
+
+        self::assertSame('it is [redacted] and [redacted]', $answer->text);
+    }
+
+    public function testARefusalQuotingTheLoginComesOutRedacted(): void
+    {
+        $refused = '';
+        try {
+            (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 1), new JobOutput(new JobOutputFile(ReviewJob::LOG, "refused: no PLANT-login-token here\n"))))->run($this->requestWithLogin());
+        } catch (ReviewJobFailure $failure) {
+            $refused = $failure->getMessage();
+        }
+
+        self::assertSame('The review job refused to run the reviewer: no [redacted] here.', $refused);
     }
 
     protected function setUp(): void
@@ -343,11 +450,21 @@ final class ReviewJobTest extends TestCase
         );
     }
 
+    private function reviewsAnswering(string $json): ReviewJob
+    {
+        return $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(new JobOutputFile(ReviewJob::ANSWER, '{"type":"result","is_error":false,"result":"'.$json.'"}'), new JobOutputFile(ReviewJob::LOG, "claude_code exited with 0\n"))));
+    }
+
+    private function requestWithLogin(): ReviewJobRequest
+    {
+        return new ReviewJobRequest('demo', $this->folder.'/checkout', self::HEAD, 'correctness', new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'), 'PLANT-prompt', new AccountLogin(new Account(Provider::ClaudeCode, Account::DEFAULT), 'PLANT-login-token'));
+    }
+
     /**
      * @param array<string, string> $images
      */
     private function useCase(JobRunner $runner, array $images = ['demo' => 'intakt-job/demo:review']): ReviewJob
     {
-        return new ReviewJob(new ReviewJobImages($images), $runner, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        return new ReviewJob(new ReviewJobImages($images), $runner, new Filesystem(), new MockClock(self::NOW), self::SCRIPT, $this->folder.'/prompts');
     }
 }

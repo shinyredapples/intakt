@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\JobReview;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\ReviewBrief;
@@ -30,6 +31,9 @@ final class VerdictPerRole implements Vendor
     /** @var list<?string> */
     public array $rounds = [];
 
+    /** @var list<?JobReview> */
+    public array $jobs = [];
+
     /**
      * @param array<string, Verdict> $verdicts
      */
@@ -46,6 +50,7 @@ final class VerdictPerRole implements Vendor
         ++$this->calls;
         $this->conversations[] = $request->conversation->id->toRfc4122();
         $this->rounds[] = $request->conversation->round?->toRfc4122();
+        $this->jobs[] = $request->job;
         $this->briefs[$request->conversation->rolePrompt] = $request->brief;
 
         return $this->failure instanceof Throwable ? throw $this->failure : new VendorReview($this->verdicts[$request->conversation->rolePrompt] ?? $this->otherwise);

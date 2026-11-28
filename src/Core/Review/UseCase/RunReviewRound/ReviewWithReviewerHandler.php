@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
+use Intakt\Core\Job\Contract\ContainerEngine;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\JobReview;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -30,6 +32,7 @@ final readonly class ReviewWithReviewerHandler
         private ReviewRounds $rounds,
         private GoalpostRule $goalposts,
         private LiveRoundProgress $progress,
+        private ContainerEngine $engine,
     ) {
     }
 
@@ -62,7 +65,8 @@ final readonly class ReviewWithReviewerHandler
 
         try {
             $brief = new ReviewBrief(new ChangeUnderReview($round->project(), $round->task(), $round->diff()), $this->rounds->openFindingsOf($round), $round->number());
-            $request = new ReviewRequest(new Checkout($round->checkoutRoot()), $brief, new ReviewerConversation($reviewer->rolePrompt(), $reviewer->conversationId(), $round->id(), $reviewer->id()));
+            $conversation = new ReviewerConversation($reviewer->rolePrompt(), $reviewer->conversationId(), $round->id(), $reviewer->id());
+            $request = new ReviewRequest(new Checkout($round->checkoutRoot()), $brief, $conversation, $this->jobReviewOf($reviewer));
             $review = $this->vendor->review($round->project(), $reviewer->tier(), $request);
         } catch (ProviderRateLimited $limited) {
             $this->leases->handBack($reviewer);
@@ -95,5 +99,15 @@ final readonly class ReviewWithReviewerHandler
         if ($this->leases->recordVerdict($reviewer, $verdict, $review->substitute)) {
             $this->progress->publishStopOf($reviewer);
         }
+    }
+
+    // Decided per review from the install's setting, so an install without a container engine keeps reviewing in its own process; the head comes from the round's identity, because the job checks its checkout against it.
+    private function jobReviewOf(RoundReviewer $reviewer): ?JobReview
+    {
+        if (!$this->engine->isConfigured()) {
+            return null;
+        }
+
+        return new JobReview($reviewer->round()->identity()->commits->head, $reviewer->roleName());
     }
 }
