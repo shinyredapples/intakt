@@ -16,9 +16,12 @@ final readonly class SentenceTestName
 
     public function isMisnamedTest(ReflectionMethod $method): bool
     {
-        $name = $method->getName();
+        return PhpUnitTestMethod::isRun($method) && !$this->isSentence($method->getName());
+    }
 
-        return PhpUnitTestMethod::isRun($method) && (!str_starts_with($name, 'test') || !$this->readsAsSentence(substr($name, 4)));
+    public function isSentence(string $name): bool
+    {
+        return str_starts_with($name, 'test') && $this->readsAsSentence(substr($name, 4));
     }
 
     // because PHPUnit calls only a static provider and iterates what it returns

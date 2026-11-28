@@ -31,13 +31,16 @@ final readonly class TestMethodSentenceRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        $collected = [...array_merge(...array_values($node->get(TestMethodCollector::class))), ...$this->aliasedNames($node)];
+        $collected = [
+            ...array_merge(...array_values($node->get(TestMethodCollector::class))),
+            ...$this->aliasedNames($node),
+        ];
         $providers = array_merge(...array_values($node->get(TestProviderCollector::class)));
         $findings = [];
 
         foreach ($collected as [$file, $line, $owner, $class, $method, $mayBeProvider]) {
             // keyed by place, owner and name because a trait's method is collected once for every test case that uses it, but is one name to fix, while one line may hold several methods or classes
-            if (str_starts_with($file, $this->root.'/tests/') && (!$mayBeProvider || (!$this->isProvider($class, $method, $providers) && !$this->isChangedFilesRun()))) {
+            if ($this->isUnderTests($file) && (!$mayBeProvider || (!$this->isProvider($class, $method, $providers) && !$this->isChangedFilesRun()))) {
                 $findings[$file.':'.$line.':'.$owner.':'.$method] = $this->finding($owner, $method)->file($file)->line($line)->build();
             }
         }
@@ -50,11 +53,39 @@ final readonly class TestMethodSentenceRule implements Rule
      */
     private function aliasedNames(CollectedDataNode $node): array
     {
-        $aliased = array_merge(...array_merge(...array_values($node->get(TraitAliasCollector::class))));
-        // because a trait under tests/ already reports its own name where it declares the method, an original name is judged at the alias only for a trait outside tests/
-        $judgedHere = array_filter($aliased, fn (array $record): bool => !str_starts_with($record[6], $this->root.'/tests/'));
+        $lines = $this->traitMethodLines($node);
+        $judged = [];
 
-        return array_values(array_map(static fn (array $record): array => array_slice($record, 0, 6), $judgedHere));
+        foreach (array_merge(...array_merge(...array_values($node->get(TraitAliasCollector::class)))) as [$file, $line, $owner, $class, $method, $mayBeProvider, $sourceFile, $sourceTrait, $exposer]) {
+            // because a name the trait declares is one name to fix in the trait when the trait lives under tests/, and only the alias can be fixed for a trait outside tests/, while an alias declared outside tests/ is fixed in the test class that takes it
+            $place = match (true) {
+                null === $exposer && $this->isUnderTests($sourceFile) => [$sourceFile, $lines[strtolower($sourceTrait.'::'.$method)] ?? $line, $sourceTrait],
+                null !== $exposer && !$this->isUnderTests($file) && $this->isUnderTests($sourceFile) => $exposer,
+                default => [$file, $line, $owner],
+            };
+            $judged[] = [...$place, $class, $method, $mayBeProvider];
+        }
+
+        return $judged;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function traitMethodLines(CollectedDataNode $node): array
+    {
+        $lines = [];
+
+        foreach (array_merge(...array_merge(...array_values($node->get(TraitMethodLineCollector::class)))) as [$trait, $method, $line]) {
+            $lines[strtolower($trait.'::'.$method)] = $line;
+        }
+
+        return $lines;
+    }
+
+    private function isUnderTests(string $file): bool
+    {
+        return str_starts_with($file, $this->root.'/tests/');
     }
 
     /**

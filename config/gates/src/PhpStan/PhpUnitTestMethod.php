@@ -19,7 +19,12 @@ final readonly class PhpUnitTestMethod
 
     public static function isRun(ReflectionMethod $method): bool
     {
-        return $method->isPublic() && (str_starts_with($method->getName(), 'test') || self::isMarked($method));
+        return $method->isPublic() && self::isNamedOrMarked($method);
+    }
+
+    public static function isNamedOrMarked(ReflectionMethod $method): bool
+    {
+        return str_starts_with($method->getName(), 'test') || self::isMarked($method);
     }
 
     // because PHPUnit runs a method marked #[Test] as a test even when another method names it as a provider
