@@ -604,6 +604,36 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertContains($this->differsFromIndex('.gitignore'), $result->findings);
     }
 
+    public function testAGitignoreWithANonUtf8ByteUnderTheUtf8WorkingTreeEncodingGitTreatsAsIdentityPasses(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesIn('UTF-8', "a\x80.log\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame("a\x80.log\n", file_get_contents($sandbox->root.'/.gitignore'));
+        self::assertSame('', $sandbox->git('status', '--porcelain')->output, 'the checkout is clean');
+        self::assertSame([], $result->findings);
+    }
+
+    public function testAGitignoreUnderTheUtf8WorkingTreeEncodingSpelledWithoutCaseOrDashPasses(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesIn('utf8', "a\x80.log\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([], $result->findings);
+    }
+
+    public function testAnUnstagedRuleEditUnderTheUtf8WorkingTreeEncodingStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesIn('UTF-8', "a\x80.log\n");
+        $sandbox->write('.gitignore', "a\x80.bak\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
     public function testAnUnstagedAttributesEditDoesNotChangeTheEncodingAnEncodedGitignoreIsReadIn(): void
     {
         $sandbox = $this->repositoryCheckingOutRulesInLatin1();
@@ -707,6 +737,19 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         $sandbox->write('.gitattributes', ".gitignore text working-tree-encoding=UTF-16LE-BOM\n");
         $sandbox->write('.gitignore', "\xFF\xFE*\0.\0l\0o\0g\0\n\0");
         $sandbox->commitAll('chore: check out the rules in utf-16le with a byte order mark');
+        unlink($sandbox->root.'/.gitignore');
+        $sandbox->git('checkout', '--', '.gitignore');
+
+        return $sandbox;
+    }
+
+    private function repositoryCheckingOutRulesIn(string $encoding, string $rules): Sandbox
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('.gitattributes', ".gitignore text working-tree-encoding={$encoding}\n");
+        $sandbox->write('.gitignore', $rules);
+        $sandbox->commitAll('chore: name the default encoding for the rules');
         unlink($sandbox->root.'/.gitignore');
         $sandbox->git('checkout', '--', '.gitignore');
 

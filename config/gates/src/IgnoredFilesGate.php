@@ -152,8 +152,9 @@ final readonly class IgnoredFilesGate implements Gate
 
         preg_match_all('/\G([^\0]*)\0working-tree-encoding\0([^\0]*)\0/', $result->output, $records);
 
+        // Because git converts nothing for an empty value or for UTF-8 under any spelling it matches (case ignored, dash optional), and keeps the bytes as they are.
         return array_combine($records[1], $records[2])
-            |> (static fn (array $values): array => array_filter($values, static fn (string $value): bool => !in_array($value, ['unspecified', 'unset', 'set'], true)));
+            |> (static fn (array $values): array => array_filter($values, static fn (string $value): bool => !in_array($value, ['unspecified', 'unset', 'set', ''], true) && 1 !== preg_match('/\Autf-?8\z/i', $value)));
     }
 
     // Because a file git could not read, or one not valid in its charset, holds no rules CI would read.
