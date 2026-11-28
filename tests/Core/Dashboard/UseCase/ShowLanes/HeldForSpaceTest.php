@@ -13,6 +13,7 @@ use Intakt\Core\Disk\Contract\NearestFolder;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\MirrorFolders;
+use Intakt\Core\Git\Contract\MirrorPaths;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\UseCase\UpdateMirror\MirrorsOnDisk;
@@ -33,6 +34,7 @@ use Symfony\Component\Process\Process;
 #[UsesClass(NearestFolder::class)]
 #[UsesClass(FreeSpaceUnreadable::class)]
 #[UsesClass(MirrorsOnDisk::class)]
+#[UsesClass(MirrorPaths::class)]
 #[UsesClass(UpdateMirror::class)]
 #[UsesClass(Mirrors::class)]
 #[UsesClass(HardenedGit::class)]
@@ -201,6 +203,38 @@ final class HeldForSpaceTest extends TestCase
         self::assertSame([true, 'The free space of '.$mirror.' cannot be read: df exited with 1. A mirror update or build clone on that disk fails until it can be read.'], [$held['broken'] ?? null, $held['text'] ?? null]);
     }
 
+    public function testAHoldOnTheMirrorsFolderShowsTheLineWithoutListingTheMirrors(): void
+    {
+        $mirrors = new RecordingMirrorFolders(sys_get_temp_dir());
+
+        $held = new HeldForSpace($this->heldOnlyAt(sys_get_temp_dir()), $mirrors, sys_get_temp_dir())->now();
+
+        self::assertSame([true, false], [str_starts_with($held['text'] ?? '', 'The disk of '.sys_get_temp_dir().' has 0 bytes free'), $mirrors->asked]);
+    }
+
+    public function testAMirrorsFolderThatIsNotHeldStillListsTheMirrorsAndShowsAMirrorsHold(): void
+    {
+        mkdir($this->root, 0o777, true);
+        $mirrors = new RecordingMirrorFolders(sys_get_temp_dir());
+
+        $held = new HeldForSpace($this->heldOnlyAt(sys_get_temp_dir()), $mirrors, $this->root)->now();
+
+        self::assertSame([true, true], [str_starts_with($held['text'] ?? '', 'The disk of '.sys_get_temp_dir().' has 0 bytes free'), $mirrors->asked]);
+    }
+
+    public function testAMirrorsFolderThatCannotBeReadStillListsTheMirrorsAndAMirrorsHoldBeatsTheFailedReading(): void
+    {
+        mkdir($this->root, 0o777, true);
+        $mirrors = new RecordingMirrorFolders(sys_get_temp_dir());
+        $root = $this->root;
+        $disk = self::createStub(DiskSpace::class);
+        $disk->method('holdAt')->willReturnCallback(static fn (string $folder): DiskHold => $root === $folder ? throw new FreeSpaceUnreadable($folder, 'df exited with 1') : new DiskHold(DiskFloor::Inodes, $folder, 2, 100));
+
+        $held = new HeldForSpace($disk, $mirrors, $this->root)->now();
+
+        self::assertSame([false, true], [$held['broken'] ?? null, $mirrors->asked]);
+    }
+
     protected function setUp(): void
     {
         $this->root = $this->scratch = sys_get_temp_dir().'/intakt-held-for-space-'.bin2hex(random_bytes(6));
@@ -236,7 +270,7 @@ final class HeldForSpaceTest extends TestCase
     private function mirrorsAt(string ...$paths): MirrorFolders
     {
         $mirrors = self::createStub(MirrorFolders::class);
-        $mirrors->method('existing')->willReturn(array_values($paths));
+        $mirrors->method('existing')->willReturn(new MirrorPaths(...$paths));
 
         return $mirrors;
     }

@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Git\UseCase\UpdateMirror;
 use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\MirrorPaths;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Contract\WorkTreeInBareRepository;
@@ -25,6 +26,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(MirrorsOnDisk::class)]
+#[UsesClass(MirrorPaths::class)]
 #[UsesClass(UpdateMirror::class)]
 #[UsesClass(Mirrors::class)]
 #[UsesClass(ProjectNameRefused::class)]
@@ -44,6 +46,14 @@ final class MirrorsOnDiskTest extends TestCase
         $this->bare('alpha.git');
 
         self::assertSame([$this->mirrors.'/alpha.git'], $this->existing());
+    }
+
+    public function testTheMirrorsAreReturnedAsOneTypedValue(): void
+    {
+        $mirrors = new Mirrors($this->mirrors);
+        $update = new UpdateMirror(new HardenedGit(), new NetworkGit(new RecordingClock(), new NullLogger()), new Filesystem(), new LockFactory(new InMemoryStore()), $mirrors, self::createStub(DiskSpace::class));
+
+        self::assertInstanceOf(MirrorPaths::class, new MirrorsOnDisk($update, $mirrors)->existing());
     }
 
     public function testAFolderThatHoldsNoRepositoryIsNotListedEvenUnderAMirrorsName(): void
@@ -123,6 +133,6 @@ final class MirrorsOnDiskTest extends TestCase
         $mirrors = new Mirrors($this->mirrors);
         $update = new UpdateMirror(new HardenedGit(), new NetworkGit(new RecordingClock(), new NullLogger()), new Filesystem(), new LockFactory(new InMemoryStore()), $mirrors, self::createStub(DiskSpace::class));
 
-        return new MirrorsOnDisk($update, $mirrors)->existing();
+        return iterator_to_array(new MirrorsOnDisk($update, $mirrors)->existing(), false);
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Git\UseCase\UpdateMirror;
 
 use Intakt\Core\Git\Contract\MirrorFolders;
+use Intakt\Core\Git\Contract\MirrorPaths;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\Domain\ProjectNameRefused;
@@ -22,17 +23,17 @@ final readonly class MirrorsOnDisk implements MirrorFolders
     }
 
     #[NoDiscard]
-    public function existing(): array
+    public function existing(): MirrorPaths
     {
         $directory = $this->mirrors->directory;
         if (!is_dir($directory) || !is_readable($directory)) {
-            return [];
+            return new MirrorPaths();
         }
 
         // Listed by name and never by a pattern, because a pattern would give brackets in the install's path a meaning.
         $entries = scandir($directory);
 
-        return false === $entries ? [] : array_values(array_filter(array_map($this->mirrorNamed(...), $entries), static fn (?string $path): bool => null !== $path));
+        return false === $entries ? new MirrorPaths() : new MirrorPaths(...array_filter(array_map($this->mirrorNamed(...), $entries), static fn (?string $path): bool => null !== $path));
     }
 
     private function mirrorNamed(string $entry): ?string

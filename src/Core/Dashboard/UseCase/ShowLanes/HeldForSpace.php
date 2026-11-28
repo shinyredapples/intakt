@@ -35,37 +35,37 @@ final readonly class HeldForSpace
      */
     public function now(): ?array
     {
-        $unreadable = null;
+        // First and alone, because a hold there is enough for the line and listing the mirrors checks each one with git.
+        $reading = $this->reading(NearestFolder::of($this->mirrorsDirectory));
+        if ($reading instanceof DiskHold) {
+            return $this->held($reading);
+        }
 
-        foreach ($this->folders() as $folder) {
-            try {
-                $hold = $this->disk->holdAt($folder);
-            } catch (FreeSpaceUnreadable $failed) {
-                $unreadable ??= $failed;
+        $unreadable = $reading;
 
-                continue;
-            } catch (ProcessTimedOutException $timedOut) {
-                $unreadable ??= new FreeSpaceUnreadable($folder, sprintf('df timed out after %s seconds', $timedOut->getExceededTimeout()));
-
-                continue;
+        // Needed because a mirror can sit on a disk of its own, which UpdateMirror measures; a folder there that is no mirror is never written to, so it is not asked.
+        foreach ($this->mirrors->existing() as $mirror) {
+            $reading = $this->reading(NearestFolder::of($mirror));
+            if ($reading instanceof DiskHold) {
+                return $this->held($reading);
             }
 
-            if ($hold instanceof DiskHold) {
-                return $this->held($hold);
-            }
+            $unreadable ??= $reading;
         }
 
         // Only after every folder was asked, because a hold that was read on one disk says more than a reading that failed on another.
         return $unreadable instanceof FreeSpaceUnreadable ? $this->unreadable($unreadable) : null;
     }
 
-    /**
-     * @return list<string>
-     */
-    private function folders(): array
+    private function reading(string $folder): DiskHold|FreeSpaceUnreadable|null
     {
-        // Needed because a mirror can sit on a disk of its own, which UpdateMirror measures; a folder there that is no mirror is never written to, so it is not asked.
-        return [NearestFolder::of($this->mirrorsDirectory), ...array_map(NearestFolder::of(...), $this->mirrors->existing())];
+        try {
+            return $this->disk->holdAt($folder);
+        } catch (FreeSpaceUnreadable $failed) {
+            return $failed;
+        } catch (ProcessTimedOutException $timedOut) {
+            return new FreeSpaceUnreadable($folder, sprintf('df timed out after %s seconds', $timedOut->getExceededTimeout()));
+        }
     }
 
     /**
@@ -134,12 +134,12 @@ final readonly class HeldForSpace
             ++$unit;
         }
 
-        // Rounded down, so a reading one byte below its floor never reads as equal to it.
-        $number = number_format(floor($size * 10) / 10, 0 === $unit ? 0 : 1);
-
         if (0 === $unit) {
             return $this->exactBytes($bytes);
         }
+
+        // Rounded down, so a reading is never shown above what is free; bytePair() handles a reading that would then look equal to its floor.
+        $number = number_format(floor($size * 10) / 10, 1);
 
         return (str_ends_with($number, '.0') ? substr($number, 0, -2) : $number).' '.self::UNITS[$unit];
     }
