@@ -52,7 +52,7 @@ final readonly class ReadableLines
             return $this->closes($line, $this->openFence) ? clone($this, ['openFence' => null]) : $this;
         }
 
-        if (null !== $this->html) {
+        if ($this->html instanceof HtmlBlock) {
             return $this->html->endsAt($line) ? clone($this, ['html' => null]) : $this;
         }
 
@@ -91,7 +91,7 @@ final readonly class ReadableLines
         $html = HtmlBlock::opening($line);
 
         // A line with only a tag cannot interrupt a paragraph, because CommonMark keeps it as the paragraph's text.
-        if (null !== $html && (HtmlBlock::Tag !== $html || [] === $this->paragraph)) {
+        if ($html instanceof HtmlBlock && (HtmlBlock::Tag !== $html || [] === $this->paragraph)) {
             return $this->htmlOpened($html, $line);
         }
 
@@ -110,14 +110,6 @@ final readonly class ReadableLines
         return new self($this->headings, null, $paragraph, [] === $paragraph ? TextPlace::Apart : $this->place, null, $this->openElement);
     }
 
-    // The block is open unless its end marker is already on the line that opened it.
-    private function htmlOpened(HtmlBlock $html, string $line): self
-    {
-        $open = !$html->endsOnOpeningLine() || !$html->endsAt($line);
-
-        return new self($this->headings, null, [], TextPlace::Apart, $open ? $html : null, HtmlBlock::elementOpenedBy($line) ?? $this->openElement);
-    }
-
     private function opening(string $line): ?string
     {
         if (1 !== preg_match('/^ {0,3}(`{3,}|~{3,})(.*)$/', $line, $match)) {
@@ -126,6 +118,14 @@ final readonly class ReadableLines
 
         // A backtick fence's info string holds no backtick, because such a line is an inline code span.
         return '`' === $match[1][0] && str_contains($match[2], '`') ? null : $match[1];
+    }
+
+    // The block is open unless its end marker is already on the line that opened it.
+    private function htmlOpened(HtmlBlock $html, string $line): self
+    {
+        $open = !$html->endsOnOpeningLine() || !$html->endsAt($line);
+
+        return new self($this->headings, null, [], TextPlace::Apart, $open ? $html : null, HtmlBlock::elementOpenedBy($line) ?? $this->openElement);
     }
 
     /**

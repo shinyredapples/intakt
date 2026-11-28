@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\Domain;
 
-// The seven CommonMark HTML block kinds; kinds 1 to 5 end at their own end marker and kinds 6 and 7 at the next blank line.
+// The seven CommonMark HTML block kinds, because the Evidence writer must read what each hides; kinds 1 to 5 end at their own end marker and kinds 6 and 7 at the next blank line.
 enum HtmlBlock
 {
     case Raw;
