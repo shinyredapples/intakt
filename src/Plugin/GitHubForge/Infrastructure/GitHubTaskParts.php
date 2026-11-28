@@ -35,12 +35,37 @@ final readonly class GitHubTaskParts implements TaskParts
     #[Override]
     public function fileOnce(string $project, PartIssue $part): int
     {
-        $path = $this->repositories->addressOf($project)->path().'/issues';
-        $kept = $this->created->numberOf($project, $part);
+        $repository = $this->repositories->addressOf($project)->path();
 
-        return null === $kept
-            ? $this->filedBefore($path, $part) ?? $this->filed($path, $project, $part)
-            : $this->reconciled($path.'/'.$kept, $kept, $part);
+        // Held across the lookup, the create and the record, because two overlapping runs could both find nothing and both file the part.
+        return $this->created->whileHeld($project, $part, fn (): int => $this->filedOnce($repository, $project, $part));
+    }
+
+    /**
+     * @throws ForgeReadFailed
+     * @throws ForgeWriteFailed
+     */
+    private function filedOnce(string $repository, string $project, PartIssue $part): int
+    {
+        $path = $repository.'/issues';
+        $kept = $this->created->numberOf($repository, $project, $part);
+
+        if (null !== $kept) {
+            return $this->reconciled($path.'/'.$kept, $kept, $part);
+        }
+
+        $found = $this->filedBefore($path, $part);
+
+        if (null !== $found) {
+            return $found;
+        }
+
+        // An earlier create whose number was never kept may have stored the part without the marker, which no search finds, so a person checks the issues instead of this run filing it again.
+        if ($this->created->attempted($project, $part)) {
+            throw new ForgeWriteFailed('An earlier create of this part kept no issue number and no issue carries its marker, so nothing was filed again; check the repository\'s issues for the part.');
+        }
+
+        return $this->filed($path, $repository, $project, $part);
     }
 
     // By this App's mark and the marker, never by the title, because anyone can write the marker into an issue of their own, and two parts may share a title.
@@ -52,14 +77,16 @@ final readonly class GitHubTaskParts implements TaskParts
         $since = $part->plannedAt->modify(self::CLOCK_MARGIN)->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
 
         for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
-            $listed = $this->listIn($this->calls->read($path, ['state' => 'all', 'since' => $since, 'sort' => 'created', 'direction' => 'asc', 'per_page' => self::PAGE_SIZE, 'page' => $page]));
+            $answer = $this->calls->read($path, ['state' => 'all', 'since' => $since, 'sort' => 'created', 'direction' => 'asc', 'per_page' => self::PAGE_SIZE, 'page' => $page]);
+            $listed = $this->listIn($answer->body);
             $found = array_find($listed, fn (array $issue): bool => $this->isThisAppsPart($issue, $part->marker));
 
             if (null !== $found) {
                 return $this->numberOf($found) ?? throw new ForgeReadFailed('GitHub listed a part without its number.');
             }
 
-            if (count($listed) < self::PAGE_SIZE) {
+            // The Link header's word, not the page's length, ends the search, because GitHub may serve a shorter page than asked for and still have more.
+            if (!$answer->hasNextPage && count($listed) < self::PAGE_SIZE) {
                 return null;
             }
         }
@@ -124,11 +151,12 @@ final readonly class GitHubTaskParts implements TaskParts
     /**
      * @throws ForgeWriteFailed
      */
-    private function filed(string $path, string $project, PartIssue $part): int
+    private function filed(string $path, string $repository, string $project, PartIssue $part): int
     {
+        $this->created->intend($repository, $project, $part);
         $issue = $this->calls->written('POST', $path, ['title' => $part->title, 'body' => $part->body."\n\n".$part->marker, 'labels' => [...$part->labels]]);
         $number = $this->numberOf($issue) ?? throw new ForgeWriteFailed('GitHub answered the create without the number of the issue.');
-        $this->created->keep($project, $part, $number);
+        $this->created->keep($repository, $project, $part, $number);
 
         return $this->isThisAppsPart($issue, $part->marker) ? $number : throw new ForgeWriteFailed(sprintf('GitHub answered the create of part #%d without this App\'s mark or its marker, so the next run checks that issue.', $number));
     }
@@ -157,7 +185,7 @@ final readonly class GitHubTaskParts implements TaskParts
      */
     private function storedBodyOf(string $url, int $kept): string
     {
-        $answer = $this->calls->read($url, []);
+        $answer = $this->calls->read($url, [])->body;
 
         try {
             $issue = json_decode($answer, true, flags: JSON_THROW_ON_ERROR);

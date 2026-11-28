@@ -29,7 +29,7 @@ final readonly class PartIssueCalls
      *
      * @throws ForgeReadFailed
      */
-    public function read(string $path, array $query): string
+    public function read(string $path, array $query): ReadAnswer
     {
         $options = ['auth_bearer' => $this->bearer(), 'query' => $query, 'headers' => ['Accept' => 'application/vnd.github+json']];
 
@@ -37,15 +37,16 @@ final readonly class PartIssueCalls
             $response = $this->calls->asInstallation('GET', $path, $options);
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
+            $links = $response->getHeaders(false)['link'] ?? [];
         } catch (ExceptionInterface $failure) {
             throw $this->unreachable($failure::class);
         }
 
         if ($status < 200 || $status >= 300) {
-            throw new ForgeReadFailed(sprintf('GitHub answered %d to a read of the issues.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
+            throw new ForgeReadFailed(sprintf('GitHub answered %d to a read of %s.', $status, $path), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
         }
 
-        return $body;
+        return new ReadAnswer($body, 1 === preg_match('/<[^>]*>\s*;\s*rel="?next"?/i', implode(',', $links)));
     }
 
     /**

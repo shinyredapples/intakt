@@ -115,7 +115,7 @@ final class GitHubTaskPartsTest extends TestCase
             $this->fileOnce($tracker);
             self::fail('A part was filed without the read of the issues filed since the plan.');
         } catch (ForgeReadFailed $failed) {
-            self::assertSame('GitHub answered 500 to a read of the issues.', $failed->getMessage());
+            self::assertSame('GitHub answered 500 to a read of /repos/acme/widget/issues.', $failed->getMessage());
         }
 
         self::assertCount(1, $tracker->requests);
@@ -150,8 +150,8 @@ final class GitHubTaskPartsTest extends TestCase
 
         $this->unconfirmed($tracker);
 
-        self::assertSame([LedgerEventKind::PartIssueCreated], $tracker->ledger->kinds());
-        self::assertSame([['project' => 'widget', 'issue' => 1, 'marker' => self::MARKER]], $tracker->ledger->payloads());
+        self::assertSame([LedgerEventKind::PartIssueCreated, LedgerEventKind::PartIssueCreated], $tracker->ledger->kinds());
+        self::assertSame([['project' => 'widget', 'repository' => '/repos/acme/widget', 'marker' => self::MARKER], ['project' => 'widget', 'repository' => '/repos/acme/widget', 'issue' => 1, 'marker' => self::MARKER]], $tracker->ledger->payloads());
     }
 
     public function testAnUnconfirmedPartWithoutTheMarkerGetsTheMarkerWrittenIntoIt(): void
@@ -216,7 +216,7 @@ final class GitHubTaskPartsTest extends TestCase
             $this->fileOnce($tracker);
             self::fail('A kept part that could not be read was reported as filed.');
         } catch (ForgeReadFailed $failed) {
-            self::assertSame('GitHub answered 404 to a read of the issues.', $failed->getMessage());
+            self::assertSame('GitHub answered 404 to a read of /repos/acme/widget/issues/1.', $failed->getMessage());
         }
 
         self::assertSame('GET https://api.github.com/repos/acme/widget/issues/1', array_last($tracker->requests));
@@ -253,11 +253,74 @@ final class GitHubTaskPartsTest extends TestCase
     public function testACreateWhoseNumberTheLedgerDoesNotKeepFails(): void
     {
         $tracker = new ScriptedIssueTracker();
-        $tracker->ledger = new InMemoryLedger(0);
+        $tracker->ledger = new InMemoryLedger(1);
 
         $this->expectExceptionObject(new ForgeWriteFailed('GitHub filed part #1, but the ledger did not keep its number: the ledger is down'));
 
         $this->fileOnce($tracker);
+    }
+
+    public function testAPartOnALaterPageOfShortPagesIsFound(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->served = 1;
+        $tracker->byPerson('Other issue 1');
+        $tracker->byPerson('Other issue 2');
+        $first = $this->fileOnce($tracker);
+        $tracker->ledger = new InMemoryLedger();
+
+        self::assertSame([$first, 1], [$this->fileOnce($tracker), count($tracker->filed())]);
+    }
+
+    public function testAPartKeptForAnotherRepositoryThanTheProjectsNowFilesAndWritesNothing(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->storedOtherwise = ['body' => 'Part 1 of 2 of #7.'];
+        $this->unconfirmed($tracker);
+        $tracker->storedOtherwise = [];
+        $requests = count($tracker->requests);
+
+        try {
+            $tracker->parts('acme/gadget')->fileOnce(ScriptedIssueTracker::PROJECT, $this->part(self::MARKER));
+            self::fail('A number kept for another repository was used.');
+        } catch (ForgeReadFailed $failed) {
+            self::assertSame('The ledger kept this part\'s issue number for another repository than the project\'s now.', $failed->getMessage());
+        }
+
+        self::assertSame($requests, count($tracker->requests));
+    }
+
+    public function testACreateWhoseNumberTheLedgerDoesNotKeepIsNotFiledAgainWhenNoMarkerIsFound(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->storedOtherwise = ['body' => 'Part 1 of 2 of #7.'];
+        $tracker->ledger = new InMemoryLedger(1);
+
+        try {
+            $this->fileOnce($tracker);
+            self::fail('A create whose number the ledger refused was reported as filed.');
+        } catch (ForgeWriteFailed) {
+            self::assertCount(1, $tracker->filed());
+        }
+
+        $this->expectExceptionMessage('check the repository\'s issues for the part');
+
+        $this->fileOnce($tracker);
+    }
+
+    public function testAPartWhoseFilingIsHeldByAnotherRunIsNotFiledByThisOne(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->holdTheLock($this->part(self::MARKER));
+
+        try {
+            $this->fileOnce($tracker);
+            self::fail('A part was filed while another run held its lock.');
+        } catch (ForgeWriteFailed $failed) {
+            self::assertSame('Another run is filing this part.', $failed->getMessage());
+        }
+
+        self::assertSame([], $tracker->requests);
     }
 
     private function unconfirmed(ScriptedIssueTracker $tracker): void
@@ -272,6 +335,11 @@ final class GitHubTaskPartsTest extends TestCase
 
     private function fileOnce(ScriptedIssueTracker $tracker, string $marker = self::MARKER): int
     {
-        return $tracker->parts()->fileOnce(ScriptedIssueTracker::PROJECT, new PartIssue('Read the cart', 'Part 1 of 2 of #7.', $marker, new IssueLabels('ready', 'priority:high'), new DateTimeImmutable('2026-11-28T12:00:00Z')));
+        return $tracker->parts()->fileOnce(ScriptedIssueTracker::PROJECT, $this->part($marker));
+    }
+
+    private function part(string $marker): PartIssue
+    {
+        return new PartIssue('Read the cart', 'Part 1 of 2 of #7.', $marker, new IssueLabels('ready', 'priority:high'), new DateTimeImmutable('2026-11-28T12:00:00Z'));
     }
 }

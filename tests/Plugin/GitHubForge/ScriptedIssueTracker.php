@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use Intakt\Plugin\GitHubForge\Contract\PartIssue;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
@@ -18,6 +19,9 @@ use Intakt\Plugin\GitHubForge\Infrastructure\PartIssueCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Psr\Log\NullLogger;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
@@ -38,6 +42,9 @@ final class ScriptedIssueTracker
 
     public ?int $refusal = null;
 
+    // The size of the pages GitHub serves, whatever per_page asked for; a next page is announced in the Link header.
+    public int $served = 100;
+
     // Answered after the issue is kept, because GitHub can create an issue and still answer 502.
     public ?int $answerToAStoredCreate = null;
 
@@ -48,8 +55,13 @@ final class ScriptedIssueTracker
     // Kept across runs, because a later run reads what an earlier run's create kept there.
     public InMemoryLedger $ledger;
 
+    private LockFactory $locks;
+
+    private ?LockInterface $held = null;
+
     public function __construct()
     {
+        $this->locks = new LockFactory(new InMemoryStore());
         $this->ledger = new InMemoryLedger();
     }
 
@@ -67,7 +79,15 @@ final class ScriptedIssueTracker
         return array_values(array_filter($this->issues, static fn (array $issue): bool => null !== $issue['performed_via_github_app']));
     }
 
-    public function parts(): GitHubTaskParts
+    // Held by another run, so a test sees what a busy part does.
+    public function holdTheLock(PartIssue $part): void
+    {
+        $subject = 'part-issue-'.hash('sha256', strlen(self::PROJECT).':'.self::PROJECT.$part->marker);
+        $this->held = $this->locks->createLock($subject);
+        $this->held->acquire();
+    }
+
+    public function parts(string $repository = 'acme/widget'): GitHubTaskParts
     {
         $clock = new MockClock('2026-11-28 12:00:00 UTC');
         $identity = new RecordedInstallation($clock, 'installation-secret')->client();
@@ -78,7 +98,7 @@ final class ScriptedIssueTracker
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
         $calls = new GitHubCalls(new MockHttpClient($this->answer(...), 'https://api.github.com'), $readings, $tokens);
 
-        return new GitHubTaskParts(new PartIssueCalls($calls, new CheckedInstallationTokens($readBack, $tokens)), new WatchedRepositories([self::PROJECT => ['github' => 'acme/widget']]), new CreatedParts($this->ledger), self::APP_ID);
+        return new GitHubTaskParts(new PartIssueCalls($calls, new CheckedInstallationTokens($readBack, $tokens)), new WatchedRepositories([self::PROJECT => ['github' => $repository]]), new CreatedParts($this->ledger, $this->locks), self::APP_ID);
     }
 
     /**
@@ -102,7 +122,9 @@ final class ScriptedIssueTracker
             parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
             $page = is_numeric($query['page'] ?? null) ? (int) $query['page'] : 1;
 
-            return new MockResponse(json_encode(array_slice($this->issues, ($page - 1) * 100, 100), JSON_THROW_ON_ERROR), ['http_code' => 200]);
+            $headers = $page * $this->served < count($this->issues) ? ['link: <https://api.github.com/repos/acme/widget/issues?page='.($page + 1).'>; rel="next"'] : [];
+
+            return new MockResponse(json_encode(array_slice($this->issues, ($page - 1) * $this->served, $this->served), JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => $headers]);
         }
 
         $body = $options['body'] ?? '';
