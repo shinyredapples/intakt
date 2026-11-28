@@ -282,7 +282,7 @@ final class ReviewJobTest extends TestCase
         }
     }
 
-    // As a killed CLI leaves it: no result event, one event per content block that repeats its message's usage, and a last line cut off mid-write.
+    // A timeout or out-of-memory kill must still settle what the job used: a killed CLI writes no result event, repeats a message's usage in each content block event and may cut off its last line mid-write.
     #[DataProvider('endsWithoutAnExitLine')]
     public function testAJobKilledBeforeItsResultKeepsTheUsageOfEachMessageOnce(JobEnd $end): void
     {

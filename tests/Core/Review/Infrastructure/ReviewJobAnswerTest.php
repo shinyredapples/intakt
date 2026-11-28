@@ -222,7 +222,7 @@ final class ReviewJobAnswerTest extends TestCase
     {
         $this->expectException(ReviewJobFailure::class);
 
-        (void) ReviewJobAnswer::read(Provider::ClaudeCode, '{"type":"result","is_error":false,"result":"fine"}'."\n".'{"type":"assis');
+        ReviewJobAnswer::read(Provider::ClaudeCode, '{"type":"result","is_error":false,"result":"fine"}'."\n".'{"type":"assis');
     }
 
     public function testAnEmptyUsageBlockCountsAsNoUsageReported(): void
