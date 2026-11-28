@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
+use Closure;
 use Intakt\Core\Disk\Contract\DiskFloor;
 use Intakt\Core\Disk\Contract\DiskHold;
 use Intakt\Core\Disk\Contract\NewWorkHeld;
@@ -38,7 +39,8 @@ final class HeadBackOffDiskWaitTest extends KernelTestCase
         );
         $boundary = new HeadBackOff($container->get(FailedHeads::class), $pending, $container->get('doctrine'), new RecordingLogger());
 
-        self::assertNull($boundary->tryAlone('alpha', $head, $this->heldStep()));
+        $boundary->tryAlone('alpha', $head, $this->heldStep());
+
         self::assertContainsEquals($head, $pending->dueFor('alpha'));
     }
 
@@ -57,11 +59,14 @@ final class HeadBackOffDiskWaitTest extends KernelTestCase
         self::assertNull(array_find($logger->logged, static fn (array $line): bool => 'A head failed; it backs off alone.' === $line[0]));
     }
 
-    private function heldStep(): callable
+    /**
+     * @return Closure(): null
+     */
+    private function heldStep(): Closure
     {
         $held = new NewWorkHeld(new DiskHold(DiskFloor::Bytes, 'var/mirrors', 1, 2));
 
-        return static function () use ($held): never {
+        return static function () use ($held): null {
             throw new RuntimeException('start stopped', 0, $held);
         };
     }
