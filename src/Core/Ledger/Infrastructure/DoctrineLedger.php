@@ -186,17 +186,7 @@ final readonly class DoctrineLedger implements Ledger
         return new RecordedEvents(array_values(array_filter(array_map($this->eventOf(...), array_values($records)))));
     }
 
-    private function eventOf(EventRecord $record): ?RecordedEvent
-    {
-        $kind = $record->kind();
-        if (!$kind instanceof LedgerEventKind) {
-            return null;
-        }
-
-        return new RecordedEvent($record->id(), new LedgerEvent($kind, $record->payload(), $record->subject()), $record->recordedAt());
-    }
-
-    // The supported engines spell a byte comparison differently: SQLite and PostgreSQL by a binary collation, MySQL and MariaDB by a cast.
+    // Chosen by platform, because the supported engines have no common spelling of a byte comparison.
     private function bytesOf(string $column, AbstractPlatform $platform): string
     {
         return match (true) {
@@ -205,6 +195,16 @@ final readonly class DoctrineLedger implements Ledger
             $platform instanceof AbstractMySQLPlatform => 'CAST('.$column.' AS BINARY)',
             default => throw NotSupported::new('newestOfKindAbout'),
         };
+    }
+
+    private function eventOf(EventRecord $record): ?RecordedEvent
+    {
+        $kind = $record->kind();
+        if (!$kind instanceof LedgerEventKind) {
+            return null;
+        }
+
+        return new RecordedEvent($record->id(), new LedgerEvent($kind, $record->payload(), $record->subject()), $record->recordedAt());
     }
 
     // The id takes its time from the same moment, so the id of an event carries when it was stored.
