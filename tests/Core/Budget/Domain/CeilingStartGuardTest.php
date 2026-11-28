@@ -212,6 +212,33 @@ final class CeilingStartGuardTest extends TestCase
         self::assertSame([UsageWindow::FiveHour, 601, UsageWindow::FiveHour, null], [$room->atCeiling, $wait, $atTheBoundary, $this->guard()->roomOf($this->account())->atCeiling]);
     }
 
+    // Exact because 5 * 57 / 8100 of the 604800 s week is 21280 s, which the 2680 s elapsed plus the 18000 s short window reach after 600 s, and a use at the paced ceiling still holds the account.
+    public function testAPaceHoldReachingItsCeilingExactlyAfterSixHundredSecondsIsReportedFreeAtSixHundredAndOne(): void
+    {
+        $this->readWindow(UsageWindow::Weekly, 57.0, $this->clock->now()->modify('+602120 seconds'));
+        $this->readWindow(UsageWindow::FiveHour, 5.0, $this->clock->now()->modify('+3 hours'));
+        $wait = $this->secondsUntil($this->guard()->roomOf($this->account())->resetsAt);
+
+        $this->clock->sleep(600);
+        $atTheBoundary = $this->guard()->roomOf($this->account())->atCeiling;
+        $this->clock->sleep(1);
+
+        self::assertSame([601, UsageWindow::FiveHour, null], [$wait, $atTheBoundary, $this->guard()->roomOf($this->account())->atCeiling]);
+    }
+
+    public function testAPaceHoldIsStillHeldOneSecondBeforeTheReportedWaitAndFreeAtIt(): void
+    {
+        $this->readWindow(UsageWindow::Weekly, 6.0, $this->clock->now()->modify('+602120 seconds'));
+        $this->readWindow(UsageWindow::FiveHour, 49.0, $this->clock->now()->modify('+3 hours'));
+        $wait = (int) $this->secondsUntil($this->guard()->roomOf($this->account())->resetsAt);
+
+        $this->clock->sleep($wait - 1);
+        $oneSecondBefore = $this->guard()->roomOf($this->account())->atCeiling;
+        $this->clock->sleep(1);
+
+        self::assertSame([UsageWindow::FiveHour, null], [$oneSecondBefore, $this->guard()->roomOf($this->account())->atCeiling]);
+    }
+
     public function testAShortWindowWithoutResetTimeAtItsOwnCeilingIsFreeAtAnUnknownTime(): void
     {
         $this->readWindow(UsageWindow::Weekly, 40.0, $this->weekResets);
