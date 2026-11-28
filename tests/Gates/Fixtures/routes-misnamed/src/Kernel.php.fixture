@@ -1,0 +1,36 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fixture;
+
+use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
+use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
+use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Component\HttpKernel\Kernel as BaseKernel;
+use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
+
+final class Kernel extends BaseKernel
+{
+    use MicroKernelTrait;
+
+    public function registerBundles(): iterable
+    {
+        yield new FrameworkBundle();
+    }
+
+    public function getProjectDir(): string
+    {
+        return dirname(__DIR__);
+    }
+
+    protected function configureContainer(ContainerConfigurator $container): void
+    {
+        $container->extension('framework', ['secret' => 'fixture', 'http_method_override' => false]);
+    }
+
+    protected function configureRoutes(RoutingConfigurator $routes): void
+    {
+        $routes->add('dashboard_show_demo', '/demo')->controller('Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController');
+    }
+}

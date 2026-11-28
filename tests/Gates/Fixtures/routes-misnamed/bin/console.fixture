@@ -1,0 +1,15 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Fixture\Kernel;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
+use Symfony\Component\Console\Input\ArgvInput;
+
+require dirname(__DIR__).'/vendor/autoload.php';
+require dirname(__DIR__).'/src/Kernel.php';
+
+$input = new ArgvInput();
+
+exit(new Application(new Kernel((string) $input->getParameterOption(['--env', '-e'], 'dev'), false))->run($input));

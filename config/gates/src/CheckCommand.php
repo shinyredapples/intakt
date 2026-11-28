@@ -180,6 +180,7 @@ final readonly class CheckCommand
             new WorkflowsGate(),
             new LeftUndoneGate(),
             new IgnoredFilesGate(),
+            new RouteNamesGate(),
         ];
     }
 

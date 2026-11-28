@@ -32,14 +32,7 @@ final readonly class ShowReviewController
         return $this->show($request, $round, ReviewView::Main);
     }
 
-    // The timeline, the reviewers, the tokens and the cost on a view of their own, so the review's main view keeps one message (owner decision for #3360); it takes the same live updates.
-    #[Route('/reviews/{round}/record', name: DashboardRoutes::SHOW_REVIEW_RECORD, methods: ['GET'])]
-    public function record(Request $request, string $round): Response
-    {
-        return $this->show($request, $round, ReviewView::FullRecord);
-    }
-
-    private function show(Request $request, string $round, ReviewView $view): Response
+    public function show(Request $request, string $round, ReviewView $view): Response
     {
         $review = $this->reviews->reviewOf($round);
 

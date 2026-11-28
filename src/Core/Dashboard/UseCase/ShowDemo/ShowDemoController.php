@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Dashboard\UseCase\PlayDemo;
+namespace Intakt\Core\Dashboard\UseCase\ShowDemo;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
+use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoRuns;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;

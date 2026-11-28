@@ -72,7 +72,7 @@
         {# Offered for the whole round in review, also before the first reviewer starts and while the judge works (decision D4 of #2369); the judged round's live update removes it. #}
         <div id="round-{{ active.round }}-now-stop">
             <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_ROUND'), {round: active.round}) }}" class="stop-round">
-                <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StopReview\\StopRoundController::TOKEN_ID')) }}">
+                <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StopRound\\StopRoundController::TOKEN_ID')) }}">
                 {{ include('dashboard/components/button.html.twig', {kind: 'danger', type: 'submit', label: 'Stop', confirm: 'Click again to stop the round'}, with_context = false) }}
                 <p class="next-step">The reviewers stop and this round ends without a verdict.</p>
             </form>
