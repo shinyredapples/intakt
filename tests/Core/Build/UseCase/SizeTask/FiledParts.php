@@ -64,6 +64,14 @@ final class FiledParts implements TaskParts
         return array_any([...$this->ledger->readOfKindsMentioning(new Mentions(json_encode($project, JSON_THROW_ON_ERROR)), LedgerEventKind::PartIssueCreated)], static fn (RecordedEvent $kept): bool => self::lineOf($project, $issue) === $kept->event->payload);
     }
 
+    /**
+     * @return list<string>
+     */
+    public function titles(): array
+    {
+        return array_column($this->filed, 'title');
+    }
+
     private function kept(string $project, int $number): int
     {
         if (!$this->isFiledPart($project, $number)) {
@@ -76,13 +84,5 @@ final class FiledParts implements TaskParts
     private static function lineOf(string $project, int $number): string
     {
         return json_encode(['project' => $project, 'issue' => $number], JSON_THROW_ON_ERROR);
-    }
-
-    /**
-     * @return list<string>
-     */
-    public function titles(): array
-    {
-        return array_column($this->filed, 'title');
     }
 }

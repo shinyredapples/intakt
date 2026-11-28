@@ -138,7 +138,7 @@ final class SplitTaskTest extends TestCase
         (void) $fixture->sizing($this->vendor())->run('alpha', 7);
 
         self::assertSame([['alpha', 7, 'This task was split into #100, #101, #102. It stays open as their umbrella.']], $fixture->comments->posted);
-        self::assertSame([LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], self::kindsOfTheSplitIn($fixture));
+        self::assertSame([LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], $this->kindsOfTheSplitIn($fixture));
         self::assertSame(['project' => 'alpha', 'task' => '7', 'parts' => [100, 101, 102]], array_diff_key(array_last($fixture->ledger->payloads()), ['run' => true]));
     }
 
@@ -151,7 +151,7 @@ final class SplitTaskTest extends TestCase
         $outcome = $fixture->sizing($this->vendor())->run('alpha', 7);
 
         self::assertSame([SizingOutcome::AlreadySized, 1, 3], [$outcome, $this->calls, count($fixture->parts->filed)]);
-        self::assertSame([LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], self::kindsOfTheSplitIn($fixture));
+        self::assertSame([LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], $this->kindsOfTheSplitIn($fixture));
     }
 
     public function testAPartSizedAsSplitIsKeptWholeAndRecordedAsReady(): void
@@ -204,7 +204,7 @@ final class SplitTaskTest extends TestCase
         self::assertStringNotContainsString('Waits for', $fixture->parts->filed[0]['body']);
         self::assertStringEndsWith('Waits for #100', $fixture->parts->filed[1]['body']);
         self::assertCount(1, $fixture->comments->posted);
-        self::assertSame([LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], self::kindsOfTheSplitIn($fixture));
+        self::assertSame([LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], $this->kindsOfTheSplitIn($fixture));
     }
 
     public function testAPlanOnRecordThatCannotBeReadStopsTheSizingWithoutACall(): void
@@ -231,7 +231,7 @@ final class SplitTaskTest extends TestCase
 
         self::assertSame([SizingOutcome::Split, 1], [$outcome, $this->calls]);
         self::assertSame(['Read the cart', 'Show the total', 'Show the empty cart'], $fixture->parts->titles());
-        self::assertSame([LedgerEventKind::TaskSized, LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], self::kindsOfTheSplitIn($fixture));
+        self::assertSame([LedgerEventKind::TaskSized, LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], $this->kindsOfTheSplitIn($fixture));
     }
 
     public function testAPartSizedAsSplitBeforeIsNotSizedAgain(): void
@@ -390,7 +390,7 @@ final class SplitTaskTest extends TestCase
     /**
      * @return list<LedgerEventKind>
      */
-    private static function kindsOfTheSplitIn(SizingFixture $fixture): array
+    private function kindsOfTheSplitIn(SizingFixture $fixture): array
     {
         return array_values(array_filter($fixture->ledger->kinds(), static fn (LedgerEventKind $kind): bool => LedgerEventKind::PartIssueCreated !== $kind));
     }
