@@ -12,6 +12,7 @@ use Intakt\Core\Build\Domain\SplitPart;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\PartIssue;
+use stdClass;
 
 // Everything a split needs to finish without a second model call, because a crash between two parts resumes from this record alone.
 final readonly class SplitPlan
@@ -47,25 +48,26 @@ final readonly class SplitPlan
         ], JSON_THROW_ON_ERROR);
     }
 
-    // Null for a payload whose parts plain code does not read whole, because a split resumed from a guess would file parts that wait for the wrong work.
-    public static function in(RecordedEvent $recorded): ?self
+    // Null for a payload whose parts plain code does not read whole, or that names another task than the one asked for, because a split resumed from a guess would file parts that wait for the wrong work or belong to another issue.
+    public static function of(SizingRequest $request, RecordedEvent $recorded): ?self
     {
-        $fields = json_decode($recorded->event->payload, true);
-        $project = is_array($fields) ? ($fields['project'] ?? null) : null;
-        $task = is_array($fields) && is_string($fields['task'] ?? null) ? (int) $fields['task'] : 0;
-        $run = is_array($fields) ? ($fields['run'] ?? null) : null;
-        $parts = is_array($fields) ? SplitLines::partsIn(self::textsIn($fields['parts'] ?? null) ?? []) : null;
-        $labels = is_array($fields) ? self::textsIn($fields['labels'] ?? null) : null;
+        // Decoded to objects, so a JSON object such as `{"0":"ready"}` stays an object and is never read as a list.
+        $fields = json_decode($recorded->event->payload);
+        $fields = $fields instanceof stdClass ? get_object_vars($fields) : [];
+        $task = is_string($fields['task'] ?? null) ? $fields['task'] : null;
+        $run = $fields['run'] ?? null;
+        $parts = SplitLines::partsIn(self::textsIn($fields['parts'] ?? null) ?? []);
+        $labels = self::textsIn($fields['labels'] ?? null);
 
-        if (!is_string($project) || $task < 1 || !is_string($run) || null === $parts || null === $labels) {
+        if ($request->project !== ($fields['project'] ?? null) || (string) $request->task !== $task || !is_string($run) || null === $parts || null === $labels) {
             return null;
         }
 
-        return new self($project, $task, $run, $parts, $labels, $recorded->recordedAt);
+        return new self($request->project, $request->task, $run, $parts, $labels, $recorded->recordedAt);
     }
 
     // By the marker's opening, because only a part carries it, and a trusted author who copies one into a task only keeps that task whole.
-    public static function isPart(SizingRequest $request): bool
+    public static function carriesAMarker(SizingRequest $request): bool
     {
         return str_contains($request->body, self::MARKER_OPENS);
     }
@@ -96,7 +98,7 @@ final readonly class SplitPlan
      */
     private static function textsIn(mixed $values): ?array
     {
-        if (!is_array($values) || !array_is_list($values)) {
+        if (!is_array($values)) {
             return null;
         }
 

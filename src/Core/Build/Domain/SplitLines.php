@@ -11,6 +11,8 @@ final readonly class SplitLines
     private const int MOST = 4;
     // A part is never split again, so a chain a build cannot finish in two steps must be cut differently instead.
     private const int LONGEST_CHAIN = 2;
+    // GitHub's limit for an issue title, in characters.
+    private const int LONGEST_TITLE = 256;
     private const array MARKERS = [' | done-when: ', ' | verify: ', ' | files: ', ' | depends on: '];
     private const string NO_DEPENDENCY = 'none';
     private const string DEPENDENCIES = '/\Apart [1-9][0-9]?(?:, part [1-9][0-9]?)*\z/';
@@ -44,14 +46,15 @@ final readonly class SplitLines
 
     private static function partIn(int $number, string $line): ?SplitPart
     {
-        // A line break or an HTML comment in a part would let model text start a `Waits for` line, open an external block or forge a part marker in the filed issue.
-        if (1 === preg_match('/[\r\n]/', $line) || str_contains($line, '<!--')) {
+        // A line break or an HTML comment in a part would let model text start a `Waits for` line, open an external block or forge a part marker in the filed issue; a line that is not UTF-8 fails the match and is refused with them.
+        if (0 !== preg_match('/[\r\n\x{0}\x{2028}\x{2029}]/u', $line) || str_contains($line, '<!--')) {
             return null;
         }
 
         $fields = self::fieldsIn($line);
 
-        if (null === $fields) {
+        // Checked before the plan is recorded, because the forge refuses a longer title and a retry would file the same part from the record again.
+        if (null === $fields || mb_strlen($fields[0]) > self::LONGEST_TITLE) {
             return null;
         }
 

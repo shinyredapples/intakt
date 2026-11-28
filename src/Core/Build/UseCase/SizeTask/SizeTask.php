@@ -124,7 +124,7 @@ final readonly class SizeTask
         }
 
         // A part keeps a split verdict whole, because a part is never split again; its `task_sized` line says ready with size split.
-        if ($verdict instanceof SizingVerdict && SizingOutcome::Ready === $outcome && SizeTier::Split === $verdict->size && !SplitPlan::isPart($request)) {
+        if ($verdict instanceof SizingVerdict && SizingOutcome::Ready === $outcome && SizeTier::Split === $verdict->size && !$this->splits->isPart($request)) {
             return $this->splits->finished($this->splits->planned($run, $request, $verdict));
         }
 
@@ -137,7 +137,7 @@ final readonly class SizeTask
     // Sized once more, because a verdict recorded before splitting existed has no part lines to split from; reached only without a plan, and never for a part, so it cannot repeat.
     private function waitsForItsSplit(SizingRequest $request, RecordedSizing $latest): bool
     {
-        return $latest->awaitsItsSplit() && !SplitPlan::isPart($request);
+        return $latest->awaitsItsSplit() && !$this->splits->isPart($request);
     }
 
     // No call for a text that already has a verdict, because a second answer would cost tokens and could name another gap than the parked question and its comment; a parked verdict ensures its comment again, because the forge can store a comment and still answer the post as failed.

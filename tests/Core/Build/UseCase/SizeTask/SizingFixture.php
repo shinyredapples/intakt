@@ -11,6 +11,7 @@ use Intakt\Core\Build\UseCase\SizeTask\EligibleTasks;
 use Intakt\Core\Build\UseCase\SizeTask\SizeTask;
 use Intakt\Core\Build\UseCase\SizeTask\SizingRecords;
 use Intakt\Core\Build\UseCase\SizeTask\SplitTask;
+use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
@@ -35,15 +36,20 @@ final readonly class SizingFixture
 
     public KindRefusingLedger $splitLedger;
 
+    // Every record goes to the kept ledger, the in-memory one unless a test passes the persistent ledger.
+    public Ledger $kept;
+
     public function __construct(
         private ManagerRegistry $registry,
         public InMemoryLedger $ledger = new InMemoryLedger(),
         int $number = 7,
+        ?Ledger $kept = null,
     ) {
+        $this->kept = $kept ?? $this->ledger;
         $this->parked = ParkedTaskTable::inMemory();
         $this->comments = new PostedTaskComments();
         $this->parts = new FiledParts();
-        $this->splitLedger = new KindRefusingLedger($this->ledger);
+        $this->splitLedger = new KindRefusingLedger($this->kept);
         $this->issue = new SampleIssue($number);
     }
 
@@ -52,7 +58,7 @@ final readonly class SizingFixture
         return new SizeTask(
             $this->eligibleTasks($accounts),
             $vendor,
-            new SizingRecords($this->ledger),
+            new SizingRecords($this->kept),
             $this->parkedTasks(),
             $comments ?? $this->comments,
             new LockFactory(new InMemoryStore()),
@@ -62,7 +68,7 @@ final readonly class SizingFixture
 
     public function parkedTasks(): ParkedTasks
     {
-        return new ParkedTasks($this->parked, $this->ledger, $this->registry, new MockClock('2026-11-28 12:00:00 UTC'));
+        return new ParkedTasks($this->parked, $this->kept, $this->registry, new MockClock('2026-11-28 12:00:00 UTC'));
     }
 
     public function eligibleTasks(SteeringAccounts $accounts = new SteeringLogins(SampleIssue::OWNER)): EligibleTasks

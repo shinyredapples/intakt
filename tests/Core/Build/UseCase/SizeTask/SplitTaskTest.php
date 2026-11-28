@@ -24,6 +24,7 @@ use Intakt\Core\Build\UseCase\SizeTask\TaskNotSized;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
@@ -65,6 +66,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(AppendResult::class)]
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(RecordedEvents::class)]
+#[UsesClass(Mentions::class)]
 #[UsesClass(ListedIssue::class)]
 #[UsesClass(IssueHistory::class)]
 #[UsesClass(IssueLabels::class)]
@@ -266,6 +268,59 @@ final class SplitTaskTest extends TestCase
             self::fail('A plan with a label that is not a text filed its parts.');
         } catch (TaskNotSized $stopped) {
             self::assertSame('Issue 7 of project "alpha" has a split plan on record that cannot be read, so it is neither split again nor finished.', $stopped->getMessage());
+        }
+
+        self::assertSame([0, []], [$this->calls, $fixture->parts->filed]);
+    }
+
+    public function testAPartWhoseMarkerAnEditRemovedIsKeptWhole(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplit, '{"project":"alpha","task":"3","run":"r1","parts":[7,8]}', SizingRecords::keyOf('alpha', 3)));
+
+        $outcome = $fixture->sizing($this->vendor())->run('alpha', 7);
+
+        self::assertSame([SizingOutcome::Ready, []], [$outcome, $fixture->parts->filed]);
+        self::assertSame([LedgerEventKind::TaskSplit, LedgerEventKind::TaskSized], $fixture->ledger->kinds());
+    }
+
+    public function testATaskWithTheNumberOfAPartInAnotherProjectIsSplit(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplit, '{"project":"beta","task":"3","run":"r1","parts":[7,8]}', SizingRecords::keyOf('beta', 3)));
+
+        $outcome = $fixture->sizing($this->vendor())->run('alpha', 7);
+
+        self::assertSame([SizingOutcome::Split, 3], [$outcome, count($fixture->parts->filed)]);
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>}>
+     */
+    public static function plansOfAnotherShapeOrTask(): iterable
+    {
+        $plan = ['project' => 'alpha', 'task' => '7', 'run' => 'r1', 'parts' => self::PARTS, 'labels' => ['ready']];
+
+        yield 'labels as an object' => [['labels' => (object) ['ready']] + $plan];
+        yield 'parts as an object' => [['parts' => (object) self::PARTS] + $plan];
+        yield 'another project' => [['project' => 'beta'] + $plan];
+        yield 'another issue' => [['task' => '8'] + $plan];
+    }
+
+    /**
+     * @param array<string, mixed> $plan
+     */
+    #[DataProvider('plansOfAnotherShapeOrTask')]
+    public function testAPlanOfAnotherShapeOrTaskIsUnreadableAndFilesNoPart(array $plan): void
+    {
+        $fixture = $this->fixture();
+        $fixture->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplitPlanned, json_encode($plan, JSON_THROW_ON_ERROR), SizingRecords::keyOf('alpha', 7)));
+
+        try {
+            (void) $fixture->sizing($this->vendor())->run('alpha', 7);
+            self::fail('A plan of another shape or task filed its parts.');
+        } catch (TaskNotSized $stopped) {
+            self::assertStringContainsString('has a split plan on record that cannot be read', $stopped->getMessage());
         }
 
         self::assertSame([0, []], [$this->calls, $fixture->parts->filed]);

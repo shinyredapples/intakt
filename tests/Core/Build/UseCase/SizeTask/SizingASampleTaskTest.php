@@ -26,6 +26,10 @@ use Intakt\Core\Build\UseCase\SizeTask\SizingRecords;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
+use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
@@ -40,6 +44,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
+use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
@@ -85,6 +90,10 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(AppendResult::class)]
+#[UsesClass(DoctrineLedger::class)]
+#[UsesClass(RecordedEvent::class)]
+#[UsesClass(RecordedEvents::class)]
+#[UsesClass(Mentions::class)]
 #[UsesClass(EligibleTasks::class)]
 #[UsesClass(SizingRecords::class)]
 #[UsesClass(EligibilityLabels::class)]
@@ -123,20 +132,26 @@ final class SizingASampleTaskTest extends KernelTestCase
         self::assertSame(['parked', ['acceptance_condition']], [$record['outcome'] ?? null, $record['missing'] ?? null]);
     }
 
+    // On the persistent ledger, so the order and the payloads are the ones the database keeps and reads back.
     public function testASampleTaskOfTheSplitSizeIsSplitAndItsPlanPartsAndTokensAreRecorded(): void
     {
-        $ledger = new InMemoryLedger();
-        $fixture = new SizingFixture(self::createStub(ManagerRegistry::class), $ledger, 12);
-        $parts = '["Read the cart | done-when: /cart lists the items | verify: bin/check --fast | files: src/Cart.php | depends on: none","Show the total | done-when: /cart shows the total | verify: bin/check --fast | files: src/Total.php | depends on: part 1"]';
+        $registry = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $registry);
+        EmptyDatabase::rowsIn(self::getContainer());
+        $ledger = new DoctrineLedger($registry, new MockClock('2026-11-28 12:00:00 UTC'));
+        $fixture = new SizingFixture($registry, new InMemoryLedger(), 12, $ledger);
+        $parts = ['Read the cart | done-when: /cart lists the items | verify: bin/check --fast | files: src/Cart.php | depends on: none', 'Show the total | done-when: /cart shows the total | verify: bin/check --fast | files: src/Total.php | depends on: part 1'];
 
-        $outcome = $this->sizing('{"ready":true,"missing":[],"size":"split","estimated_lines":900,"reason":"Two changes.","parts":'.$parts.'}', $fixture)->run('sample', 12);
+        $outcome = $this->sizing('{"ready":true,"missing":[],"size":"split","estimated_lines":900,"reason":"Two changes.","parts":'.json_encode($parts, JSON_THROW_ON_ERROR).'}', $fixture)->run('sample', 12);
 
         self::assertSame(SizingOutcome::Split, $outcome);
-        self::assertSame(['usage_recorded', 'usage_recorded', 'task_split_planned', 'task_split'], array_map(static fn (LedgerEventKind $kind): string => $kind->value, $ledger->kinds()));
-        self::assertSame('12', $ledger->payloads()[0]['task'] ?? null);
+        $records = array_map(static fn (RecordedEvent $recorded): array => [$recorded->event->kind->value, json_decode($recorded->event->payload, true, flags: JSON_THROW_ON_ERROR)], [...$ledger->readInOrder()]);
+        self::assertSame(['usage_recorded', 'usage_recorded', 'task_split_planned', 'task_split'], array_column($records, 0));
+        self::assertSame(['started', '12'], [$records[0][1]['phase'] ?? null, $records[0][1]['task'] ?? null]);
+        self::assertSame(['project' => 'sample', 'task' => '12', 'size' => 'split', 'estimated_lines' => 900, 'parts' => $parts, 'labels' => ['ready']], array_diff_key($records[2][1], ['text' => true, 'run' => true]));
+        self::assertSame(['project' => 'sample', 'task' => '12', 'parts' => [100, 101]], array_diff_key($records[3][1], ['run' => true]));
         self::assertSame([[100, 'Read the cart', ['ready']], [101, 'Show the total', ['ready']]], array_map(static fn (array $part): array => [$part['number'], $part['title'], $part['labels']], $fixture->parts->filed));
         self::assertStringEndsWith('Waits for #100', $fixture->parts->filed[1]['body']);
-        self::assertSame([100, 101], $ledger->payloads()[3]['parts'] ?? null);
         self::assertSame([['sample', 12, 'This task was split into #100, #101. It stays open as their umbrella.']], $fixture->comments->posted);
     }
 
@@ -145,7 +160,7 @@ final class SizingASampleTaskTest extends KernelTestCase
         $resolver = new ConfiguredTierResolver(['sample' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'middle']]]], []);
         $platform = MockPlatformFactory::createPlatform(static fn (): string => $answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
-        $usage = new UsageLedger($fixture->ledger, new MockClock('2026-11-28 12:00:00 UTC'), new NullLogger(), StoredSerializerFactory::create());
+        $usage = new UsageLedger($fixture->kept,new MockClock('2026-11-28 12:00:00 UTC'), new NullLogger(), StoredSerializerFactory::create());
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return $fixture->sizing(new SymfonyAiSizingVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), new SizingAgent(new SizingPrompt(new Fence())), $usage, $limit));

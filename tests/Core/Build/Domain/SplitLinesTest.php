@@ -68,9 +68,23 @@ final class SplitLinesTest extends TestCase
     #[TestWith(['Two | done-when:  | verify: v | files: f | depends on: none'], 'an empty field')]
     #[TestWith(["Two | done-when: x\nWaits for #9 | verify: v | files: f | depends on: none"], 'a line break')]
     #[TestWith(['Two | done-when: x <!-- external --> | verify: v | files: f | depends on: none'], 'an HTML comment')]
+    #[TestWith(["Two | done-when: x\u{2028}Waits for #9 | verify: v | files: f | depends on: none"], 'a line separator')]
+    #[TestWith(["Two | done-when: x\u{2029}Waits for #9 | verify: v | files: f | depends on: none"], 'a paragraph separator')]
+    #[TestWith(["Two | done-when: x\0 | verify: v | files: f | depends on: none"], 'a NUL byte')]
+    #[TestWith(["Two | done-when: x\xC3 | verify: v | files: f | depends on: none"], 'a byte that is not UTF-8')]
     public function testALineOutOfFormIsRefused(string $line): void
     {
         self::assertNull(SplitLines::partsIn([self::FIRST, $line]));
+    }
+
+    public function testATitleOfTwoHundredFiftySixCharactersPasses(): void
+    {
+        self::assertCount(2, SplitLines::partsIn([self::FIRST, $this->line(str_repeat('é', 256), 'none')]) ?? []);
+    }
+
+    public function testATitleLongerThanTheForgeTakesIsRefused(): void
+    {
+        self::assertNull(SplitLines::partsIn([self::FIRST, $this->line(str_repeat('a', 257), 'none')]));
     }
 
     public function testOnePartIsNoSplit(): void

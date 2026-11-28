@@ -11,6 +11,7 @@ use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
@@ -18,6 +19,7 @@ use Intakt\Plugin\GitHubForge\Contract\KeyedComment;
 use Intakt\Plugin\GitHubForge\Contract\TaskComments;
 use Intakt\Plugin\GitHubForge\Contract\TaskParts;
 use NoDiscard;
+use stdClass;
 
 // The plan is on record before any part exists, and every step after it is found again on a retry, so a split interrupted anywhere ends with each part filed once: docs/design/05-architecture/03-choosing-work.md
 final readonly class SplitTask
@@ -41,7 +43,25 @@ final readonly class SplitTask
             return null;
         }
 
-        return SplitPlan::in($recorded) ?? throw TaskNotSized::planUnreadable($request->project, $request->task);
+        return SplitPlan::of($request, $recorded) ?? throw TaskNotSized::planUnreadable($request->project, $request->task);
+    }
+
+    // Also by the split records, because an edit can remove a part's marker and a part is never split again; a record that names the task's number in another project does not count.
+    public function isPart(SizingRequest $request): bool
+    {
+        if (SplitPlan::carriesAMarker($request)) {
+            return true;
+        }
+
+        foreach ($this->ledger->readOfKindsMentioning(new Mentions(json_encode($request->project, JSON_THROW_ON_ERROR)), LedgerEventKind::TaskSplit) as $recorded) {
+            $fields = json_decode($recorded->event->payload);
+
+            if ($fields instanceof stdClass && $request->project === ($fields->project ?? null) && is_array($fields->parts ?? null) && in_array($request->task, $fields->parts, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Read back after the append, so the parts are filed from the plan as recorded, with the moment the ledger gave it.
