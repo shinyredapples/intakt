@@ -59,6 +59,7 @@ final class AccountFailoverPlatformPickTest extends TestCase
     private MockClock $clock;
     private ReadingsInMemory $readings;
     private PicksInMemory $picks;
+    private HoldsInMemory $holds;
 
     public function testAStartRecordsTheAccountItPickedAndTheLeftOutAccountWithItsCauseAndReset(): void
     {
@@ -117,6 +118,16 @@ final class AccountFailoverPlatformPickTest extends TestCase
         self::assertEquals([new LeftOutAccount(new Account(Provider::ClaudeCode, 'team'), LeftOutCause::AtWeeklyCeiling, null)], $this->picks->latestOf(Provider::ClaudeCode)?->leftOut);
     }
 
+    public function testACoolingAccountWithAStoredHoldBehindALaterWeeklyCeilingIsRecordedAtTheCeilingWithItsReset(): void
+    {
+        $this->weekly('team', 95.0, '+3 hours');
+        $this->holds->coolDown(new Account(Provider::ClaudeCode, 'team'), $this->clock->now()->modify('+2 minutes'));
+
+        $this->platform($this->teamCoolingFor(60))->invoke('big', 'Review.');
+
+        self::assertEquals([new LeftOutAccount(new Account(Provider::ClaudeCode, 'team'), LeftOutCause::AtWeeklyCeiling, new DateTimeImmutable('2026-11-28T15:00:00+00:00'))], $this->picks->latestOf(Provider::ClaudeCode)?->leftOut);
+    }
+
     public function testACooldownThatOutlastsTheCeilingStaysRecordedAsCoolingDown(): void
     {
         $this->weekly('team', 95.0, '+30 seconds');
@@ -152,6 +163,7 @@ final class AccountFailoverPlatformPickTest extends TestCase
         $this->clock = new MockClock(new DateTimeImmutable('2026-11-28T12:00:00+00:00'));
         $this->readings = new ReadingsInMemory($this->clock);
         $this->picks = new PicksInMemory();
+        $this->holds = new HoldsInMemory($this->clock);
     }
 
     private function weekly(string $name, float $percent, string $resetsIn): void
@@ -169,7 +181,7 @@ final class AccountFailoverPlatformPickTest extends TestCase
 
     private function platform(AccountCooldowns $cooldowns): AccountFailoverPlatform
     {
-        $ranking = new MeasuredRoomRanking(new HoldsInMemory($this->clock), new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]), $this->picks);
+        $ranking = new MeasuredRoomRanking($this->holds,new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]), $this->picks);
 
         return new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->answering(Account::DEFAULT), 'team' => $this->answering('team')], $cooldowns, $this->clock, new NullLogger(), new NoPinnedProviderCooldowns(), $ranking);
     }

@@ -46,23 +46,23 @@ final readonly class MeasuredRoomRanking implements AccountRanking
     private function leftOutOf(Account $account, AccountRoom $room): ?LeftOutAccount
     {
         $coolingUntil = $this->holds->coolingDownUntil($account);
-
-        return match (true) {
-            $coolingUntil instanceof DateTimeImmutable => new LeftOutAccount($account, LeftOutCause::CoolingDown, $this->endOfBoth($coolingUntil, $room)),
-            UsageWindow::Weekly === $room->atCeiling => new LeftOutAccount($account, LeftOutCause::AtWeeklyCeiling, $room->resetsAt),
-            UsageWindow::FiveHour === $room->atCeiling => new LeftOutAccount($account, LeftOutCause::AtShortWindowCeiling, $room->resetsAt),
-            default => null,
+        $ceiling = match ($room->atCeiling) {
+            UsageWindow::Weekly => LeftOutCause::AtWeeklyCeiling,
+            UsageWindow::FiveHour => LeftOutCause::AtShortWindowCeiling,
+            null => null,
         };
-    }
 
-    // The later of the hold's end and the reset of a fresh ceiling, because the account starts again only once both have ended; unknown when that ceiling names no reset, since the hold's end alone would promise a start the ceiling still refuses.
-    private function endOfBoth(DateTimeImmutable $coolingUntil, AccountRoom $room): ?DateTimeImmutable
-    {
-        if (!$room->atCeiling instanceof UsageWindow) {
-            return $coolingUntil;
+        if ($coolingUntil instanceof DateTimeImmutable && $this->holdEndsLast($coolingUntil, $ceiling, $room)) {
+            return new LeftOutAccount($account, LeftOutCause::CoolingDown, $coolingUntil);
         }
 
-        return $room->resetsAt instanceof DateTimeImmutable ? max($coolingUntil, $room->resetsAt) : null;
+        return $ceiling instanceof LeftOutCause ? new LeftOutAccount($account, $ceiling, $room->resetsAt) : null;
+    }
+
+    // The hold or a fresh ceiling, whichever ends last, names the cause and the reset, because the account starts again only once both have ended; a ceiling with no named reset counts as last, since the hold's end alone would promise a start the ceiling still refuses.
+    private function holdEndsLast(DateTimeImmutable $coolingUntil, ?LeftOutCause $ceiling, AccountRoom $room): bool
+    {
+        return !$ceiling instanceof LeftOutCause || ($room->resetsAt instanceof DateTimeImmutable && $room->resetsAt <= $coolingUntil);
     }
 
     // Subscription before paid, because a paid account is never spent while a subscription has room; trusted before unknown, because an old reading may hide a spent window; soonest reset next, because room left at a reset is lost.
