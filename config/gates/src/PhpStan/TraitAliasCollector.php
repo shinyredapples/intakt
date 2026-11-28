@@ -155,21 +155,26 @@ final readonly class TraitAliasCollector implements Collector
         $hiding = array_find(array_reverse($adaptations['aliases']), static fn (array $adaptation): bool => null === $adaptation['name'] && 0 !== $adaptation['visibility'] && 0 === strcasecmp($adaptation['method'], $name));
         $written = null === $alias ? $hiding['visibility'] ?? 0 : $alias['visibility'];
 
-        return 0 !== $written ? $written : $this->visibilityInTraitsOf($wrapper, $alias['trait'] ?? null, $alias['method'] ?? $name, $method, $adaptations['exclusions']);
+        if (0 !== $written) {
+            return $written;
+        }
+
+        $original = $alias['method'] ?? $name;
+        $named = $alias['trait'] ?? null;
+        $source = array_find($this->unexcludedTraits($wrapper, $original, $adaptations['exclusions']), static fn (ClassReflection $trait): bool => $trait->getNativeReflection()->hasMethod($original) && (null === $named || 0 === strcasecmp(ltrim($named, '\\'), $trait->getName())));
+
+        return ($source?->getNativeReflection()->getMethod($original)->isPublic() ?? $method->isPublic()) ? Modifiers::PUBLIC : Modifiers::PRIVATE;
     }
 
-    // the trait that supplies the method is the one the alias names, or else the first that brings the name and that no insteadof excludes, as PHP picks it
+    // because PHP takes the method from the trait the alias names, or else from the first trait that brings the name and that no insteadof excludes, so a protected method insteadof sets aside does not hide the public one it selects
     /**
      * @param list<Exclusion> $exclusions
+     *
+     * @return list<ClassReflection>
      */
-    private function visibilityInTraitsOf(ClassReflection $wrapper, ?string $named, string $original, ReflectionMethod $reflected, array $exclusions): int
+    private function unexcludedTraits(ClassReflection $wrapper, string $original, array $exclusions): array
     {
-        $source = array_find($wrapper->getTraits(), static fn (ClassReflection $trait): bool => $trait->getNativeReflection()->hasMethod($original)
-            && (null === $named || 0 === strcasecmp(ltrim($named, '\\'), $trait->getName()))
-            && !array_any($exclusions, static fn (array $exclusion): bool => 0 === strcasecmp(ltrim($exclusion['trait'], '\\'), $trait->getName()) && 0 === strcasecmp($exclusion['method'], $original)));
-        $public = $source?->getNativeReflection()->getMethod($original)->isPublic() ?? $reflected->isPublic();
-
-        return $public ? Modifiers::PUBLIC : Modifiers::PRIVATE;
+        return array_values(array_filter($wrapper->getTraits(), static fn (ClassReflection $trait): bool => !array_any($exclusions, static fn (array $exclusion): bool => 0 === strcasecmp(ltrim($exclusion['trait'], '\\'), $trait->getName()) && 0 === strcasecmp($exclusion['method'], $original))));
     }
 
     // because BetterReflection gives a method that one block both aliases and changes the visibility of the wrong visibility (upstream/phpstan-trait-alias-drops-visibility/), the adaptations are recorded as the block writes them
