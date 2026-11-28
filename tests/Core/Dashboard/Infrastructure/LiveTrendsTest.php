@@ -154,7 +154,7 @@ final class LiveTrendsTest extends KernelTestCase
 
         $this->trendsOn($ledger, new PublishedLiveEvents())->publishLatest($round);
 
-        $logs = $this->log->cleanLogs();
+        $logs = $this->logged();
         self::assertCount(1, $logs);
         self::assertSame(['warning', 'The trends were not published.', $round->toRfc4122()], [$logs[0][0], $logs[0][1], $logs[0][2]['round'] ?? null]);
     }
@@ -166,7 +166,7 @@ final class LiveTrendsTest extends KernelTestCase
 
         $this->trendsOn($ledger, new PublishedLiveEvents())->publishTheTrends();
 
-        $logs = $this->log->cleanLogs();
+        $logs = $this->logged();
         self::assertCount(1, $logs);
         self::assertSame(['warning', 'The trends were not published.', false], [$logs[0][0], $logs[0][1], array_key_exists('round', $logs[0][2])]);
     }
@@ -178,14 +178,6 @@ final class LiveTrendsTest extends KernelTestCase
         $this->locks = new InMemoryStore();
     }
 
-    /**
-     * @return list<string>
-     */
-    private function targetsOf(LiveEvent $event): array
-    {
-        return new Crawler($event->turboStream)->filter('turbo-stream')->each(static fn (Crawler $stream): string => (string) $stream->attr('target'));
-    }
-
     private function trendsOn(Ledger $ledger, LiveUpdates $live): LiveTrends
     {
         $twig = self::getContainer()->get(Environment::class);
@@ -194,5 +186,21 @@ final class LiveTrendsTest extends KernelTestCase
         $pages = new LedgerReviewPages(new MockClock(), $ledger, $payloads, new UnpricedRoundCosts(), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
 
         return new LiveTrends(new LedgerTrends($ledger, $pages, new LedgerQueuedRounds($payloads), new PublishedBench(''), new MockClock()), $twig, $live, new LockFactory($this->locks), $this->log);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function targetsOf(LiveEvent $event): array
+    {
+        return new Crawler($event->turboStream)->filter('turbo-stream')->each(static fn (Crawler $stream): string => (string) $stream->attr('target'));
+    }
+
+    /**
+     * @return list<array{0: mixed, 1: mixed, 2: array<array-key, mixed>}>
+     */
+    private function logged(): array
+    {
+        return array_values(array_map(static fn (mixed $record): array => is_array($record) ? [$record[0] ?? null, $record[1] ?? null, is_array($record[2] ?? null) ? $record[2] : []] : [null, null, []], $this->log->cleanLogs()));
     }
 }
