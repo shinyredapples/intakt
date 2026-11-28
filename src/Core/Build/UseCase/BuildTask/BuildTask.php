@@ -33,9 +33,6 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Labels;
 use Intakt\Plugin\Forge\Contract\ChangeText;
-use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
-use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
-use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use LogicException;
 use NoDiscard;
@@ -52,7 +49,7 @@ final readonly class BuildTask
     public const string START_BUSY = 'another run of this task is starting';
 
     public function __construct(
-        private IssueReads $issues,
+        private TaskAdmission $admission,
         private BuildCheckout $checkout,
         private BuildRouting $routing,
         private RunBuildJob $builds,
@@ -113,7 +110,7 @@ final readonly class BuildTask
         }
 
         try {
-            $task = $this->readTask($request);
+            $task = $this->admission->taskOf($request);
             $this->record($run, EndedStep::of(BuildStep::Task, $task instanceof ListedIssue ? null : $task));
 
             return $task;
@@ -129,18 +126,6 @@ final readonly class BuildTask
         if (!$result->succeeded()) {
             throw BuildStepNotRecorded::for($run, $ended->step, (string) $result->failure);
         }
-    }
-
-    // The failure's text when the task cannot be read, because the caller names the issue and no other issue may stand in for it.
-    private function readTask(BuildTaskRequest $request): ListedIssue|string
-    {
-        try {
-            $issue = $this->issues->readOpen($request->project, $request->issue);
-        } catch (ForgeReadFailed|ForgeRateLimited $failure) {
-            return $failure->getMessage();
-        }
-
-        return $issue ?? sprintf('project "%s" has no open issue %d', $request->project, $request->issue);
     }
 
     /**

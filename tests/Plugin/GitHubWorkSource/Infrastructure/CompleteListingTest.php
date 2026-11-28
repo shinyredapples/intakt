@@ -12,6 +12,11 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Build\Contract\UmbrellaTasks;
+use Intakt\Core\Build\Infrastructure\RecordedSplitUmbrellas;
+use Intakt\Core\Build\UseCase\SizeTask\SizingRecords;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
@@ -47,6 +52,7 @@ use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\GitHubWorkSource\RecordedIssueReads;
 use Intakt\Tests\Plugin\GitHubWorkSource\ScriptedHistories;
 use Intakt\Tests\Plugin\GitHubWorkSource\WriterBetweenWriteAndCommit;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -77,6 +83,9 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[UsesClass(QueuedIssue::class)]
 #[UsesClass(SyncState::class)]
 #[UsesClass(Vouching::class)]
+#[UsesClass(RecordedSplitUmbrellas::class)]
+#[UsesClass(UmbrellaTasks::class)]
+#[UsesClass(SizingRecords::class)]
 final class CompleteListingTest extends KernelTestCase
 {
     private const string VALIDATOR = 'W/"issues-1"';
@@ -86,6 +95,7 @@ final class CompleteListingTest extends KernelTestCase
     private RecordedIssueReads $reads;
     private ScriptedHistories $histories;
     private BufferingLogger $logger;
+    private InMemoryLedger $ledger;
 
     public function testAWaitOnSeveralIssuesIsAnsweredFromTheListingWithoutAReadPerReference(): void
     {
@@ -99,6 +109,30 @@ final class CompleteListingTest extends KernelTestCase
         self::assertSame(['waits for #3, #4'], $this->reasonsOf($plan));
         self::assertSame(2, $this->reads->listings);
         self::assertSame([3, 4, 10], $this->histories->read);
+    }
+
+    public function testATaskWhoseSplitPlanTheLedgerRecordsIsHeldAndItsPartsAreReady(): void
+    {
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplitPlanned, json_encode(['project' => 'alpha', 'task' => '7', 'run' => 'r1', 'parts' => [], 'labels' => []], JSON_THROW_ON_ERROR), SizingRecords::keyOf('alpha', 7)));
+        $this->reads->lists([Issues::task(7), Issues::task(100), Issues::task(101)]);
+
+        $plan = $this->planOf();
+
+        self::assertSame([100, 101], array_map(static fn (QueuedIssue $task): int => $task->number(), $plan->ready));
+        self::assertSame(['split into parts, which are built in its place'], $this->reasonsOf($plan));
+    }
+
+    public function testASplitPlanRecordedWhileTheListingIsReadStillHoldsItsOriginal(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::task(100)]);
+        $this->reads->during = function (): void {
+            self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplitPlanned, json_encode(['project' => 'alpha', 'task' => '7', 'run' => 'r1', 'parts' => [], 'labels' => []], JSON_THROW_ON_ERROR), SizingRecords::keyOf('alpha', 7)))->succeeded());
+        };
+
+        $plan = $this->planOf();
+
+        self::assertSame([100], array_map(static fn (QueuedIssue $task): int => $task->number(), $plan->ready));
+        self::assertSame(['split into parts, which are built in its place'], $this->reasonsOf($plan));
     }
 
     public function testAnUnchangedListingKeepsTheStoredStateOfEveryWaitedForIssue(): void
@@ -542,6 +576,7 @@ final class CompleteListingTest extends KernelTestCase
         $this->reads = new RecordedIssueReads();
         $this->histories = new ScriptedHistories($this->reads);
         $this->logger = new BufferingLogger();
+        $this->ledger = new InMemoryLedger();
     }
 
     // A reader keeps its shared lock open, so the writer's commit is refused and leaves its pending lock, which refuses every new read of the file until it commits.
@@ -707,6 +742,6 @@ final class CompleteListingTest extends KernelTestCase
         $accounts = self::createStub(SteeringAccounts::class);
         $accounts->method('steers')->willReturnCallback(static fn (string $project, string $account): bool => 'ana' === $account);
 
-        return new CompleteListing($reads ?? $this->reads, $histories ?? $this->histories, $accounts, $this->store, $labels, new IssueReferences(), $this->logger);
+        return new CompleteListing($reads ?? $this->reads, $histories ?? $this->histories, $accounts, $this->store, $labels, new IssueReferences(), $this->logger, new RecordedSplitUmbrellas($this->ledger));
     }
 }

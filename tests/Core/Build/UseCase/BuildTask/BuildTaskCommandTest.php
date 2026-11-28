@@ -12,8 +12,10 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
+use Intakt\Core\Build\Contract\SplitUmbrellas;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
+use Intakt\Core\Build\Contract\UmbrellaTasks;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\GatesAtOnce;
@@ -36,6 +38,7 @@ use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteRefused;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
+use Intakt\Core\Build\UseCase\BuildTask\TaskAdmission;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
@@ -100,6 +103,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(BuildTaskCommand::class)]
 #[UsesClass(BuildTaskInput::class)]
 #[UsesClass(BuildTask::class)]
+#[UsesClass(TaskAdmission::class)]
 #[UsesClass(BuildTaskOutcome::class)]
 #[UsesClass(BuildTaskRequest::class)]
 #[UsesClass(BuildRun::class)]
@@ -421,8 +425,10 @@ final class BuildTaskCommandTest extends TestCase
         // A folder that exists, because the text round resolves the mirror's path and a stubbed checkout names none.
         $mirror = self::createStub(BuildCheckout::class);
         $mirror->method('mirrorOf')->willReturn($this->folder);
+        $umbrellas = self::createStub(SplitUmbrellas::class);
+        $umbrellas->method('of')->willReturn(new UmbrellaTasks());
 
-        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($mirror, $texts), new PushStep($branches, $checkout), $parked, new PullRequestStep($branches, $checkout), $ledger, new PushRemoteCheck($repositories), new LockFactory(new InMemoryStore()));
+        return new BuildTask(new TaskAdmission($issues, $umbrellas), $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($mirror, $texts), new PushStep($branches, $checkout), $parked, new PullRequestStep($branches, $checkout), $ledger, new PushRemoteCheck($repositories), new LockFactory(new InMemoryStore()));
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Build\Infrastructure\RecordedSplitUmbrellas;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
@@ -37,6 +38,7 @@ use Intakt\Plugin\WorkSource\Contract\Task;
 use Intakt\Plugin\WorkSource\Contract\WorkQueue;
 use Intakt\Plugin\WorkSource\Contract\WorkSource;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -316,7 +318,7 @@ final class ShowQueueCommandTest extends KernelTestCase
         $accounts = self::createStub(SteeringAccounts::class);
         $accounts->method('steers')->willReturn(true);
         $references = new IssueReferences();
-        $listing = new CompleteListing($this->reads, $histories, $accounts, $this->store, new EligibilityLabels(new ProjectEligibilityLabel('alpha', $this->eligibilityLabel)), $references, $this->logger);
+        $listing = new CompleteListing($this->reads, $histories, $accounts, $this->store, new EligibilityLabels(new ProjectEligibilityLabel('alpha', $this->eligibilityLabel)), $references, $this->logger, new RecordedSplitUmbrellas(new InMemoryLedger()));
 
         return new GitHubWorkSource($listing, $histories, $accounts, $references, $this->store, new PullRequestsOfTasks(new RecordedPullRequestBranches($this->reads), $histories, $accounts, $references), $this->logger);
     }

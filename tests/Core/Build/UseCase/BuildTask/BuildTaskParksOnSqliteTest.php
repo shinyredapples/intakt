@@ -18,9 +18,11 @@ use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\Decisions;
+use Intakt\Core\Build\Contract\SplitUmbrellas;
 use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
+use Intakt\Core\Build\Contract\UmbrellaTasks;
 use Intakt\Core\Build\Domain\BugPart;
 use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuilderPrompt;
@@ -46,6 +48,7 @@ use Intakt\Core\Build\UseCase\BuildTask\PullRequestStep;
 use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
+use Intakt\Core\Build\UseCase\BuildTask\TaskAdmission;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobEndFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -94,6 +97,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 // On the install's own database, because the parked row and the asked step share its transaction while the earlier steps go through the same ledger; a stopped job's row is read back from the same table.
 #[Group('persistence')]
 #[CoversClass(BuildTask::class)]
+#[UsesClass(TaskAdmission::class)]
 #[CoversClass(BuildTaskOutcome::class)]
 #[CoversClass(BuildTaskCommand::class)]
 #[UsesClass(BuildTaskInput::class)]
@@ -351,8 +355,10 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $files = new HandBackFile($checkout, new Filesystem(), $this->folder.'/hand-backs');
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);
+        $umbrellas = self::createStub(SplitUmbrellas::class);
+        $umbrellas->method('of')->willReturn(new UmbrellaTasks());
 
-        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($checkout, self::createStub(PullRequestTextRound::class)), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, new PullRequestStep(self::createStub(BranchPush::class), $checkout), $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()));
+        return new BuildTask(new TaskAdmission($reads, $umbrellas), $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($checkout, self::createStub(PullRequestTextRound::class)), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, new PullRequestStep(self::createStub(BranchPush::class), $checkout), $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()));
     }
 
     private function question(): string
