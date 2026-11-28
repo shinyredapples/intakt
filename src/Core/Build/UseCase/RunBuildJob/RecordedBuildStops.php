@@ -7,7 +7,7 @@ namespace Intakt\Core\Build\UseCase\RunBuildJob;
 use Intakt\Core\Build\Domain\BuildStopCause;
 use Symfony\Contracts\Service\ResetInterface;
 
-// The watch of a running build records the cause while the job runs, and RunBuildJob reads it once the job ended.
+// Kept apart from the watch, because the watch records the cause while the job runs and RunBuildJob reads it only once the job ended, also when the job's end failed.
 final class RecordedBuildStops implements ResetInterface
 {
     /** @var array<string, BuildStopCause> */

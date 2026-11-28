@@ -226,12 +226,12 @@ final readonly class BuildTask
 
         // What the job hands back stays untrusted until the hand-back check, so only its verdict, its stop cause and its tokens reach the ledger, Intakt's own words and a number.
         if (!$outcome->built()) {
-            return EndedStep::of(BuildStep::BuildJob, $outcome->verdict->reason(), $outcome->stopCause, $outcome->tokens);
+            return EndedStep::of(BuildStep::BuildJob, $outcome->verdict->reason(), $outcome->stopCause)->using($outcome->tokens);
         }
 
         $notCleared = $this->unpark($run);
 
-        return null === $notCleared ? $outcome : EndedStep::of(BuildStep::BuildJob, $notCleared, $outcome->stopCause, $outcome->tokens);
+        return null === $notCleared ? $outcome : EndedStep::of(BuildStep::BuildJob, $notCleared, $outcome->stopCause)->using($outcome->tokens);
     }
 
     /**
@@ -318,9 +318,9 @@ final readonly class BuildTask
     private function park(BuildRun $run, ListedIssue $task, AskedQuestion $asked): BuildTaskOutcome
     {
         try {
-            $this->parkedTasks->park($run, $asked->question, $asked->stopCause, $asked->tokens);
+            $this->parkedTasks->park($run, $asked);
         } catch (TaskNotParked $notParked) {
-            $this->record($run, EndedStep::of(BuildStep::BuildJob, $notParked->getMessage(), $asked->stopCause, $asked->tokens));
+            $this->record($run, EndedStep::of(BuildStep::BuildJob, $notParked->getMessage(), $asked->stopCause)->using($asked->tokens));
 
             return new BuildTaskOutcome(BuildStep::BuildJob, $notParked->getMessage(), $task);
         }
@@ -335,7 +335,7 @@ final readonly class BuildTask
             return $result;
         }
 
-        return $result instanceof BuildJobOutcome ? EndedStep::of($step, null, $result->stopCause, $result->tokens) : EndedStep::of($step, is_string($result) ? $result : null);
+        return $result instanceof BuildJobOutcome ? EndedStep::of($step, null, $result->stopCause)->using($result->tokens) : EndedStep::of($step, is_string($result) ? $result : null);
     }
 
     // The title on the first line and the body after it, as BuilderPrompt asks the builder to write them; fixed words for a text without a title, because the forge opens no pull request without one.

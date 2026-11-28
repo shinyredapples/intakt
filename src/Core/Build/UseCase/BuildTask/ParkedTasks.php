@@ -12,8 +12,6 @@ use Doctrine\DBAL\ParameterType;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
-use Intakt\Core\Build\Domain\BuildQuestion;
-use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -41,16 +39,16 @@ final readonly class ParkedTasks
     /**
      * @throws TaskNotParked
      */
-    public function park(BuildRun $run, BuildQuestion $question, ?BuildStopCause $stopCause, int $tokens = 0): void
+    public function park(BuildRun $run, AskedQuestion $asked): void
     {
         // Refused before any write, because inside a caller's transaction the commit only releases a savepoint and the caller could still take the question back.
         if ($this->connection->isTransactionActive()) {
             throw TaskNotParked::for($run->project, $run->task);
         }
 
-        $record = new ParkedTaskRecord($run->project, $run->task, $question, $this->clock->now()->setTimezone(new DateTimeZone('UTC')), $run->id);
+        $record = new ParkedTaskRecord($run->project, $run->task, $asked->question, $this->clock->now()->setTimezone(new DateTimeZone('UTC')), $run->id);
 
-        if ($this->storedWithItsAskedStep($record, $run, new EndedStep(BuildStep::BuildJob, BuildStepOutcome::Asked, null, $stopCause, $tokens))) {
+        if ($this->storedWithItsAskedStep($record, $run, new EndedStep(BuildStep::BuildJob, BuildStepOutcome::Asked, null, $asked->stopCause, $asked->tokens))) {
             return;
         }
 

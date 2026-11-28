@@ -89,7 +89,7 @@ final class BuildSessionWatch implements JobWatch
         return true;
     }
 
-    // What this session used as far as the log showed it, for the ledger row that adds it to the task's total.
+    // Read once the job ended, because the build job's ledger row keeps it for the task's later builds.
     public function tokensUsed(): int
     {
         return $this->tokens;

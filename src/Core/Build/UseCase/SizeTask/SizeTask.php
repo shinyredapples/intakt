@@ -6,6 +6,7 @@ namespace Intakt\Core\Build\UseCase\SizeTask;
 
 use Intakt\Core\Build\Contract\SizingRequest;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\UseCase\BuildTask\AskedQuestion;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTaskNotCleared;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
@@ -140,7 +141,7 @@ final readonly class SizeTask
     private function parked(BuildRun $run, BuildQuestion $question): void
     {
         try {
-            $this->parkedTasks->park($run, $question, null);
+            $this->parkedTasks->park($run, new AskedQuestion($question));
         } catch (TaskNotParked) {
             throw TaskNotSized::notParked($run->project, $run->task);
         }

@@ -21,8 +21,13 @@ final readonly class EndedStep
     ) {
     }
 
-    public static function of(BuildStep $step, ?string $failure, ?BuildStopCause $stopCause = null, int $tokens = 0): self
+    public static function of(BuildStep $step, ?string $failure, ?BuildStopCause $stopCause = null): self
     {
-        return new self($step, null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed, $failure, $stopCause, $tokens);
+        return new self($step, null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed, $failure, $stopCause);
+    }
+
+    public function using(int $tokens): self
+    {
+        return clone($this, ['tokens' => $tokens]);
     }
 }

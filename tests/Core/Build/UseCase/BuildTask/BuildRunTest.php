@@ -45,7 +45,7 @@ final class BuildRunTest extends TestCase
 
     public function testTheStepPayloadOfABuildJobThatUsedTokensNamesThemLast(): void
     {
-        $payload = new BuildRun('alpha', 7, self::RUN)->stepPayload(EndedStep::of(BuildStep::BuildJob, 'no commits', BuildStopCause::NoProgress, 350));
+        $payload = new BuildRun('alpha', 7, self::RUN)->stepPayload(EndedStep::of(BuildStep::BuildJob, 'no commits', BuildStopCause::NoProgress)->using(350));
 
         self::assertSame('{"project":"alpha","task":"7","run":"'.self::RUN.'","step":"build_job","outcome":"failed","failure":"no commits","stop_cause":"no_progress","tokens":350}', $payload);
     }

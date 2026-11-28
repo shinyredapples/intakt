@@ -11,6 +11,7 @@ use Intakt\Core\Build\Contract\SizingRequest;
 use Intakt\Core\Build\Contract\SizingVerdict;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
+use Intakt\Core\Build\UseCase\BuildTask\AskedQuestion;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\SizeTask\EligibleTasks;
@@ -43,6 +44,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(SizeTask::class)]
+#[UsesClass(AskedQuestion::class)]
 #[CoversClass(SizingRecords::class)]
 #[CoversClass(TaskNotSized::class)]
 #[CoversClass(SizingOutcome::class)]
@@ -340,7 +342,7 @@ final class SizeTaskTest extends TestCase
         $fixture = $this->fixture();
         $sizing = $fixture->sizing($this->vendorAnswering($this->verdict([ReadinessGap::AcceptanceCondition], SizeTier::Small, 20), $this->verdict([], SizeTier::Small, 20)));
         (void) $sizing->run('alpha', 7);
-        $fixture->parkedTasks()->park(new BuildRun('alpha', 7, 'a-later-build-run'), BuildQuestion::forMissingReadiness([ReadinessGap::SingleOutcome]), null);
+        $fixture->parkedTasks()->park(new BuildRun('alpha', 7, 'a-later-build-run'), new AskedQuestion(BuildQuestion::forMissingReadiness([ReadinessGap::SingleOutcome])));
         $fixture->issue->rewrittenAs(SampleIssue::BODY.' Done when the cart shows a saved item.');
 
         self::assertSame(SizingOutcome::Ready, $sizing->run('alpha', 7));
