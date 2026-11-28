@@ -93,7 +93,7 @@ final readonly class SizeTask
 
         $latest = $this->records->latestVerdictOf($request);
 
-        if (null !== $latest && $latest->isOf($request)) {
+        if ($latest instanceof RecordedSizing && $latest->isOf($request)) {
             return $this->askedAgainIfParked($run, $request, $latest);
         }
 

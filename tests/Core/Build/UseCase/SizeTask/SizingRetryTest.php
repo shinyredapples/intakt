@@ -146,7 +146,7 @@ final class SizingRetryTest extends TestCase
     {
         $fixture = $this->fixture();
         $request = new SizingRequest(ScriptedIssue::PROJECT, ScriptedIssue::NUMBER, 'Add a cart page', SampleIssue::BODY);
-        (void) $fixture->ledger->append(new LedgerEvent(LedgerEventKind::TaskSized, (string) json_encode(['outcome' => 'parked', 'missing' => ['unknown_gap'], 'text' => SizingRecords::textOf($request), 'run' => 'r']), SizingRecords::keyOf(ScriptedIssue::PROJECT, ScriptedIssue::NUMBER)));
+        $fixture->ledger->append(new LedgerEvent(LedgerEventKind::TaskSized, (string) json_encode(['outcome' => 'parked', 'missing' => ['unknown_gap'], 'text' => SizingRecords::textOf($request), 'run' => 'r']), SizingRecords::keyOf(ScriptedIssue::PROJECT, ScriptedIssue::NUMBER)));
 
         self::assertSame(SizingOutcome::Ready, $fixture->sizing($this->vendorAnswering($this->ready()))->run(ScriptedIssue::PROJECT, ScriptedIssue::NUMBER));
         self::assertSame(1, $this->calls);
@@ -173,9 +173,7 @@ final class SizingRetryTest extends TestCase
     private function vendorAnswering(SizingVerdict ...$verdicts): SizingVendor
     {
         $vendor = self::createStub(SizingVendor::class);
-        $vendor->method('size')->willReturnCallback(function () use ($verdicts): SizingVerdict {
-            return $verdicts[$this->calls++] ?? self::fail('The model was asked more often than it was scripted for.');
-        });
+        $vendor->method('size')->willReturnCallback(fn (): SizingVerdict => $verdicts[$this->calls++] ?? self::fail('The model was asked more often than it was scripted for.'));
 
         return $vendor;
     }
