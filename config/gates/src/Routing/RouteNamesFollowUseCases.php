@@ -42,6 +42,11 @@ final class RouteNamesFollowUseCases
     {
         $controller = $route->getDefault('_controller');
 
+        // Because a route may also name its controller as [class, method], which serves the route just like Class::method.
+        if (is_array($controller) && array_is_list($controller) && 2 === count($controller) && is_string($controller[0])) {
+            $controller = $controller[0];
+        }
+
         // Because a route file may write the class with a leading backslash, which names the same class.
         return is_string($controller) ? ltrim(explode('::', $controller)[0], '\\') : null;
     }

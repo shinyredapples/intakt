@@ -33,6 +33,20 @@ final class RouteNamesGateTest extends SandboxTestCase
         self::assertTrue($run->passed('routes'), $run->output());
     }
 
+    public function testARouteWhoseControllerIsAClassAndMethodListFailsTheGate(): void
+    {
+        $sandbox = $this->kernelSandbox();
+        $kernel = (string) file_get_contents($sandbox->root.'/src/Kernel.php');
+        $listed = str_replace("->controller('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController')", "->defaults(['_controller' => ['Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController', '__invoke']])", $kernel);
+        self::assertStringContainsString("'_controller' => [", $listed);
+        $sandbox->write('src/Kernel.php', $listed);
+
+        $run = $sandbox->check('--only=routes');
+
+        self::assertTrue($run->failed('routes'), $run->output());
+        self::assertStringContainsString('Route "dashboard_show_demo" is served by Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController, so it must be named "dashboard_play_demo"', $run->findingsOf('routes'));
+    }
+
     public function testARouteRenamedAfterAnEarlierRunIsReadFromTheChangedKernel(): void
     {
         $sandbox = $this->kernelSandbox();

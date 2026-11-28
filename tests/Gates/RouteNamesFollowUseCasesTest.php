@@ -9,6 +9,7 @@ use Intakt\Core\Dashboard\UseCase\ShowReviewRecord\ShowReviewRecordController;
 use Intakt\Gates\Routing\RouteNamesFollowUseCases;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
 
@@ -83,6 +84,37 @@ final class RouteNamesFollowUseCasesTest extends TestCase
         self::assertStringContainsString('must be named "dashboard_play_demo"', implode("\n", new RouteNamesFollowUseCases()->findingsIn($routes)));
     }
 
+    public function testAControllerWrittenWithALeadingBackslashIsAcceptedUnderItsUseCaseName(): void
+    {
+        $routes = $this->routes(['dashboard_play_demo' => '\Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController']);
+
+        self::assertSame([], new RouteNamesFollowUseCases()->findingsIn($routes));
+    }
+
+    public function testAControllerGivenAsClassAndMethodListIsRejectedWithTheExpectedName(): void
+    {
+        $routes = $this->routes(['dashboard_show_demo' => ['Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController', '__invoke']]);
+
+        self::assertSame(
+            ['Route "dashboard_show_demo" is served by Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController, so it must be named "dashboard_play_demo" (<module>_<use_case>): rename the route, or move the controller into the UseCase/<Name>/ folder the name says.'],
+            new RouteNamesFollowUseCases()->findingsIn($routes),
+        );
+    }
+
+    public function testAControllerListWithALeadingBackslashIsAcceptedUnderItsUseCaseName(): void
+    {
+        $routes = $this->routes(['dashboard_play_demo' => ['\Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController', '__invoke']]);
+
+        self::assertSame([], new RouteNamesFollowUseCases()->findingsIn($routes));
+    }
+
+    public function testAControllerListWhoseFirstElementIsNoClassNameIsIgnored(): void
+    {
+        $routes = $this->routes(['dashboard_show_demo' => [new stdClass(), '__invoke']]);
+
+        self::assertSame([], new RouteNamesFollowUseCases()->findingsIn($routes));
+    }
+
     public function testAControllerOutsideTheIntaktNamespaceIsIgnored(): void
     {
         $routes = $this->routes(['_wdt' => 'web_profiler.controller.profiler::toolbarAction', 'mcp_endpoint' => 'Mcp\Server\Controller']);
@@ -99,7 +131,7 @@ final class RouteNamesFollowUseCasesTest extends TestCase
     }
 
     /**
-     * @param array<string, string> $controllers
+     * @param array<string, string|list<mixed>> $controllers
      */
     private function routes(array $controllers): RouteCollection
     {
