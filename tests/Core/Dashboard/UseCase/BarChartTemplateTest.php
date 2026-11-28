@@ -76,6 +76,22 @@ final class BarChartTemplateTest extends KernelTestCase
         self::assertSame([], $collapsed);
     }
 
+    // At the 8 units a character the template reckons with, because a label that starts left of the drawing is cut by the page edge on a phone, where the chart sits at the page's padding.
+    public function testEveryValueAxisLabelOfACostChartStartsInsideTheDrawing(): void
+    {
+        $starts = $this->costChart()->filter('text.c-axis[text-anchor="end"]')->each(static fn (Crawler $label): float => (float) $label->attr('x') - 8 * strlen($label->text()));
+
+        self::assertCount(3, $starts);
+        self::assertGreaterThanOrEqual(0.0, min($starts));
+    }
+
+    public function testACountChartKeepsItsNarrowGutterBecauseItsAxisLabelsAreShort(): void
+    {
+        $chart = $this->render([new ChartBar('Mon', 2, '2 rounds', 'Mon'), new ChartBar('Tue', 1, '1 round', 'Tue')], 2);
+
+        self::assertSame(['36', '36', '36'], $chart->filter('line')->each(static fn (Crawler $line): ?string => $line->attr('x1')));
+    }
+
     private function costChart(): Crawler
     {
         $rounds = [];
