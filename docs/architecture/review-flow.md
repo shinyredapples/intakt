@@ -8,7 +8,7 @@ Worth knowing:
 
 - A round is refused before it opens when a tier it needs is not mapped.
 - A finding that quotes code is dropped before judging when none of its quoted code fragments is in the change (the quote check). A finding without a checkable quote, or with at least one quote that is in the change, is kept.
-- `Domain\ReviewersAgree` tells when the Code reviewers' verdict step needs no model call: every reviewer approves, or every reviewer asks for changes with the same P1 and P2 findings and each passes the quote check, with no P3, follow-up or failed review. Findings match by severity, file and text, case counting; white space (a nonbreaking space too) is collapsed outside code spans and compared exactly inside them, and an escaped backtick opens no code span. Nothing calls it yet.
+- `Domain\ReviewersAgree` tells when the Code reviewers' verdict step needs no model call: every reviewer gives the same decision with the same P1 and P2 findings (by severity, file and text, case counting, white space collapsed outside code spans and exact inside them), each passing the quote check, with no P3, follow-up or failed review. Nothing calls it yet.
 - Every kept P1 and P2 reaches the act list, whatever the judge marked it, a gate gap too.
 - A gate-gap P3 never reaches the act list: marked `act` or `defer` it is a follow-up, marked `reject` it is rejected.
 - A P1 that recurs on another head gets an escalation review, and its verdict is kept and reused.

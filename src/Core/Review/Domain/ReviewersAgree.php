@@ -13,15 +13,15 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class ReviewersAgree
 {
-    // Spans are consumed whole because "A B" and "A  B" name different literals, an escaped backtick first because it opens no span (CommonMark), Unicode mode because a nonbreaking space is prose white space too.
-    private const string ESCAPED_BACKTICK_OR_CODE_SPAN_OR_WHITE_SPACE = '/\\\\`|(`+)(?!`).*?(?<!`)\1(?!`)|\s+/su';
+    // Spans are consumed whole because "A B" and "A  B" name different literals, a backslash escape first because an escaped backtick opens no span while the backtick after an escaped backslash does (CommonMark), Unicode mode because a nonbreaking space is prose white space too.
+    private const string BACKSLASH_ESCAPE_OR_CODE_SPAN_OR_WHITE_SPACE = '/\\\\[\\\\`]|(`+)(?!`).*?(?<!`)\1(?!`)|\s+/su';
 
-    // One verdict agrees with itself, because a panel where one reviewer answered leaves the model nothing to reconcile.
     /**
      * @param list<Verdict> $verdicts
      */
     public function agree(array $verdicts, string $change): bool
     {
+        // One verdict agrees with itself, because a panel where one reviewer answered leaves the model nothing to reconcile.
         if ([] === $verdicts || array_any($verdicts, $this->needsTheModel(...))) {
             return false;
         }
@@ -91,7 +91,7 @@ final readonly class ReviewersAgree
     private function words(string $text): string
     {
         $words = preg_replace_callback(
-            self::ESCAPED_BACKTICK_OR_CODE_SPAN_OR_WHITE_SPACE,
+            self::BACKSLASH_ESCAPE_OR_CODE_SPAN_OR_WHITE_SPACE,
             static fn (array $match): string => str_contains('\\`', $match[0][0]) ? $match[0] : ' ',
             $text,
         );

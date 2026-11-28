@@ -184,6 +184,22 @@ final class ReviewersAgreeTest extends TestCase
         ], self::LITERALS));
     }
 
+    public function testFindingsThatDifferOnlyInWhiteSpaceInsideACodeSpanAfterAnEscapedBackslashAreNotShared(): void
+    {
+        self::assertFalse($this->agree([
+            $this->changes($this->finding('A \\\\`"A B"` in total is wrong.')),
+            $this->changes($this->finding('A \\\\`"A  B"` in total is wrong.')),
+        ], self::LITERALS));
+    }
+
+    public function testFindingsThatDifferOnlyInWhiteSpaceAfterAnEscapedBackslashAndAnEscapedBacktickAreShared(): void
+    {
+        self::assertTrue($this->agree([
+            $this->changes($this->finding('A \\\\\\`"A B"` in total is wrong.')),
+            $this->changes($this->finding('A \\\\\\`"A  B"` in total is wrong.')),
+        ], self::LITERALS));
+    }
+
     public function testFindingsThatDifferOnlyInANonbreakingSpaceOfTheProseAreShared(): void
     {
         self::assertTrue($this->agree([
