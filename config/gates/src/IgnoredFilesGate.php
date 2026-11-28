@@ -130,7 +130,7 @@ final readonly class IgnoredFilesGate implements Gate
         return false !== $workingTree && $this->cleaned($workingTree) === $this->cleaned($result->output);
     }
 
-    // Git drops the carriage return before each line break of a .gitignore, and its ident clean conversion collapses an expanded `$Id: ... $` to `$Id$`.
+    // Because git drops the carriage return before each line break of a .gitignore and its ident clean conversion collapses an expanded `$Id: ... $` to `$Id$`, neither changes the rules.
     private function cleaned(string $rules): string
     {
         return str_replace("\r\n", "\n", $rules)
