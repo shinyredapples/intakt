@@ -42,7 +42,7 @@ final readonly class FailedHeads
 
     public function backOff(string $project, OpenChange $head, Throwable $failure): void
     {
-        if (self::causedBy($failure, NewWorkHeld::class)) {
+        if ($this->causedBy($failure, NewWorkHeld::class)) {
             $this->waitForRoomOnTheDisk($project, $head);
 
             return;
@@ -96,7 +96,7 @@ final readonly class FailedHeads
 
     private function reportCauseOf(string $item, Throwable $failure): void
     {
-        if (self::causedBy($failure, ForgeCredentialsRefused::class)) {
+        if ($this->causedBy($failure, ForgeCredentialsRefused::class)) {
             $this->installWide->forgeCredentialsRefused($failure);
 
             return;
@@ -119,7 +119,7 @@ final readonly class FailedHeads
     /**
      * @param class-string<Throwable> $kind
      */
-    private static function causedBy(Throwable $failure, string $kind): bool
+    private function causedBy(Throwable $failure, string $kind): bool
     {
         for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
             if ($cause instanceof $kind) {

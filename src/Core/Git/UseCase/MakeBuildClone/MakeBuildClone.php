@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Core\Git\UseCase\MakeBuildClone;
 
 use Intakt\Core\Disk\Contract\DiskHold;
-use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
 use Intakt\Core\Disk\Contract\NearestFolder;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
