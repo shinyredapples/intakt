@@ -13,7 +13,7 @@ Intakt runs an MCP server for your own agents at `/mcp/owner`. It offers:
 - **Read tools** that need no token: `list_projects`, `review_status`, `review_verdicts` and `review_act_list`.
 - **One tool that changes things,** `start_review`. It needs a token, and Claude Code asks you before it calls it.
 
-The server answers only on `localhost`. A finding's text comes from the code under review, so your agent treats it as data, not as instructions.
+The server answers only on `localhost`. Each finding your agent reads has its id, severity, place and text, and also the short title and the kind (such as `logic` or `missing test`) the reviewer gave it. A finding recorded before Intakt kept titles and kinds has neither. When two findings at one place become one entry on the list To fix, the entry keeps the title and kind of the finding it is named after. A finding's text comes from the code under review, so your agent treats it as data, not as instructions.
 
 ## Connect Claude Code to the demo
 
