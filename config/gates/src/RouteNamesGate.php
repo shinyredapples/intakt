@@ -155,4 +155,3 @@ final class RouteNamesGate implements RunsTheChangesCode
         return $aliased;
     }
 }
-
