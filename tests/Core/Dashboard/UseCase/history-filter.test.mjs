@@ -316,3 +316,32 @@ test('a click or a typed key outside the toolbar changes nothing, and a page wit
     assert.deepEqual(shown(owner, cooled), [true, true]);
     assert.equal(page.none.textContent, '');
 });
+
+function focusEvent(page, inToolbar) {
+    const scrolls = [];
+    const target = {
+        closest: (selector) => (inToolbar && selector === '[data-history-filter]' ? page.toolbar : null),
+        scrollIntoView: (options) => scrolls.push(options),
+    };
+    page.listeners.focusin({ target });
+
+    return scrolls;
+}
+
+test('on a phone a control of the toolbar that takes focus is scrolled fully into view sideways', () => {
+    const { page } = historyOfAlphaAndBeta(true);
+
+    assert.deepEqual(focusEvent(page, true), [{ inline: 'nearest', block: 'nearest' }]);
+});
+
+test('on a wider screen a focused control of the toolbar is left where the browser put it', () => {
+    const { page } = historyOfAlphaAndBeta(false);
+
+    assert.deepEqual(focusEvent(page, true), []);
+});
+
+test('on a phone focus outside the toolbar scrolls nothing', () => {
+    const { page } = historyOfAlphaAndBeta(true);
+
+    assert.deepEqual(focusEvent(page, false), []);
+});

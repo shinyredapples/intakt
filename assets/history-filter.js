@@ -30,6 +30,12 @@ export function filterHistory(page, phone) {
             shared.dispatchEvent(new Event('change'));
         }
     });
+    page.addEventListener('focusin', (event) => {
+        // The browser scrolls a control that is only partly in view just when it is hidden entirely, so a chip or the input cut by the edge of the sideways-scrolling bar would keep a clipped focus ring.
+        if (phone.matches && event.target?.closest?.(TOOLBAR)) {
+            event.target.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
+        }
+    });
     page.addEventListener('intakt:project-shown', () => narrow(page, phone));
     // The shell's first run on a full load comes before this module, so its choice is read here once.
     narrow(page, phone);

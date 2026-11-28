@@ -20,7 +20,7 @@ Intakt has reviewed a dozen of your changes. A colleague asks whether the second
 - **Time to verdict:** the median time from the start of a round to the owl's call.
 - **Cost per pass:** the mean estimated cost of the rounds with a known price.
 
-A tile appears only when there is a figure for it, never as a made-up 0. Point at a label, or reach it with the Tab key, to read more.
+A tile appears only when there is a figure for it, never as a made-up 0. Point at a label, or reach it with the Tab key, to read more. Press Esc to close the explanation; focus stays on the label.
 
 ## The charts answer three questions
 
