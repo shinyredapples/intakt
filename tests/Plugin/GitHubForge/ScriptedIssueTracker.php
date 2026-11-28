@@ -21,6 +21,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Psr\Log\NullLogger;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Lock\LockFactory;
@@ -51,6 +52,9 @@ final class ScriptedIssueTracker
 
     // Answered instead of keeping the issue, because GitHub stores nothing for a create it refuses or cannot serve.
     public ?int $answerToAnUnstoredCreate = null;
+
+    // The connection drops while that answer's body is read, so the status is all the caller knows.
+    public bool $bodyOfAnUnstoredCreateLost = false;
 
     // Sent with that answer, so a test can make it a rate limit.
     /** @var list<string> */
@@ -177,6 +181,10 @@ final class ScriptedIssueTracker
      */
     private function created(array $options): ResponseInterface
     {
+        if (null !== $this->answerToAnUnstoredCreate && $this->bodyOfAnUnstoredCreateLost) {
+            return new MockResponse([new TransportException('connection dropped')], ['http_code' => $this->answerToAnUnstoredCreate]);
+        }
+
         if (null !== $this->answerToAnUnstoredCreate) {
             return new MockResponse('{"message":"Refused"}', ['http_code' => $this->answerToAnUnstoredCreate, 'response_headers' => $this->headersOfAnUnstoredCreate]);
         }

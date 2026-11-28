@@ -102,7 +102,6 @@ final readonly class PartIssueCalls
         try {
             $response = $this->calls->asInstallation($method, $path, $options);
             $status = $response->getStatusCode();
-            $stored = $response->getContent(false);
         } catch (ForgeRateLimited $limited) {
             // A refusal, because the pause is raised before anything is sent or for an answer of 403 or 429, and GitHub stored nothing either way.
             throw new WriteRefused($limited);
@@ -110,8 +109,15 @@ final readonly class PartIssueCalls
             throw $this->unreachableForWrite($failure::class);
         }
 
+        // Classified from the status alone, before the body is read, because a 4xx answer whose body is lost still says GitHub stored nothing.
         if ($status < 200 || $status >= 300) {
             throw $this->failedWith($status);
+        }
+
+        try {
+            $stored = $response->getContent(false);
+        } catch (ExceptionInterface $failure) {
+            throw $this->unreachableForWrite($failure::class);
         }
 
         return $this->answeredIssue($stored);

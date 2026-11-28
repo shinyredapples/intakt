@@ -331,6 +331,23 @@ final class GitHubTaskPartsTest extends TestCase
         self::assertSame([1, 1, 1], [$this->fileOnce($tracker), $this->fileOnce($tracker), count($tracker->filed())]);
     }
 
+    public function testARefusedCreateWhoseBodyIsLostIsFiledByTheNextCallExactlyOnce(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->answerToAnUnstoredCreate = 422;
+        $tracker->bodyOfAnUnstoredCreateLost = true;
+
+        try {
+            $this->fileOnce($tracker);
+            self::fail('A refused create was reported as filed.');
+        } catch (ForgeWriteFailed) {
+        }
+
+        $tracker->answerToAnUnstoredCreate = null;
+
+        self::assertSame([1, 1], [$this->fileOnce($tracker), count($tracker->filed())]);
+    }
+
     /**
      * @return iterable<string, array{int}>
      */
