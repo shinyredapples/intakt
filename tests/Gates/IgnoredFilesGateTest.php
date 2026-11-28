@@ -163,6 +163,28 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertSame(['"notes\n\"draft\".tmp": tracked, but .gitignore excludes it'], $findings);
     }
 
+    public function testAPathEndingInANewlineIsQuotedWithCEscapesInTheFullReport(): void
+    {
+        $sandbox = $this->repositoryIgnoring("report*\n");
+        $sandbox->write("report.tmp\n", "data\n");
+        $sandbox->git('add', '--force', "report.tmp\n");
+
+        $findings = $this->fullFindingsOf($sandbox->gateResult(new IgnoredFilesGate()));
+
+        self::assertSame(['"report.tmp\n": tracked, but .gitignore excludes it'], $findings);
+    }
+
+    public function testAPathWithARightToLeftOverrideIsQuotedWithOctalBytesInTheFullReport(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.tmp\n");
+        $sandbox->write("one\u{202E}owt.tmp", "data\n");
+        $sandbox->git('add', '--force', "one\u{202E}owt.tmp");
+
+        $findings = $this->fullFindingsOf($sandbox->gateResult(new IgnoredFilesGate()));
+
+        self::assertSame(['"one\342\200\256owt.tmp": tracked, but .gitignore excludes it'], $findings);
+    }
+
     public function testAPathWithAUnicodeNextLineIsQuotedWithOctalBytesInTheFullReport(): void
     {
         $sandbox = $this->repositoryIgnoring("*.tmp\n");

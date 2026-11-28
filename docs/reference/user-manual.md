@@ -494,7 +494,7 @@ To fix it, either:
 1. untrack the file and keep it on disk: `git rm --cached <path>`, then commit; or
 2. keep it tracked with a negated rule `!<path>` in `.gitignore`. This works only when no parent folder is excluded: under a folder rule such as `/.evidence/`, change the rule to `/.evidence/*` and add `!/.evidence/<file>`.
 
-A path with a line break or bytes that are not valid UTF-8 is shown quoted as git quotes it, for example `"report-\377.tmp"`.
+A path with a line break (also a trailing one), another control character, a Unicode line or paragraph separator, an invisible format character such as the right-to-left override, bytes that are not valid UTF-8, or a leading `"` is shown quoted as git quotes it, for example `"report-\377.tmp"`.
 
 ## When the `phpstan` gate reports a prompt message finding
 
