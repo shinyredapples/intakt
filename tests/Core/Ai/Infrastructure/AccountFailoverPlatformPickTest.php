@@ -181,7 +181,7 @@ final class AccountFailoverPlatformPickTest extends TestCase
 
     private function platform(AccountCooldowns $cooldowns): AccountFailoverPlatform
     {
-        $ranking = new MeasuredRoomRanking($this->holds,new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]), $this->picks);
+        $ranking = new MeasuredRoomRanking($this->holds, new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]), $this->picks);
 
         return new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->answering(Account::DEFAULT), 'team' => $this->answering('team')], $cooldowns, $this->clock, new NullLogger(), new NoPinnedProviderCooldowns(), $ranking);
     }

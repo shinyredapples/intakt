@@ -15,7 +15,6 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Exception\EntityManagerClosed;
 use Doctrine\ORM\Query\ResultSetMappingBuilder;
 use Doctrine\ORM\QueryBuilder;
-use LogicException;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -26,6 +25,7 @@ use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Ledger\Domain\EventRecord;
+use LogicException;
 use NoDiscard;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Uid\UuidV7;
@@ -87,7 +87,7 @@ final readonly class DoctrineLedger implements Ledger
         $mapping = new ResultSetMappingBuilder($manager);
         $mapping->addRootEntityFromClassMetadata(EventRecord::class, 'r');
         $platform = $manager->getConnection()->getDatabasePlatform();
-        $sql = sprintf('SELECT %s FROM %s r WHERE r.kind = :kind AND r.subject = :subject AND %s ORDER BY r.position DESC',$mapping->generateSelectClause(), $manager->getClassMetadata(EventRecord::class)->getTableName(), self::exactSubjectOn($platform));
+        $sql = sprintf('SELECT %s FROM %s r WHERE r.kind = :kind AND r.subject = :subject AND %s ORDER BY r.position DESC', $mapping->generateSelectClause(), $manager->getClassMetadata(EventRecord::class)->getTableName(), $this->exactSubjectOn($platform));
 
         /** @var list<EventRecord> $newest */
         $newest = $manager->createNativeQuery($platform->modifyLimitQuery($sql, 1), $mapping)->setParameters(['kind' => $kind->value, 'subject' => $subject])->getResult();
@@ -193,7 +193,7 @@ final readonly class DoctrineLedger implements Ledger
     }
 
     // Each platform the install supports spells a byte comparison its own way, and none ignores case.
-    private static function exactSubjectOn(AbstractPlatform $platform): string
+    private function exactSubjectOn(AbstractPlatform $platform): string
     {
         return match (true) {
             $platform instanceof SQLitePlatform => 'r.subject = :subject COLLATE BINARY',
