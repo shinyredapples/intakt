@@ -62,6 +62,11 @@ final class ClockedLedger implements Ledger
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind)));
     }
 
+    public function newestOfKindAbout(LedgerEventKind $kind, string $subject): ?RecordedEvent
+    {
+        return array_last(iterator_to_array($this->readOfKindAbout($kind, $subject), false));
+    }
+
     public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
     {
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind && $subject === $recorded->event->subject)));

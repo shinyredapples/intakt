@@ -22,6 +22,7 @@ use Intakt\Core\Budget\UseCase\ReplayDay\DayReplay;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptedStep;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptLineNotUnderstood;
 use Intakt\Tests\Core\Budget\HoldsInMemory;
+use Intakt\Tests\Core\Budget\PicksInMemory;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Watchdog\HaltsInMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -108,7 +109,7 @@ final class DayReplayTest extends TestCase
         $readings = new ReadingsInMemory($clock);
         $holds = new HoldsInMemory($clock);
         $guard = new BudgetGuard($holds, new CeilingStartGuard($readings, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]), new OutageWatch($readings, $clock, new EventDispatcher()), new HaltsInMemory());
-        $this->replay = new DayReplay($readings, $holds, $guard, new MeasuredRoomRanking($holds, new CeilingStartGuard($readings, $clock, ['five-hour' => 90.0, 'weekly' => 90.0])));
+        $this->replay = new DayReplay($readings, $holds, $guard, new MeasuredRoomRanking($holds, new CeilingStartGuard($readings, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]), new PicksInMemory()));
     }
 
     private function play(string $line): string

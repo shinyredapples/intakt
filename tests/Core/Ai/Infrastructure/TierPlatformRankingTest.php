@@ -23,6 +23,7 @@ use Intakt\Core\Budget\Domain\AccountRoom;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\MeasuredRoomRanking;
 use Intakt\Tests\Core\Budget\HoldsInMemory;
+use Intakt\Tests\Core\Budget\PicksInMemory;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -108,7 +109,7 @@ final class TierPlatformRankingTest extends TestCase
 
     private function accounts(Provider $provider): AccountFailoverPlatform
     {
-        $ranking = new MeasuredRoomRanking(new HoldsInMemory($this->clock), new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]));
+        $ranking = new MeasuredRoomRanking(new HoldsInMemory($this->clock), new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]), new PicksInMemory());
 
         return new AccountFailoverPlatform($provider, [Account::DEFAULT => MockPlatformFactory::createPlatform('answer')], new NoCooldowns(), $this->clock, new NullLogger(), new NoPinnedProviderCooldowns(), $ranking);
     }

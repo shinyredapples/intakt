@@ -65,4 +65,5 @@ enum LedgerEventKind: string
     case PartIssueCreated = 'part_issue_created';
     case TaskSplitPlanned = 'task_split_planned';
     case TaskSplit = 'task_split';
+    case AccountPicked = 'account_picked';
 }

@@ -9,6 +9,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\Mentions;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Override;
 
@@ -40,6 +41,11 @@ final class CountingLedger implements Ledger
         $this->readsOfKind[$kind->value] = ($this->readsOfKind[$kind->value] ?? 0) + 1;
 
         return $this->ledger->readOfKind($kind);
+    }
+
+    public function newestOfKindAbout(LedgerEventKind $kind, string $subject): ?RecordedEvent
+    {
+        return array_last(iterator_to_array($this->readOfKindAbout($kind, $subject), false));
     }
 
     public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents

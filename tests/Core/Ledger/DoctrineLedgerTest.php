@@ -72,6 +72,43 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertSame(['r1', 'r1'], array_map(static fn (RecordedEvent $event): ?string => $event->event->subject, $events));
     }
 
+    public function testTheNewestEventAboutASubjectIsTheLastOfThatKindAndSubjectAppended(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+
+        foreach ([[LedgerEventKind::AccountPicked, 'first', 'claude-code'], [LedgerEventKind::AccountPicked, 'other provider', 'codex'], [LedgerEventKind::AccountPicked, 'second', 'claude-code'], [LedgerEventKind::UsageRecorded, 'other kind', 'claude-code'], [LedgerEventKind::AccountPicked, 'no subject', null], [LedgerEventKind::AccountPicked, 'later provider', 'codex']] as [$kind, $payload, $subject]) {
+            self::assertTrue($ledger->append(new LedgerEvent($kind, $payload, $subject))->succeeded());
+        }
+
+        self::assertSame('second', $ledger->newestOfKindAbout(LedgerEventKind::AccountPicked, 'claude-code')?->event->payload);
+    }
+
+    public function testTheNewestEventAboutASubjectWithNoEventsIsNone(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, 'other kind', 'claude-code'))->succeeded());
+
+        self::assertNull($ledger->newestOfKindAbout(LedgerEventKind::AccountPicked, 'claude-code'));
+    }
+
+    public function testTheNewestEventAboutASubjectIsFetchedAsOneRow(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        foreach (['first', 'second', 'third'] as $payload) {
+            self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::AccountPicked, $payload, 'claude-code'))->succeeded());
+        }
+        $queries = self::getContainer()->get('doctrine.debug_data_holder');
+        self::assertInstanceOf(DebugDataHolder::class, $queries);
+        $queries->reset();
+
+        self::assertSame('third', $ledger->newestOfKindAbout(LedgerEventKind::AccountPicked, 'claude-code')?->event->payload);
+
+        $sql = array_column(array_merge(...array_values($queries->getData())), 'sql');
+        self::assertCount(1, $sql);
+        self::assertIsString($sql[0]);
+        self::assertMatchesRegularExpression('/ORDER BY .*position\S* DESC LIMIT 1/i', $sql[0]);
+    }
+
     public function testAReadAboutAPrefixOfAStoredSubjectReadsNothing(): void
     {
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');

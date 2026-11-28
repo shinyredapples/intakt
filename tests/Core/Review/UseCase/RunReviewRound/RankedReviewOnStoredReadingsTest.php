@@ -17,7 +17,9 @@ use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
+use Intakt\Core\Budget\Contract\AccountPick;
 use Intakt\Core\Budget\Contract\LeftOutAccount;
+use Intakt\Core\Budget\Contract\LeftOutCause;
 use Intakt\Core\Budget\Contract\RankedAccounts;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
 use Intakt\Core\Budget\Contract\Usage;
@@ -27,9 +29,12 @@ use Intakt\Core\Budget\Contract\WindowUse;
 use Intakt\Core\Budget\Domain\AccountRoom;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\MeasuredRoomRanking;
+use Intakt\Core\Budget\Infrastructure\AccountPicked;
 use Intakt\Core\Budget\Infrastructure\AccountReadingLock;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
+use Intakt\Core\Budget\Infrastructure\LedgerAccountPicks;
+use Intakt\Core\Budget\Infrastructure\PickedLeftOut;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\Fence;
@@ -87,6 +92,10 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[UsesClass(AccountRoom::class)]
 #[UsesClass(RankedAccounts::class)]
 #[UsesClass(LeftOutAccount::class)]
+#[UsesClass(LedgerAccountPicks::class)]
+#[UsesClass(AccountPicked::class)]
+#[UsesClass(PickedLeftOut::class)]
+#[UsesClass(AccountPick::class)]
 #[UsesClass(DoctrineMeasuredUse::class)]
 #[UsesClass(DoctrineHolds::class)]
 #[UsesClass(AccountReadingLock::class)]
@@ -132,6 +141,34 @@ final class RankedReviewOnStoredReadingsTest extends KernelTestCase
         self::assertEquals(2, $this->fixture->entities->getConnection()->fetchOne('SELECT COUNT(*) FROM budget_window_reading'));
     }
 
+    public function testARankingOnStoredReadingsIsRecordedAsAPickOfTheAccountWithRoomNamingTheLeftOutAccountsReset(): void
+    {
+        $this->store(Account::DEFAULT, 95.0, '+2 days');
+        $this->store('team', 20.0, '+2 days');
+
+        $pick = $this->recordedPick();
+
+        self::assertNotNull($pick);
+        self::assertEquals(new Account(Provider::ClaudeCode, 'team'), $pick->picked);
+        self::assertEquals([new LeftOutAccount(new Account(Provider::ClaudeCode, Account::DEFAULT), LeftOutCause::AtWeeklyCeiling, $this->fixture->clock->now()->modify('+2 days'))], $pick->leftOut);
+    }
+
+    public function testARankingWithEveryAccountAtAStoredCeilingIsRecordedAsNoPickNamingEachAccountsReset(): void
+    {
+        $this->store(Account::DEFAULT, 95.0, '+2 days');
+        $this->store('team', 95.0, '+3 hours');
+
+        $pick = $this->recordedPick();
+
+        self::assertNotNull($pick);
+        self::assertNull($pick->picked);
+        self::assertEquals([
+            new LeftOutAccount(new Account(Provider::ClaudeCode, Account::DEFAULT), LeftOutCause::AtWeeklyCeiling, $this->fixture->clock->now()->modify('+2 days')),
+            new LeftOutAccount(new Account(Provider::ClaudeCode, 'team'), LeftOutCause::AtWeeklyCeiling, $this->fixture->clock->now()->modify('+3 hours')),
+        ], $pick->leftOut);
+        self::assertEquals($this->fixture->clock->now()->modify('+3 hours'), $pick->earliestReset());
+    }
+
     public function testAReviewWhoseEveryAccountIsAtAStoredCeilingSendsNoCallAndWaitsForTheEarliestReset(): void
     {
         $this->store(Account::DEFAULT, 95.0, '+2 days');
@@ -169,7 +206,7 @@ final class RankedReviewOnStoredReadingsTest extends KernelTestCase
         $clock = $this->fixture->clock;
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'claude_code', 'model' => 'big']]]], []);
         $cooldowns = new AccountCooldownWindows(new ReadingsInMemory($clock), new ArrayAdapter(), new LockFactory(new InMemoryStore()), $clock, $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::ClaudeCode->value => [Account::DEFAULT, 'team']]);
-        $ranking = new MeasuredRoomRanking(new DoctrineHolds($this->fixture->entities, $clock), new CeilingStartGuard($this->measured, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]));
+        $ranking = $this->ranking();
         $platforms = [Account::DEFAULT => $this->answering(Account::DEFAULT), 'team' => $this->answering('team')];
         $accounts = new AccountFailoverPlatform(Provider::ClaudeCode, $platforms, $cooldowns, $clock, new NullLogger(), new NoPinnedProviderCooldowns(), $ranking);
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $accounts]), $cooldowns, new NullLogger());
@@ -180,6 +217,27 @@ final class RankedReviewOnStoredReadingsTest extends KernelTestCase
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $clock, $servers);
 
         return new AccountLimitedVendor($vendor, $resolver, $cooldowns);
+    }
+
+    // Recorded by the ranking itself, because the start that records a pick in AccountFailoverPlatform is not built yet, and this proves the row a ranking on the install's readings writes to its ledger.
+    private function recordedPick(): ?AccountPick
+    {
+        $ranking = $this->ranking();
+        $ranking->record(Provider::ClaudeCode, $ranking->rank([new Account(Provider::ClaudeCode, Account::DEFAULT), new Account(Provider::ClaudeCode, 'team')]));
+
+        return $this->picks()->latestOf(Provider::ClaudeCode);
+    }
+
+    private function ranking(): MeasuredRoomRanking
+    {
+        $clock = $this->fixture->clock;
+
+        return new MeasuredRoomRanking(new DoctrineHolds($this->fixture->entities, $clock), new CeilingStartGuard($this->measured, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]), $this->picks());
+    }
+
+    private function picks(): LedgerAccountPicks
+    {
+        return new LedgerAccountPicks($this->fixture->ledger(), $this->fixture->ledgerPayloads(), StoredSerializerFactory::create(), new NullLogger());
     }
 
     private function answering(string $name): PlatformInterface

@@ -17,6 +17,7 @@ use Intakt\Core\Budget\Domain\AccountRoom;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\MeasuredRoomRanking;
 use Intakt\Tests\Core\Budget\HoldsInMemory;
+use Intakt\Tests\Core\Budget\PicksInMemory;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -75,26 +76,29 @@ final class MeasuredRoomRankingTest extends TestCase
         self::assertEquals($this->clock->now()->modify('+1 hour'), $ranked->leftOut[0]->resetsAt);
     }
 
-    public function testAnAccountCoolingDownAtAFreshCeilingThatOutlastsItsHoldIsLeftOutUntilTheReset(): void
+    public function testAnAccountCoolingDownAtAFreshCeilingThatOutlastsItsHoldIsLeftOutAtTheCeilingUntilTheReset(): void
     {
         $this->both('first', $this->usage(10.0, 5), $this->usage(95.0, 60));
         $this->holds->coolDown(new Account(Provider::ClaudeCode, 'first'), $this->clock->now()->modify('+1 hour'));
 
         $ranked = $this->rank('first');
 
-        self::assertSame(LeftOutCause::CoolingDown, $ranked->leftOut[0]->cause);
+        self::assertSame(LeftOutCause::AtWeeklyCeiling, $ranked->leftOut[0]->cause);
         self::assertEquals($this->clock->now()->modify('+60 hours'), $ranked->leftOut[0]->resetsAt);
     }
 
-    public function testAnAccountWhoseHoldOutlastsItsFreshCeilingIsLeftOutUntilTheHoldEnds(): void
+    public function testAnAccountWhoseHoldOutlastsItsFreshCeilingIsLeftOutCoolingDownUntilTheHoldEnds(): void
     {
         $this->both('first', $this->usage(95.0, 2), $this->usage(20.0, 60));
         $this->holds->coolDown(new Account(Provider::ClaudeCode, 'first'), $this->clock->now()->modify('+3 hours'));
 
-        self::assertEquals($this->clock->now()->modify('+3 hours'), $this->rank('first')->leftOut[0]->resetsAt);
+        $ranked = $this->rank('first');
+
+        self::assertSame(LeftOutCause::CoolingDown, $ranked->leftOut[0]->cause);
+        self::assertEquals($this->clock->now()->modify('+3 hours'), $ranked->leftOut[0]->resetsAt);
     }
 
-    public function testAnAccountCoolingDownAtAFreshCeilingWithoutAResetHasNoKnownEnd(): void
+    public function testAnAccountCoolingDownAtAFreshCeilingWithoutAResetIsLeftOutAtTheCeilingWithNoKnownEnd(): void
     {
         $account = new Account(Provider::ClaudeCode, 'first');
         $this->readings->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(95.0, null)));
@@ -102,7 +106,7 @@ final class MeasuredRoomRankingTest extends TestCase
 
         $ranked = $this->rank('first');
 
-        self::assertSame(LeftOutCause::CoolingDown, $ranked->leftOut[0]->cause);
+        self::assertSame(LeftOutCause::AtShortWindowCeiling, $ranked->leftOut[0]->cause);
         self::assertNull($ranked->leftOut[0]->resetsAt);
     }
 
@@ -189,7 +193,7 @@ final class MeasuredRoomRankingTest extends TestCase
     {
         $this->both('team', $this->usage(10.0, 5), $this->usage(20.0, 100));
 
-        $ranked = new MeasuredRoomRanking($this->holds, $this->guard())->rank([new Account(Provider::Anthropic, 'key'), new Account(Provider::ClaudeCode, 'team')]);
+        $ranked = new MeasuredRoomRanking($this->holds, $this->guard(), new PicksInMemory())->rank([new Account(Provider::Anthropic, 'key'), new Account(Provider::ClaudeCode, 'team')]);
 
         self::assertSame(['claude_code.team', 'anthropic.key'], array_map(static fn (Account $account): string => $account->key(), $ranked->inOrder));
     }
@@ -236,7 +240,7 @@ final class MeasuredRoomRankingTest extends TestCase
 
     private function rank(string ...$names): RankedAccounts
     {
-        return new MeasuredRoomRanking($this->holds, $this->guard())->rank(array_values(array_map(static fn (string $name): Account => new Account(Provider::ClaudeCode, $name), $names)));
+        return new MeasuredRoomRanking($this->holds, $this->guard(), new PicksInMemory())->rank(array_values(array_map(static fn (string $name): Account => new Account(Provider::ClaudeCode, $name), $names)));
     }
 
     private function guard(): CeilingStartGuard
