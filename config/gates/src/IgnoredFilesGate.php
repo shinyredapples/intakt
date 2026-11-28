@@ -101,8 +101,6 @@ final readonly class IgnoredFilesGate implements Gate
     }
 
     /**
-     * Git does not read a .gitignore that is a symbolic link, so a staged link holds no rule to compare.
-     *
      * @param array<string, string> $tagged
      *
      * @return array<string, list<string>>
@@ -115,6 +113,7 @@ final readonly class IgnoredFilesGate implements Gate
             [$stage, $path] = explode("\t", $entry, 2);
             [$mode, $blob] = explode(' ', $stage);
 
+            // Git does not read a .gitignore that is a symbolic link, so a staged link holds no rule to compare.
             if (self::SYMLINK_MODE !== $mode && !$this->isMarked($tagged[$path] ?? '')) {
                 $blobs[$path][] = $blob;
             }
@@ -184,14 +183,6 @@ final readonly class IgnoredFilesGate implements Gate
     }
 
     /**
-     * @return list<string>
-     */
-    private function paths(string $output): array
-    {
-        return array_values(array_unique(array_filter(explode("\0", $output), static fn (string $path): bool => '' !== $path)));
-    }
-
-    /**
      * @param list<string> $paths
      *
      * @return list<array{string, string}>
@@ -204,6 +195,14 @@ final readonly class IgnoredFilesGate implements Gate
     private function isMarked(string $tag): bool
     {
         return self::SKIP_WORKTREE_TAG === $tag || ctype_lower($tag);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function paths(string $output): array
+    {
+        return array_values(array_unique(array_filter(explode("\0", $output), static fn (string $path): bool => '' !== $path)));
     }
 
     /**
