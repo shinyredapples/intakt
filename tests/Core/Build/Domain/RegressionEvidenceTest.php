@@ -233,6 +233,66 @@ final class RegressionEvidenceTest extends TestCase
         self::assertSame("<div>\n\x0B\n## Evidence\n\n- E1: shown\n\n## Evidence\n\n".self::LINES, $body);
     }
 
+    public function testAPreEndTagLineOnItsOwnIsParagraphTextSoTheHeadingBelowItIsRead(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("</pre>\n## Evidence\n\n- E1: shown");
+
+        self::assertSame("</pre>\n## Evidence\n\n- E1: shown\n\n".self::LINES, $body);
+    }
+
+    public function testASelfClosingPreLineOnItsOwnIsParagraphTextSoTheHeadingBelowItIsRead(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<PRE/>\n## Evidence\n\n- E1: shown");
+
+        self::assertSame("<PRE/>\n## Evidence\n\n- E1: shown\n\n".self::LINES, $body);
+    }
+
+    public function testATextareasOwnEndTagLineStartsNoBlockSoTheEvidenceHeadingBelowItGetsTheResults(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<textarea>\n</pre>\n</textarea>\n## Evidence\n\n- E1: shown");
+
+        self::assertSame("<textarea>\n</pre>\n</textarea>\n## Evidence\n\n- E1: shown\n\n".self::LINES, $body);
+    }
+
+    public function testAVerticalTabLineContinuesAParagraphSoASpanLineBelowItStartsNoBlock(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Paragraph\n\x0B\n<span>\n## Evidence");
+
+        self::assertSame("Paragraph\n\x0B\n<span>\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function endTagsWrittenOtherwise(): iterable
+    {
+        yield 'space before the bracket' => ['</textarea >'];
+        yield 'tab before the bracket' => ["</textarea\t>"];
+        yield 'upper case' => ['</TEXTAREA>'];
+    }
+
+    #[DataProvider('endTagsWrittenOtherwise')]
+    public function testAnOwnEndTagWrittenOtherwiseClosesTheElementSoNoSecondOneIsAppended(string $end): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<textarea>\nExample.\n</pre>\n".$end);
+
+        self::assertSame("<textarea>\nExample.\n</pre>\n".$end."\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testTheTrailingSpacesOfAnOpenFencesLastLineAreKeptBeforeItsCloser(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("```\nexample  \n");
+
+        self::assertSame("```\nexample  \n```\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testTheTrailingSpacesOfAnOpenFencesLastLineInsideTheEvidenceSectionAreKeptBeforeItsCloser(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\n```\nexample  \n");
+
+        self::assertSame("## Evidence\n\n```\nexample  \n```\n\n".self::LINES, $body);
+    }
+
     /**
      * @return iterable<string, array{string, string}>
      */

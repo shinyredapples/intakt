@@ -16,7 +16,9 @@ enum HtmlBlock
     case Tag;
     private const string RAW_NAMES = 'pre|script|style|textarea';
     private const string BLOCK_NAMES = 'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul';
-    private const string ATTRIBUTE = '\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:[^\s"\'=<>`]+|\'[^\']*\'|"[^"]*"))?';
+    // A vertical tab or form feed is not blank, because CommonMark counts only spaces and tabs as blank.
+    public const string BLANK = '/^[ \t]*$/';
+    private const string ATTRIBUTE ='\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:[^\s"\'=<>`]+|\'[^\']*\'|"[^"]*"))?';
 
     public static function opening(string $line): ?self
     {
@@ -37,14 +39,11 @@ enum HtmlBlock
 
     public function endsAt(string $line): bool
     {
-        $end = match ($this) {
+        $closer = $this->closer();
+
+        $end = null !== $closer ? '/'.preg_quote($closer, '/').'/' : match ($this) {
             self::Raw => '/<\/(?:'.self::RAW_NAMES.')>/i',
-            self::Comment => '/-->/',
-            self::Instruction => '/\?>/',
-            self::Declaration => '/>/',
-            self::CData => '/\]\]>/',
-            // A vertical tab or form feed keeps the block open, because CommonMark counts only spaces and tabs as blank.
-            self::Block, self::Tag => '/^[ \t]*$/',
+            default => self::BLANK,
         };
 
         return 1 === preg_match($end, $line);
@@ -77,7 +76,8 @@ enum HtmlBlock
             self::Declaration => '/^ {0,3}<![A-Za-z]/',
             self::CData => '/^ {0,3}<!\[CDATA\[/',
             self::Block => '/^ {0,3}<\/?(?:'.self::BLOCK_NAMES.')(?:[ \t]|\/?>|$)/i',
-            self::Tag => '/^ {0,3}(?:<[A-Za-z][A-Za-z0-9-]*(?:'.self::ATTRIBUTE.')*\s*\/?>|<\/[A-Za-z][A-Za-z0-9-]*\s*>)[ \t]*$/',
+            // The four kind 1 names are left out, because CommonMark reads a line holding only such a tag as paragraph text.
+            self::Tag => '/^ {0,3}(?!<\/?(?:'.self::RAW_NAMES.')(?![A-Za-z0-9-]))(?:<[A-Za-z][A-Za-z0-9-]*(?:'.self::ATTRIBUTE.')*\s*\/?>|<\/[A-Za-z][A-Za-z0-9-]*\s*>)[ \t]*$/i',
         };
     }
 }

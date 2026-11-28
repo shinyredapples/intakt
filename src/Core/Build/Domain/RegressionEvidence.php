@@ -27,14 +27,20 @@ final readonly class RegressionEvidence
         $evidence = $this->evidenceIn($headings);
 
         if (null === $evidence) {
-            return $this->joined(rtrim($body).$readable->closing(), "## Evidence\n\n".$this->resultLines(), '');
+            return $this->joined($this->closed($body, $readable->closing()), "## Evidence\n\n".$this->resultLines(), '');
         }
 
         $end = $this->endOf($evidence, $headings, count($lines));
         $kept = array_slice($lines, 0, $end);
 
         // The lines up to the section's end are read again, because an element left open there would hide the results even when the body closes it later.
-        return $this->joined(rtrim(implode("\n", $kept)).ReadableLines::of($kept)->closing(), $this->resultLines(), implode("\n", array_slice($lines, $end)));
+        return $this->joined($this->closed(implode("\n", $kept), ReadableLines::of($kept)->closing()), $this->resultLines(), implode("\n", array_slice($lines, $end)));
+    }
+
+    // Only line breaks go before a closer, because the trailing spaces of the last line are content of the code or block it closes.
+    private function closed(string $text, string $closing): string
+    {
+        return '' === $closing ? rtrim($text) : rtrim($text, "\n").$closing;
     }
 
     /**

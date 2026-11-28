@@ -48,7 +48,7 @@ final readonly class ReadableLines
         $next = $this->read($number, $line);
 
         // An end tag in code is rendered as text, so only one read as HTML closes the element.
-        if (null !== $next->openElement && !$this->isCode($next, $line) && false !== stripos($line, '</'.$next->openElement.'>')) {
+        if (null !== $next->openElement && !$this->isCode($next, $line) && 1 === preg_match('/<\/'.preg_quote($next->openElement, '/').'[ \t]*>/i', $line)) {
             return clone($next, ['openElement' => null]);
         }
 
@@ -174,7 +174,7 @@ final readonly class ReadableLines
      */
     private function paragraphAfter(array $paragraph, int $number, string $line): array
     {
-        if ('' === trim($line) || $this->isBreak($line)) {
+        if (1 === preg_match(HtmlBlock::BLANK, $line) || $this->isBreak($line)) {
             return [];
         }
 
