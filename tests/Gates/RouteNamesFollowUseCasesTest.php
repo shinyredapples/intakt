@@ -116,6 +116,43 @@ final class RouteNamesFollowUseCasesTest extends TestCase
         self::assertSame([], new RouteNamesFollowUseCases()->findingsIn($routes));
     }
 
+    public function testAControllerGivenAsAServiceIdIsRejectedWithTheNameOfItsServiceClass(): void
+    {
+        $routes = $this->routes(['dashboard_wrong' => 'dashboard.route_service_probe::__invoke']);
+        $rule = new RouteNamesFollowUseCases(['dashboard.route_service_probe' => 'Intakt\Core\Dashboard\UseCase\RouteServiceProbe\RouteServiceProbeController']);
+
+        self::assertStringContainsString('must be named "dashboard_route_service_probe"', implode("\n", $rule->findingsIn($routes)));
+    }
+
+    public function testAControllerGivenAsAServiceIdIsAcceptedUnderTheUseCaseNameOfItsServiceClass(): void
+    {
+        $routes = $this->routes(['dashboard_play_demo' => ['dashboard.play_demo', '__invoke']]);
+
+        self::assertSame([], new RouteNamesFollowUseCases(['dashboard.play_demo' => PlayDemoController::class])->findingsIn($routes));
+    }
+
+    public function testAControllerWrittenInLowerCaseIsRejectedWithTheNameOfItsDeclaredClass(): void
+    {
+        $routes = $this->routes(['dashboard_wrong' => strtolower(PlayDemoController::class).'::__invoke']);
+        $rule = new RouteNamesFollowUseCases([PlayDemoController::class => PlayDemoController::class]);
+
+        self::assertStringContainsString('must be named "dashboard_play_demo"', implode("\n", $rule->findingsIn($routes)));
+    }
+
+    public function testAControllerWrittenInLowerCaseIsAcceptedUnderTheUseCaseNameOfItsDeclaredClass(): void
+    {
+        $routes = $this->routes(['dashboard_play_demo' => strtolower(PlayDemoController::class)]);
+
+        self::assertSame([], new RouteNamesFollowUseCases([PlayDemoController::class => PlayDemoController::class])->findingsIn($routes));
+    }
+
+    public function testAControllerInAnotherCaseThanAnyKnownClassIsRejected(): void
+    {
+        $routes = $this->routes(['dashboard_wrong' => 'intakt\Core\Dashboard\UseCase\RouteCaseProbe\RouteCaseProbeController::__invoke']);
+
+        self::assertStringContainsString('write the class in the case it is declared in', implode("\n", new RouteNamesFollowUseCases()->findingsIn($routes)));
+    }
+
     public function testAControllerOutsideTheIntaktNamespaceIsIgnored(): void
     {
         $routes = $this->routes(['_wdt' => 'web_profiler.controller.profiler::toolbarAction', 'mcp_endpoint' => 'Mcp\Server\Controller']);

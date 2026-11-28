@@ -47,6 +47,33 @@ final class RouteNamesGateTest extends SandboxTestCase
         self::assertStringContainsString('Route "dashboard_show_demo" is served by Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController, so it must be named "dashboard_play_demo"', $run->findingsOf('routes'));
     }
 
+    public function testARouteWhoseControllerIsAServiceIdFailsTheGate(): void
+    {
+        $sandbox = $this->kernelSandbox();
+        $kernel = (string) file_get_contents($sandbox->root.'/src/Kernel.php');
+        $kernel = str_replace("'http_method_override' => false]);", "'http_method_override' => false]);\n        \$container->services()->set('dashboard.play_demo', 'Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController')->public();", $kernel);
+        $served = str_replace("->controller('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController')", "->controller('dashboard.play_demo::__invoke')", $kernel);
+        self::assertStringContainsString("set('dashboard.play_demo'", $served);
+        self::assertStringContainsString("controller('dashboard.play_demo::__invoke')", $served);
+        $sandbox->write('src/Kernel.php', $served);
+
+        $run = $sandbox->check('--only=routes');
+
+        self::assertTrue($run->failed('routes'), $run->output());
+        self::assertStringContainsString('Route "dashboard_show_demo" is served by Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController, so it must be named "dashboard_play_demo"', $run->findingsOf('routes'));
+    }
+
+    public function testAConsoleThatPrintsNoServiceListFailsTheGate(): void
+    {
+        $sandbox = $this->kernelSandbox();
+        $sandbox->write('bin/console', "<?php\necho in_array('debug:router', \$argv, true) ? '{}' : 'no services';\n");
+
+        $run = $sandbox->check('--only=routes');
+
+        self::assertTrue($run->failed('routes'), $run->output());
+        self::assertStringContainsString('debug:container printed no service list in JSON', $run->findingsOf('routes'));
+    }
+
     public function testARouteRenamedAfterAnEarlierRunIsReadFromTheChangedKernel(): void
     {
         $sandbox = $this->kernelSandbox();
