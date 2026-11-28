@@ -14,4 +14,5 @@ enum BuildStep: string
     case HandBackCheck = 'hand_back_check';
     case PrePushCheck = 'pre_push_check';
     case Push = 'push';
+    case PullRequest = 'pull_request';
 }

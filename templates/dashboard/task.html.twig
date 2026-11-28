@@ -17,7 +17,7 @@
             Stopped at {{ last.step }}: {{ last.failure }}
             {%- elseif last.outcome == 'asked' -%}
             Parked at {{ last.step }}: the build asked a question.
-            {%- elseif last.step == final -%}
+            {%- elseif last.final -%}
             Every step passed.
             {%- else -%}
             Last recorded step: {{ last.step }} passed.

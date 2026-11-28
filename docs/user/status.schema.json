@@ -86,7 +86,7 @@
                                     "required": ["task", "step", "outcome", "failure", "ended_at", "question"],
                                     "properties": {
                                         "task": {"type": "string", "minLength": 1},
-                                        "step": {"enum": ["task", "mirror", "clone", "build_job", "hand_back_check", "pre_push_check", "push"]},
+                                        "step": {"enum": ["task", "mirror", "clone", "build_job", "hand_back_check", "pre_push_check", "push", "pull_request"]},
                                         "outcome": {"enum": ["passed", "failed", "asked"]},
                                         "failure": {"type": ["string", "null"]},
                                         "ended_at": {"$ref": "#/definitions/moment"},

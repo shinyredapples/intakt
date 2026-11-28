@@ -120,11 +120,13 @@ final class PushToAStubbedGitHubTest extends TestCase
     {
         $this->github->openPulls = [['number' => 7, 'head' => ['ref' => PushScenario::BRANCH], 'base' => ['ref' => 'main'], 'user' => ['login' => 'intakt[bot]']]];
 
-        $pushed = $this->scenario->pushThrough($this->github->opener())->push($this->scenario->request());
-
+        $push = $this->scenario->pushThrough($this->github->opener());
+        $pushed = $push->push($this->scenario->request());
         self::assertInstanceOf(PushedBranch::class, $pushed);
+        $change = $push->openChange($this->scenario->request(), $pushed);
+
         self::assertSame($pushed->head, $this->scenario->remoteTip());
-        self::assertSame('https://github.com/acme/widgets/pull/7', $pushed->change->value);
+        self::assertSame('https://github.com/acme/widgets/pull/7', $change->value);
         self::assertSame(['PATCH https://api.github.com/repos/acme/widgets/pulls/7'], array_column($this->github->writes, 0));
         self::assertSame('created', $this->scenario->ledger->payloadOf(LedgerEventKind::ChangeOpened)['opening']);
     }

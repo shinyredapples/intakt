@@ -33,6 +33,7 @@ use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PullRequestStep;
 use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteRefused;
@@ -75,6 +76,7 @@ use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
+use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
@@ -118,6 +120,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(MissingEvidenceItems::class)]
 #[UsesClass(PullRequestTextVerdict::class)]
 #[UsesClass(PushStep::class)]
+#[UsesClass(PullRequestStep::class)]
 #[UsesClass(ParkedTasks::class)]
 #[UsesClass(PushRemoteCheck::class)]
 #[UsesClass(PushRemoteRefused::class)]
@@ -179,12 +182,27 @@ final class BuildTaskCommandTest extends TestCase
 
     private ?string $configuredRepository = null;
 
+    private ?ForgeWriteFailed $openingFailure = null;
+
     public function testItPrintsEachPassedStepAndTheEscapedTitle(): void
     {
         $tester = $this->execute(new InMemoryLedger(), self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => '7', ...$this->options]);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
-        self::assertStringContainsString("task passed\nmirror passed\nclone passed\nbuild_job passed\nhand_back_check passed\npre_push_check passed\npush passed\ntitle Task 7", $tester->getDisplay());
+        self::assertStringContainsString("task passed\nmirror passed\nclone passed\nbuild_job passed\nhand_back_check passed\npre_push_check passed\npush passed\npull_request passed\ntitle Task 7", $tester->getDisplay());
+    }
+
+    public function testItExitsWithFailureWhenThePullRequestCannotBeOpenedAndPrintsItsReason(): void
+    {
+        $this->openingFailure = new ForgeWriteFailed('the forge refused the pull request (HTTP 422)');
+        $ledger = new InMemoryLedger();
+
+        $tester = $this->execute($ledger, self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => '7', ...$this->options]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString("push passed\ntitle Task 7", $tester->getDisplay());
+        self::assertStringContainsString('pull_request failed: the forge refused the pull request (HTTP 422)', $tester->getDisplay());
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
     }
 
     public function testItExitsWithFailureOnARemoteOutsideTheConfiguredRepositoryAndReportsNoStepAsPassed(): void
@@ -339,7 +357,7 @@ final class BuildTaskCommandTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->pushed = new PushedBranch(str_repeat('b', 40), new ChangeId('https://github.com/acme/alpha/pull/1'));
+        $this->pushed = new PushedBranch(str_repeat('b', 40));
         $this->checked = new AcceptedHandBack(null, str_repeat('a', 40), 0);
         $this->checkedBeforePush = new CheckJobOutcome(CheckVerdict::Passed, log: "ok\n");
         $this->folder = sys_get_temp_dir().'/intakt-build-task-command-'.bin2hex(random_bytes(6));
@@ -393,6 +411,8 @@ final class BuildTaskCommandTest extends TestCase
         $files = new HandBackFile($checkout, new Filesystem(), $this->folder.'/hand-backs');
         $branches = self::createStub(BranchPush::class);
         $branches->method('push')->willReturn($this->pushed);
+        $opening = $branches->method('openChange');
+        $this->openingFailure instanceof ForgeWriteFailed ? $opening->willThrowException($this->openingFailure) : $opening->willReturn(new ChangeId('https://github.com/acme/alpha/pull/1'));
 
         // The parked-task table alone, because the parked run's output is proven on the install's own database in BuildTaskParksOnSqliteTest.
         $parked = new ParkedTasks(ParkedTaskTable::inMemory(), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
@@ -408,7 +428,7 @@ final class BuildTaskCommandTest extends TestCase
         $umbrellas = self::createStub(SplitUmbrellas::class);
         $umbrellas->method('of')->willReturn(new UmbrellaTasks());
 
-        return new BuildTask(new TaskAdmission($issues, $umbrellas), $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($mirror, $texts), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck($repositories), new LockFactory(new InMemoryStore()));
+        return new BuildTask(new TaskAdmission($issues, $umbrellas), $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($mirror, $texts), new PushStep($branches, $checkout), $parked, new PullRequestStep($branches, $checkout), $ledger, new PushRemoteCheck($repositories), new LockFactory(new InMemoryStore()));
     }
 
     /**

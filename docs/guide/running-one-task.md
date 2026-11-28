@@ -26,11 +26,11 @@ The command prints `outcome ready`, `outcome parked`, `outcome invalid` (the ans
 
 ## The steps
 
-The command runs seven steps, always in this order:
+The command runs eight steps, always in this order:
 
 ```mermaid
 flowchart LR
-  t[Task] --> m[Mirror] --> c[Clone] --> b[Build job] --> h[Hand-back check] --> p[Pre-push check] --> u[Push]
+  t[Task] --> m[Mirror] --> c[Clone] --> b[Build job] --> h[Hand-back check] --> p[Pre-push check] --> u[Push] --> r[Pull request]
 ```
 
 1. **Task:** it reads the issue from GitHub. A pull request of that number is no task.
@@ -39,7 +39,8 @@ flowchart LR
 4. **Build job:** the Developer works on the issue in a container of its own and hands back its commits and the pull request text.
 5. **Hand-back check:** Intakt checks what came back: only new commits on the task's branch, nothing that rewrites history, no secrets.
 6. **Pre-push check:** it runs the project's checks on the work once more, in a fresh container, merged with the latest main. For a `bug` task, once those checks pass and only when the work adds, changes or renames a test, it then also tries to run those tests twice, once on the code as it was before the fix and once on the fixed code, and records how both runs ended (a run that cannot start has no result): a real regression test fails before the fix and passes after it. If the work adds no test, or its new test already passes before the fix, the test proves nothing: the step fails with that reason and nothing is pushed, the same as when a check is red.
-7. **Push:** it signs the commits with its own key, pushes the branch and opens (or updates) the pull request.
+7. **Push:** it signs the commits with its own key and pushes the branch.
+8. **Pull request:** it opens the branch's pull request as Intakt's GitHub App, or updates the one it opened before. When a later run of the same task already wrote the pull request, this run leaves it alone and stops here, so an older text never replaces a newer one.
 
 ## Where it stops
 
@@ -60,6 +61,6 @@ Every step writes one line to the **ledger**, Intakt's permanent record, with th
 php bin/console intakt:ledger:events
 ```
 
-Each line shows when it was written, its id, its kind and its details; the step lines are the ones of kind `build_step_ended`. The push writes a few lines of its own just before its step line (`push_intended`, `branch_pushed` or `push_refused`, `change_intended`, `change_opened`).
+Each line shows when it was written, its id, its kind and its details; the step lines are the ones of kind `build_step_ended`. The push writes a few lines of its own just before its step line (`push_intended`, then `branch_pushed` or `push_refused`), and so does the pull request step (`change_intended`, then `change_opened`).
 
 You don't have to read the ledger to see where a task is: `php bin/console intakt:status` shows the last step of each task's latest run (for a task parked on a question, `build_job` as `asked`), and the dashboard's page for the task (`/tasks/<project>/<issue number>`) shows every step of its latest run, the run whose `task` step was recorded last, even while an older run of the same task is still writing steps ([a tour of the dashboard](a-tour-of-the-dashboard.md)). Steps recorded by an older Intakt carry no run id, so for those the page starts a new run at each `task` step, at a step that comes after a failed one and at a step that does not come later than the one before: it never shows a step twice or a step after a failed one, but two runs of that time that overlapped can still look like one.

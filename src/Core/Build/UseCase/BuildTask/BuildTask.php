@@ -24,6 +24,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\RegressionRuns;
 use Intakt\Core\Job\Contract\JobRefused;
@@ -57,6 +58,7 @@ final readonly class BuildTask
         private PullRequestTextCheck $textChecks,
         private PushStep $pushes,
         private ParkedTasks $parkedTasks,
+        private PullRequestStep $pullRequests,
         private Ledger $ledger,
         private PushRemoteCheck $remoteCheck,
         private LockFactory $locks,
@@ -142,6 +144,7 @@ final readonly class BuildTask
                 BuildStep::HandBackCheck => $this->handBacks->check($request, $this->bundleIn($results)),
                 BuildStep::PrePushCheck => $this->prePushCheck($request, $task, $results),
                 BuildStep::Push => $this->push($request, $results),
+                BuildStep::PullRequest => $this->pullRequest($request, $results),
             };
 
             // A local of this run, never a property, because a worker keeps the service between runs.
@@ -219,7 +222,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|PushedBranch|string|null> $results
      */
     private function bundleIn(array $results): string
     {
@@ -228,7 +231,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|PushedBranch|string|null> $results
      */
     private function builtIn(array $results): BuildJobOutcome
     {
@@ -239,7 +242,7 @@ final readonly class BuildTask
 
     // The mirror again first, because main can move while the build job runs and the check merges the branch with current main; the text last, so only a head that would otherwise be pushed counts toward its one go-back. The regression runs of a passed check are the step's result, for the push.
     /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|PushedBranch|string|null> $results
      */
     private function prePushCheck(BuildTaskRequest $request, ListedIssue $task, array $results): RegressionRuns|string|null
     {
@@ -266,7 +269,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|PushedBranch|string|null> $results
      */
     private function textIn(array $results): string
     {
@@ -280,22 +283,46 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|PushedBranch|string|null> $results
      */
-    private function push(BuildTaskRequest $request, array $results): ?string
+    private function push(BuildTaskRequest $request, array $results): PushedBranch|string
+    {
+        $change = $this->changeOf($results);
+
+        return $change instanceof AcceptedChange ? $this->pushes->outcomeOf($request, $change) : $change;
+    }
+
+    // With the branch the push step returned, because the pull request belongs to exactly the head this run pushed.
+    /**
+     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|PushedBranch|string|null> $results
+     */
+    private function pullRequest(BuildTaskRequest $request, array $results): ?string
+    {
+        $change = $this->changeOf($results);
+        $pushed = $results[BuildStep::Push->value] ?? null;
+
+        // Always, because a run stops at its first failed step, so the pull request step runs only after a push that returned its branch; an assertion, not a branch, keeps the class under its complexity limit.
+        assert($pushed instanceof PushedBranch);
+
+        return $change instanceof AcceptedChange ? $this->pullRequests->failureOf($request, $change, $pushed) : $change;
+    }
+
+    /**
+     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|PushedBranch|string|null> $results
+     */
+    private function changeOf(array $results): AcceptedChange|string
     {
         $accepted = $results[BuildStep::HandBackCheck->value] ?? null;
         $text = $this->textIn($results);
 
-        // Never otherwise, because the push runs only after a hand-back check that accepted the head.
+        // Never otherwise, because the push and the pull request run only after a hand-back check that accepted the head.
         if (!$accepted instanceof AcceptedHandBack) {
-            throw new LogicException('the push runs only after an accepted hand-back');
+            throw new LogicException('the push and the pull request run only after an accepted hand-back');
         }
 
         $runs = $results[BuildStep::PrePushCheck->value] ?? null;
-        $changeText = $this->changeTextOf($text, $runs instanceof RegressionRuns ? $runs : null);
 
-        return $changeText instanceof ChangeText ? $this->pushes->failureOf($request, $accepted, $changeText) : $changeText;
+        return $this->changeOfText($accepted, $text, $runs instanceof RegressionRuns ? $runs : null);
     }
 
     // The run ends at the build job without recording its step, because park() records it as asked in the transaction that stores the question.
@@ -313,7 +340,7 @@ final readonly class BuildTask
     }
 
     // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed; a job that built after a stop still names its cause.
-    private function endOf(BuildStep $step, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null $result): EndedStep
+    private function endOf(BuildStep $step, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|PushedBranch|string|null $result): EndedStep
     {
         if ($result instanceof EndedStep) {
             return $result;
@@ -323,12 +350,12 @@ final readonly class BuildTask
     }
 
     // The title on the first line and the body after it, as BuilderPrompt asks the builder to write them; fixed words for a text without a title, because the forge opens no pull request without one.
-    private function changeTextOf(string $text, ?RegressionRuns $runs): ChangeText|string
+    private function changeOfText(AcceptedHandBack $accepted, string $text, ?RegressionRuns $runs): AcceptedChange|string
     {
         $title = explode("\n", $text, 2)[0];
         $body = $this->bodyOf($text);
 
-        return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), $runs instanceof RegressionRuns ? new RegressionEvidence($runs)->addedTo($body) : $body);
+        return '' === trim($title) ? 'the pull request text has no title on its first line' : new AcceptedChange($accepted, new ChangeText(trim($title), $runs instanceof RegressionRuns ? new RegressionEvidence($runs)->addedTo($body) : $body));
     }
 
     // Asked before the build job runs, because a bug without its four parts has no failing test to write first and the builder would guess it.

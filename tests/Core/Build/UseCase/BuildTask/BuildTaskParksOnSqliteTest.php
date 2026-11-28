@@ -44,6 +44,7 @@ use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PullRequestStep;
 use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
@@ -116,6 +117,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(PrePushCheck::class)]
 #[UsesClass(PullRequestTextCheck::class)]
 #[UsesClass(PushStep::class)]
+#[UsesClass(PullRequestStep::class)]
 #[UsesClass(DoctrineLedger::class)]
 #[UsesClass(EventRecord::class)]
 #[UsesClass(Issues::class)]
@@ -356,7 +358,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $umbrellas = self::createStub(SplitUmbrellas::class);
         $umbrellas->method('of')->willReturn(new UmbrellaTasks());
 
-        return new BuildTask(new TaskAdmission($reads, $umbrellas), $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($checkout, self::createStub(PullRequestTextRound::class)), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()));
+        return new BuildTask(new TaskAdmission($reads, $umbrellas), $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($checkout, self::createStub(PullRequestTextRound::class)), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, new PullRequestStep(self::createStub(BranchPush::class), $checkout), $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()));
     }
 
     private function question(): string

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\PushBranch;
 
+use Closure;
 use Intakt\Core\Git\Contract\BranchNotPushed;
 use Intakt\Core\Git\Contract\BranchPush;
 use Intakt\Core\Git\Contract\BranchPushRequest;
@@ -39,10 +40,39 @@ final readonly class PushBranch implements BranchPush
     #[NoDiscard('a merge-main outcome has to go back to the builder, and a refused push to its caller')]
     public function push(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush
     {
+        return $this->locked($request, $this->pushed(...));
+    }
+
+    // The same lock as the push, so no push of the branch runs between the read of the remote branch and the pull request write.
+    #[Override]
+    public function openChange(BranchPushRequest $request, PushedBranch $pushed): ChangeId
+    {
+        return $this->locked($request, fn (BranchPushRequest $request): ChangeId => $this->changeOfPushed($request, $pushed));
+    }
+
+    private function pushed(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush
+    {
+        $this->refuseRewrittenRemote($request);
+        $main = $this->mainOf($request->repository);
+        $head = $this->signed->of($request->repository, $request->accepted, $main);
+        $this->signed->verify($request->repository, $head, $main);
+
+        return $this->notLanded($request, $head, $main) ?? new PushedBranch($head, $this->records->changeRecordsOf($request));
+    }
+
+    /**
+     * @template T
+     *
+     * @param Closure(BranchPushRequest): T $work
+     *
+     * @return T
+     */
+    private function locked(BranchPushRequest $request, Closure $work): mixed
+    {
         $lock = $this->lockedBranch($request);
 
         try {
-            $outcome = $this->pushed($request);
+            $outcome = $work($request);
             // Boundary: releases the branch lock on any failure and rethrows it, because a lock left held would refuse the branch's later pushes until it expires.
         } catch (Throwable $failure) {
             $this->releaseAfter($lock);
@@ -71,20 +101,24 @@ final readonly class PushBranch implements BranchPush
         return $acquired ? $lock : throw BranchNotPushed::because('another push of this branch is running');
     }
 
-    private function pushed(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush
+    // The head the push returned, never signed again: a main that gained one of the accepted commits since signs to another commit, while the remote still holds the pushed one.
+    private function changeOfPushed(BranchPushRequest $request, PushedBranch $pushed): ChangeId
     {
         $this->refuseRewrittenRemote($request);
-        $main = $this->mainOf($request->repository);
-        $head = $this->signed->of($request->repository, $request->accepted, $main);
-        $this->signed->verify($request->repository, $head, $main);
+        $head = $pushed->head;
 
-        $notLanded = $this->notLanded($request, $head, $main);
-
-        if (null !== $notLanded) {
-            return $notLanded;
+        if (!$this->records->hasPushed($request, $head)) {
+            throw BranchNotPushed::because(sprintf('this head of %s is not pushed yet, so no pull request is opened', $request->branch));
         }
 
-        return new PushedBranch($head, $this->openedChange($request, $head, $main));
+        $this->refuseAMovedBranch($request, $head, $this->remoteTip($request));
+
+        // Refused when another run wrote the branch's pull request after this push returned, because that run came later and its text is the newer one, also for the same head.
+        if ($this->records->changeRecordsOf($request) !== $pushed->changeRecords) {
+            throw BranchNotPushed::because(sprintf('a later run wrote the pull request of %s since this head was pushed', $request->branch));
+        }
+
+        return $this->openedChange($request, $head, $this->mainOf($request->repository));
     }
 
     // The failure of the push is what its caller needs, and a lock left held expires with its time to live.
@@ -148,8 +182,9 @@ final readonly class PushBranch implements BranchPush
         $remoteTip = $this->remoteTip($request);
 
         if ($this->records->hasPushed($request, $head)) {
-            // Refused before the pull request step, because a late retry of an earlier head must not overwrite the text of the head that replaced it.
-            return $remoteTip === $head ? null : throw BranchNotPushed::because(sprintf('the remote branch %s moved since this head was pushed', $request->branch));
+            $this->refuseAMovedBranch($request, $head, $remoteTip);
+
+            return null;
         }
 
         // Not when the remote already holds this signed head: a crash after the push left only its record missing, and a main that conflicts since cannot take the push back.
@@ -180,6 +215,14 @@ final readonly class PushBranch implements BranchPush
         }
 
         return null;
+    }
+
+    // Refused before the pull request is written, because a late retry of an earlier head must not overwrite the text of the head that replaced it.
+    private function refuseAMovedBranch(BranchPushRequest $request, string $head, ?string $remoteTip): void
+    {
+        if ($remoteTip !== $head) {
+            throw BranchNotPushed::because(sprintf('the remote branch %s moved since this head was pushed', $request->branch));
+        }
     }
 
     // The merge is tried in the repository's object store only, so a conflict leaves nothing on the remote and no ref anywhere.

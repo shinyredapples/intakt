@@ -137,7 +137,10 @@ final class PushToTheLocalGitForgeTest extends TestCase
         $refused = $this->scenario->push()->push($this->request());
         $this->scenario->checkOutMainIn($this->forge);
 
-        $pushed = $this->scenario->push()->push($this->request());
+        $push = $this->scenario->push();
+        $pushed = $push->push($this->request());
+        self::assertInstanceOf(PushedBranch::class, $pushed);
+        $push->openChange($this->request(), $pushed);
 
         self::assertInstanceOf(RefusedPush::class, $refused);
         self::assertInstanceOf(PushedBranch::class, $pushed);

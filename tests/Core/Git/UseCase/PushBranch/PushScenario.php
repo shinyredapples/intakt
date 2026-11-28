@@ -35,6 +35,7 @@ final readonly class PushScenario
     public RecordingLedger $ledger;
     public RecordingChangeOpening $changes;
     public string $head;
+    public LockFactory $locks;
     private string $folder;
 
     public function __construct()
@@ -45,6 +46,8 @@ final readonly class PushScenario
         $this->key = self::generateKey($this->folder.'/orchestrator');
         $this->ledger = new RecordingLedger();
         $this->changes = new RecordingChangeOpening();
+        // One store for every PushBranch of the scenario, because a test holds the lock a push takes to show what waits for it.
+        $this->locks = new LockFactory(new InMemoryStore());
 
         $this->repository = new TemporaryRepository();
         $this->repository->commitFile('a.txt', "one\n");
@@ -112,7 +115,7 @@ final readonly class PushScenario
     {
         $git = new BranchGit(new HardenedGit(), new GuardedRun());
 
-        return new PushBranch($git, new SignedCommits($git, $key ?? $this->signingKey($this->key)), new PushRecords($this->ledger), $this->changes, new LockFactory(new InMemoryStore()));
+        return new PushBranch($git, new SignedCommits($git, $key ?? $this->signingKey($this->key)), new PushRecords($this->ledger), $this->changes, $this->locks);
     }
 
     // Through another lock store than the in-memory one, because a store can fail where memory cannot.

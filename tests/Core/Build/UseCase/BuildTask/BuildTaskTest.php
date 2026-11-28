@@ -49,6 +49,7 @@ use Intakt\Core\Build\UseCase\BuildTask\ParkedTaskNotCleared;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushResult;
+use Intakt\Core\Build\UseCase\BuildTask\PullRequestStep;
 use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteRefused;
@@ -158,6 +159,7 @@ use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
@@ -167,6 +169,7 @@ use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ParkedTaskTable;
+use Intakt\Tests\Core\Build\ReadBackLedger;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Core\Disk\ControlledFreeSpaceReader;
 use Intakt\Tests\Core\Git\RecordingClock;
@@ -233,6 +236,8 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(OpenListItems::class)]
 #[UsesClass(ParagraphEnd::class)]
 #[CoversClass(PushStep::class)]
+#[CoversClass(PullRequestStep::class)]
+#[UsesClass(ForgeWriteFailed::class)]
 #[UsesClass(ParkedTasks::class)]
 #[UsesClass(PushRemoteCheck::class)]
 #[UsesClass(PushRemoteRefused::class)]
@@ -299,6 +304,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(GitCall::class)]
 #[UsesClass(Issues::class)]
 #[UsesClass(ScriptedJobRunner::class)]
+#[UsesClass(ReadBackLedger::class)]
 #[UsesClass(RunBuildJob::class)]
 #[UsesClass(RecordedBuildStops::class)]
 #[UsesClass(BuildJobEndFailed::class)]
@@ -449,7 +455,7 @@ final class BuildTaskTest extends TestCase
         self::assertNull($this->stepsIn($ledger)[0]['failure'] ?? null);
     }
 
-    public function testATaskWhoseStepsAllPassEndsWithTheBranchPushedSignedFromTheCheckedHead(): void
+    public function testATaskWhoseStepsAllPassEndsWithTheBranchPushedSignedFromTheCheckedHeadAndAPullRequest(): void
     {
         $this->runner = $this->committingRunner();
         $ledger = new InMemoryLedger();
@@ -457,14 +463,14 @@ final class BuildTaskTest extends TestCase
         $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
 
         self::assertFalse($outcome->failed());
-        self::assertSame(BuildStep::Push, $outcome->last);
-        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob, BuildStep::HandBackCheck, BuildStep::PrePushCheck, BuildStep::Push], $outcome->passedSteps());
+        self::assertSame(BuildStep::PullRequest, $outcome->last);
+        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob, BuildStep::HandBackCheck, BuildStep::PrePushCheck, BuildStep::Push, BuildStep::PullRequest], $outcome->passedSteps());
         self::assertSame('Task 7', $outcome->task?->title);
-        self::assertSame(['task', 'mirror', 'clone', 'build_job', 'hand_back_check', 'pre_push_check', 'push'], array_column($this->stepsIn($ledger), 'step'));
-        self::assertSame(array_fill(0, 7, 'passed'), array_column($this->stepsIn($ledger), 'outcome'));
+        self::assertSame(['task', 'mirror', 'clone', 'build_job', 'hand_back_check', 'pre_push_check', 'push', 'pull_request'], array_column($this->stepsIn($ledger), 'step'));
+        self::assertSame(array_fill(0, 8, 'passed'), array_column($this->stepsIn($ledger), 'outcome'));
         self::assertSame('7', $ledger->payloads()[0]['task']);
-        self::assertNull($this->stepsIn($ledger)[6]['failure']);
-        self::assertSame([LedgerEventKind::PullRequestTextPassed, LedgerEventKind::BuildStepEnded, LedgerEventKind::PushIntended, LedgerEventKind::BranchPushed, LedgerEventKind::ChangeIntended, LedgerEventKind::ChangeOpened, LedgerEventKind::BuildStepEnded], array_slice($ledger->kinds(), 5));
+        self::assertNull($this->stepsIn($ledger)[7]['failure']);
+        self::assertSame([LedgerEventKind::PullRequestTextPassed, LedgerEventKind::BuildStepEnded, LedgerEventKind::PushIntended, LedgerEventKind::BranchPushed, LedgerEventKind::BuildStepEnded, LedgerEventKind::ChangeIntended, LedgerEventKind::ChangeOpened, LedgerEventKind::BuildStepEnded], array_slice($ledger->kinds(), 5));
         self::assertFileExists($this->clone.'/a.txt');
         self::assertStringEqualsFile($this->clone.'/b.txt', 'two');
         self::assertSame('', $this->inClone('status', '--porcelain'));
@@ -485,7 +491,7 @@ final class BuildTaskTest extends TestCase
 
         $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
 
-        self::assertSame([BuildStep::Push, null], [$outcome->last, $outcome->failure]);
+        self::assertSame([BuildStep::PullRequest, null], [$outcome->last, $outcome->failure]);
         self::assertSame(['alpha:8'], $this->parkedRows->fetchFirstColumn("SELECT project || ':' || task FROM build_parked_task"));
     }
 
@@ -515,7 +521,7 @@ final class BuildTaskTest extends TestCase
 
         $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
 
-        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob, BuildStep::HandBackCheck, BuildStep::PrePushCheck, BuildStep::Push], $outcome->passedSteps());
+        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob, BuildStep::HandBackCheck, BuildStep::PrePushCheck, BuildStep::Push, BuildStep::PullRequest], $outcome->passedSteps());
         self::assertSame("Build task 7\n", $this->git(['log', '-1', '--format=%s', 'feat/task'], $this->remote->path));
         self::assertNull($this->stops->causeFor($stopped), 'the build job did not read the recorded cause');
     }
@@ -652,7 +658,7 @@ final class BuildTaskTest extends TestCase
 
         self::assertSame(BuildStep::PrePushCheck, $first->last);
         self::assertFalse($outcome->failed(), (string) $outcome->failure);
-        self::assertSame(BuildStep::Push, $outcome->last);
+        self::assertSame(BuildStep::PullRequest, $outcome->last);
         self::assertSame([LedgerEventKind::PullRequestTextSentBack, LedgerEventKind::PullRequestTextToReviewers], $this->textLedger->kinds());
         self::assertSame("Build task 7\n", $this->git(['log', '-1', '--format=%s', 'feat/task'], $this->remote->path));
         self::assertSame(1, $this->changes->opened);
@@ -753,6 +759,24 @@ final class BuildTaskTest extends TestCase
         self::assertSame(LedgerEventKind::BuildStepEnded, array_last($ledger->kinds()));
         self::assertNull($this->remoteTip());
         self::assertSame(0, $this->changes->calls);
+    }
+
+    public function testAFailureAtThePullRequestStepEndsThereWithItsRecordedOutcomeAfterThePush(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->changes->during = static fn () => throw new ForgeWriteFailed('the forge refused the pull request (HTTP 422)');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PullRequest, $outcome->last);
+        self::assertSame('the forge refused the pull request (HTTP 422)', $outcome->failure);
+        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob, BuildStep::HandBackCheck, BuildStep::PrePushCheck, BuildStep::Push], $outcome->passedSteps());
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'passed', 'passed', 'passed', 'failed'], array_column($this->stepsIn($ledger), 'outcome'));
+        self::assertSame(['pull_request', 'the forge refused the pull request (HTTP 422)'], [$this->stepsIn($ledger)[7]['step'], $this->stepsIn($ledger)[7]['failure']]);
+        self::assertSame([LedgerEventKind::PushIntended, LedgerEventKind::BranchPushed, LedgerEventKind::BuildStepEnded, LedgerEventKind::ChangeIntended, LedgerEventKind::BuildStepEnded], array_slice($ledger->kinds(), 7));
+        self::assertNotNull($this->remoteTip());
+        self::assertSame(0, $this->changes->opened);
     }
 
     public function testThePrePushCheckRunsTheGatesStepsOnTheMirrorAndTheBundleInTheProjectsImage(): void
@@ -1252,7 +1276,7 @@ final class BuildTaskTest extends TestCase
 
         $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7, ['intakt', 'feature'], ['body' => self::BUG_BODY])])->run($this->request(7, $this->remote->path));
 
-        self::assertSame(BuildStep::Push, $outcome->last);
+        self::assertSame(BuildStep::PullRequest, $outcome->last);
         self::assertSame('', $this->changes->text?->body);
     }
 
@@ -1862,10 +1886,11 @@ final class BuildTaskTest extends TestCase
 
         $texts = new PullRequestTextCheck($checkout, new RoutePullRequestText(new PullRequestTextRoutes($this->textLedger ?? $ledger, $this->textLocks ?? $this->locks)));
 
+        $branches = $this->branchPush($ledger);
         $umbrellas = self::createStub(SplitUmbrellas::class);
         $umbrellas->method('of')->willReturnCallback(fn (string $project): UmbrellaTasks => 'alpha' === $project ? $this->umbrellas : new UmbrellaTasks());
 
-        return new BuildTask(new TaskAdmission($issues, $umbrellas), $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, $this->regressionTests ?? new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
+        return new BuildTask(new TaskAdmission($issues, $umbrellas), $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, $this->regressionTests ?? new NoRegressionTests(), new NullLogger()), $texts, new PushStep($branches, $checkout), $parked, new PullRequestStep($branches, $checkout), $ledger, new PushRemoteCheck($configured), $this->locks);
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
@@ -1875,7 +1900,7 @@ final class BuildTaskTest extends TestCase
         $file = $this->mirrors.'-key';
         $key = new SigningKey(is_file($file) ? $file : PushScenario::generateKey($file), new Filesystem(), new GuardedRun());
 
-        return new PushBranch($branches, new SignedCommits($branches, $key), new PushRecords($ledger), $this->changes, new LockFactory(new InMemoryStore()));
+        return new PushBranch($branches, new SignedCommits($branches, $key), new PushRecords(new ReadBackLedger($ledger)), $this->changes, new LockFactory(new InMemoryStore()));
     }
 
     private function checkoutIn(string $directory): GitBuildCheckout

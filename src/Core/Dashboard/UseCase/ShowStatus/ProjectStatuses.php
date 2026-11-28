@@ -104,7 +104,7 @@ final readonly class ProjectStatuses
     }
 
     /**
-     * @param list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}> $steps
+     * @param list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}> $steps
      *
      * @return array<string, list<array<string, mixed>>>
      */

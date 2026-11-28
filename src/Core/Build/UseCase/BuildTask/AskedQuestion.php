@@ -7,6 +7,7 @@ namespace Intakt\Core\Build\UseCase\BuildTask;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
+use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\RegressionRuns;
 
@@ -19,7 +20,7 @@ final readonly class AskedQuestion
     ) {
     }
 
-    public static function in(BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null $result): ?self
+    public static function in(BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|PushedBranch|string|null $result): ?self
     {
         if ($result instanceof BuildQuestion) {
             return new self($result);
