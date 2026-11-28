@@ -124,7 +124,7 @@ final readonly class ParkedTasks
      */
     private function endedWithTheEvents(BuildRun $run): bool
     {
-        if (!$this->appended(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload(BuildStep::BuildJob, BuildStepOutcome::Asked, null)))) {
+        if (!$this->appended(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload(new EndedStep(BuildStep::BuildJob, BuildStepOutcome::Asked))))) {
             return false;
         }
 

@@ -25,15 +25,16 @@ final readonly class BuildRun
     }
 
     // Because the task's title and body and a parked question are untrusted text, the payload names the task by its number only.
-    public function stepPayload(BuildStep $step, BuildStepOutcome $outcome, ?string $failure): string
+    public function stepPayload(EndedStep $ended): string
     {
         return json_encode([
             'project' => $this->project,
             'task' => (string) $this->task,
             'run' => $this->id,
-            'step' => $step->value,
-            'outcome' => $outcome->value,
-            'failure' => $failure,
+            'step' => $ended->step->value,
+            'outcome' => $ended->outcome->value,
+            'failure' => $ended->failure,
+            'stop_cause' => $ended->stopCause?->value,
         ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
