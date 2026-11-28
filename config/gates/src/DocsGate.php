@@ -30,7 +30,7 @@ final readonly class DocsGate implements Gate
         $list = DocsRatchetList::fromJson((string) file_get_contents($file));
 
         if (!$list instanceof DocsRatchetList) {
-            return GateResult::failedBecause($this->name(), DocsRatchetList::PATH.': malformed, expected '.DocsRatchetList::SHAPE.' with each page a path ending in .md and each count a positive whole number');
+            return GateResult::failedBecause($this->name(), DocsRatchetList::PATH.': malformed, expected '.DocsRatchetList::SHAPE.' with the cleanup issue as #<number>, each page a path ending in .md and each count a positive whole number');
         }
 
         return $this->checked($workspace, $list);

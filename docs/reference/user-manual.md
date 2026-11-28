@@ -493,7 +493,7 @@ A new PHPStan rule can be switched on before the code is clean: the violations i
 
 The `docs` gate keeps the documentation readable. A paragraph in `README.md` or under `docs/` may hold at most 80 words, and a page under `docs/user/` or `docs/guide/` at most 1500 words. A finding names the file, the line for a paragraph, and the limit, for example `docs/guide/glossary.md:12: paragraph of 95 words, over the limit of 80 words per paragraph; split it or cut words`.
 
-Paragraphs and pages that were already too long are listed in `ratchet/docs.json`. That list may only shrink. Editing a listed paragraph makes it new, so it must then meet the limit, and so does a copy of a listed paragraph on the same page. When a listed entry is no longer needed, or a page got shorter than its listed count, the gate asks you to remove the entry or lower the count. Deleting the list fails; an empty list is valid.
+Paragraphs and pages that were already too long are listed in `ratchet/docs.json`. That list may only shrink, and it names the issue that cleans it up. Changing the words of a listed paragraph makes it new, so it must then meet the limit, and so does a copy of a listed paragraph on the same page; rewrapping its lines keeps the allowance. When a listed entry is no longer needed, or a page got shorter than its listed count, the gate asks you to remove the entry or lower the count. Deleting the list fails; an empty list is valid.
 
 A paragraph is listed by a hash of its text after each run of whitespace is collapsed to one space, so rewrapping lines or changing spacing keeps its allowance, and any other change to the words loses it.
 

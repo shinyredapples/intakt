@@ -186,7 +186,7 @@ final class DocsGateTest extends SandboxTestCase
     {
         $sandbox = $this->emptySandbox();
         $sandbox->write('README.md', "Short documentation.\n");
-        $sandbox->write('ratchet/docs.json', '{"paragraphs": {}, "pages": {}}');
+        $sandbox->write('ratchet/docs.json', '{"cleanup": "#1", "paragraphs": {}, "pages": {}}');
 
         self::assertSame([], $sandbox->gateResult($this->gate())->findings);
     }
@@ -194,7 +194,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testAnEmptyListFailsOnAnOversizedParagraph(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('ratchet/docs.json', '{"paragraphs": {}, "pages": {}}');
+        $sandbox->write('ratchet/docs.json', '{"cleanup": "#1", "paragraphs": {}, "pages": {}}');
 
         $findings = $sandbox->gateResult($this->gate())->findings;
 
@@ -262,7 +262,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testANumericPageKeyMakesTheListMalformed(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('ratchet/docs.json', '{"paragraphs": {}, "pages": {"1": 100}}');
+        $sandbox->write('ratchet/docs.json', '{"cleanup": "#1", "paragraphs": {}, "pages": {"1": 100}}');
 
         $findings = $sandbox->gateResult($this->gate())->findings;
 
@@ -273,7 +273,7 @@ final class DocsGateTest extends SandboxTestCase
     public function testAParagraphKeyWithATrailingNewlineMakesTheListMalformed(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('ratchet/docs.json', '{"paragraphs": {"README.md": {"0123456789abcdef\n": 81}}, "pages": {}}');
+        $sandbox->write('ratchet/docs.json', '{"cleanup": "#1", "paragraphs": {"README.md": {"0123456789abcdef\n": 81}}, "pages": {}}');
 
         $findings = $sandbox->gateResult($this->gate())->findings;
 
@@ -290,7 +290,7 @@ final class DocsGateTest extends SandboxTestCase
         $findings = $sandbox->gateResult($this->gate())->findings;
 
         self::assertCount(1, $findings);
-        self::assertStringStartsWith('ratchet/docs.json: malformed, expected {"paragraphs": {"<page>.md": {"<16 hex key>": <words>}}, "pages": {"<page>.md": <words>}}', $findings[0]);
+        self::assertStringStartsWith('ratchet/docs.json: malformed, expected {"cleanup": "#<issue>", "paragraphs": {"<page>.md": {"<16 hex key>": <words>}}, "pages": {"<page>.md": <words>}}', $findings[0]);
     }
 
     /**
@@ -298,27 +298,31 @@ final class DocsGateTest extends SandboxTestCase
      */
     public static function malformedLists(): array
     {
-        $paragraphs = '"paragraphs": {"docs/a.md": {"0123456789abcdef": 90}}';
+        $paragraphs = '"cleanup": "#1", "paragraphs": {"docs/a.md": {"0123456789abcdef": 90}}';
 
         return [
             'not JSON' => ['{"paragraphs":'],
             'not an object' => ['[1, 2]'],
             'no pages' => ['{'.$paragraphs.'}'],
             'an unknown key' => ['{'.$paragraphs.', "pages": {}, "summaries": {}}'],
-            'a numeric page key in paragraphs' => ['{"paragraphs": {"7": {"0123456789abcdef": 90}}, "pages": {}}'],
-            'a page key that is not Markdown' => ['{"paragraphs": {}, "pages": {"docs/a.txt": 1600}}'],
-            'a key that is not 16 hex characters' => ['{"paragraphs": {"docs/a.md": {"0123456789ABCDEF": 90}}, "pages": {}}'],
-            'a count that is not a number' => ['{"paragraphs": {}, "pages": {"docs/user/a.md": "1600"}}'],
-            'a count of zero' => ['{"paragraphs": {}, "pages": {"docs/user/a.md": 0}}'],
-            'a page without keys' => ['{"paragraphs": {"docs/a.md": {}}, "pages": {}}'],
-            'keys that are a list' => ['{"paragraphs": {"docs/a.md": [90]}, "pages": {}}'],
+            'a numeric page key in paragraphs' => ['{"cleanup": "#1", "paragraphs": {"7": {"0123456789abcdef": 90}}, "pages": {}}'],
+            'a page key that is not Markdown' => ['{"cleanup": "#1", "paragraphs": {}, "pages": {"docs/a.txt": 1600}}'],
+            'a key that is not 16 hex characters' => ['{"cleanup": "#1", "paragraphs": {"docs/a.md": {"0123456789ABCDEF": 90}}, "pages": {}}'],
+            'a count that is not a number' => ['{"cleanup": "#1", "paragraphs": {}, "pages": {"docs/user/a.md": "1600"}}'],
+            'a count of zero' => ['{"cleanup": "#1", "paragraphs": {}, "pages": {"docs/user/a.md": 0}}'],
+            'a page without keys' => ['{"cleanup": "#1", "paragraphs": {"docs/a.md": {}}, "pages": {}}'],
+            'keys that are a list' => ['{"cleanup": "#1", "paragraphs": {"docs/a.md": [90]}, "pages": {}}'],
+            'no cleanup issue' => ['{"paragraphs": {}, "pages": {}}'],
+            'a cleanup issue without its hash' => ['{"cleanup": "4053", "paragraphs": {}, "pages": {}}'],
+            'a cleanup issue that is a number' => ['{"cleanup": 4053, "paragraphs": {}, "pages": {}}'],
+            'a cleanup issue of zero' => ['{"cleanup": "#0", "paragraphs": {}, "pages": {}}'],
         ];
     }
 
     public function testAJsonListInPlaceOfAnObjectMakesTheListMalformed(): void
     {
         $sandbox = $this->listedTree();
-        $sandbox->write('ratchet/docs.json', '{"paragraphs": {"'.self::LISTED_PAGE.'": {"'.$this->key($this->words(90, 'listed')).'": 90}}, "pages": []}');
+        $sandbox->write('ratchet/docs.json', '{"cleanup": "#1", "paragraphs": {"'.self::LISTED_PAGE.'": {"'.$this->key($this->words(90, 'listed')).'": 90}}, "pages": []}');
 
         $findings = $sandbox->gateResult($this->gate())->findings;
 
@@ -350,10 +354,11 @@ final class DocsGateTest extends SandboxTestCase
 
     public function testAListedKeyOfOnlyDigitsIsRead(): void
     {
-        $list = DocsRatchetList::fromJson('{"paragraphs": {"docs/a.md": {"1234567890123456": 90}}, "pages": {}}');
+        $list = DocsRatchetList::fromJson('{"cleanup": "#1", "paragraphs": {"docs/a.md": {"1234567890123456": 90}}, "pages": {}}');
 
         self::assertInstanceOf(DocsRatchetList::class, $list);
         self::assertSame(90, $list->paragraphCeiling('docs/a.md', '1234567890123456'));
+        self::assertSame('#1', $list->cleanup);
     }
 
     public function testAStaleKeyFailsWhileTheTargetBranchHasNoGate(): void
@@ -543,7 +548,7 @@ final class DocsGateTest extends SandboxTestCase
      */
     private function listJson(array $paragraphs, array $pages = []): string
     {
-        return json_encode(['paragraphs' => (object) $paragraphs, 'pages' => (object) $pages], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        return json_encode(['cleanup' => '#1', 'paragraphs' => (object) $paragraphs, 'pages' => (object) $pages], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
     }
 
     private function key(string $text): string

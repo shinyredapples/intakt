@@ -10,10 +10,11 @@ use stdClass;
 final readonly class DocsRatchetList
 {
     public const string PATH = 'ratchet/docs.json';
-    public const string SHAPE = '{"paragraphs": {"<page>.md": {"<16 hex key>": <words>}}, "pages": {"<page>.md": <words>}}';
+    public const string SHAPE = '{"cleanup": "#<issue>", "paragraphs": {"<page>.md": {"<16 hex key>": <words>}}, "pages": {"<page>.md": <words>}}';
 
     private const string KEY = '/\A[0-9a-f]{16}\z/';
-    private const array SECTIONS = ['pages', 'paragraphs'];
+    private const string CLEANUP_ISSUE = '/\A#[1-9][0-9]*\z/';
+    private const array SECTIONS = ['cleanup', 'pages', 'paragraphs'];
     private const int DEPTH = 4;
 
     // Because PHP turns a key of only digits into an integer, a listed paragraph key may come back as one.
@@ -22,6 +23,7 @@ final readonly class DocsRatchetList
      * @param array<string, int>                    $pages
      */
     private function __construct(
+        public string $cleanup,
         public array $paragraphs,
         public array $pages,
     ) {
@@ -41,10 +43,16 @@ final readonly class DocsRatchetList
             return null;
         }
 
+        // Because every ratchet list names its one open cleanup issue (docs/design/04-constraints.md), a list without one is malformed.
+        $cleanup = $decoded['cleanup'];
         $paragraphs = self::paragraphsOf(self::fieldsOf($decoded['paragraphs']));
         $pages = self::countsOf(self::fieldsOf($decoded['pages']));
 
-        return null === $paragraphs || null === $pages ? null : new self($paragraphs, $pages);
+        if (!is_string($cleanup) || 1 !== preg_match(self::CLEANUP_ISSUE, $cleanup) || null === $paragraphs || null === $pages) {
+            return null;
+        }
+
+        return new self($cleanup, $paragraphs, $pages);
     }
 
     public function paragraphCeiling(string $page, string $key): ?int
