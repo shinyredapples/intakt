@@ -8,6 +8,7 @@ use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
+use Intakt\Core\Job\Contract\JobWatch;
 use NoDiscard;
 
 final readonly class ContainerJobRunner implements JobRunner
@@ -24,7 +25,7 @@ final readonly class ContainerJobRunner implements JobRunner
 
     // The lock is held from before the container exists until it is gone, so a sweep never takes a living job for an orphan.
     #[NoDiscard('the cause and the output are only reported through the result')]
-    public function run(JobSpec $spec): JobResult
+    public function run(JobSpec $spec, ?JobWatch $watch = null): JobResult
     {
         $lock = $this->locks->of($spec->id);
 
@@ -33,20 +34,21 @@ final readonly class ContainerJobRunner implements JobRunner
         }
 
         try {
-            return $this->runAlone($spec);
+            return $this->runAlone($spec, $watch);
         } finally {
             $lock->release();
         }
     }
 
     // Leftovers of a crashed orchestrator are removed before each start, so the next job repairs what the crash left.
-    private function runAlone(JobSpec $spec): JobResult
+    private function runAlone(JobSpec $spec, ?JobWatch $watch): JobResult
     {
         $this->orphans->removeAll($spec->id);
         $directory = $this->outputs->prepare($spec->id);
 
         try {
-            $ended = $this->containers->runToEnd($spec, $directory);
+            $live = $watch instanceof JobWatch ? new LiveOutputWatch($watch, $this->outputs, $directory) : null;
+            $ended = $this->containers->runToEnd($spec, $directory, $live);
             $this->recordStartCheck($spec, $ended);
             $this->ledger->jobEnded($spec->id, $ended->end);
 

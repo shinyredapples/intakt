@@ -120,6 +120,12 @@ final readonly class DockerEngine
         $this->send('POST', sprintf('containers/%s/kill', $container))->accepting(204, 409);
     }
 
+    // USR1 to the job's first process, which the build script traps to end the builder's session only; a 409 or 404 is accepted, because the job ended meanwhile.
+    public function endSession(string $container): void
+    {
+        $this->send('POST', sprintf('containers/%s/kill', $container), ['query' => ['signal' => 'USR1']])->accepting(204, 404, 409);
+    }
+
     // A 404 is accepted, because it means the container is gone already, which is what the removal wanted; v removes the anonymous volumes an image declares with it.
     public function remove(string $container): void
     {

@@ -72,7 +72,7 @@ final class BuildScriptTest extends TestCase
 
         self::assertSame("Build the task.\n", (string) file_get_contents($this->history->folder.'/input'));
         self::assertSame(
-            ['-p', '--model', 'claude-opus-5-5', '--max-turns', '7', '--output-format', 'json', '--dangerously-skip-permissions', '--settings', '{"env":{"BASH_DEFAULT_TIMEOUT_MS":"1800000","BASH_MAX_TIMEOUT_MS":"1800000"}}'],
+            ['-p', '--model', 'claude-opus-5-5', '--max-turns', '7', '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions', '--settings', '{"env":{"BASH_DEFAULT_TIMEOUT_MS":"1800000","BASH_MAX_TIMEOUT_MS":"1800000"}}'],
             explode("\n", trim((string) file_get_contents($this->history->folder.'/arguments'))),
         );
     }
@@ -183,6 +183,36 @@ final class BuildScriptTest extends TestCase
         self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
         self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
         self::assertStringContainsString("claude cut after 3 seconds, its commits are kept\n", $this->outputFile('build.log'));
+    }
+
+    public function testAUsr1ToTheBuildScriptEndsTheSessionAndTheScriptStillBundlesItsCommits(): void
+    {
+        // The stand-in's parent is the script, and its sleep would outlast the test's time limit, so a script that did not end the session fails the test by timing out.
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            printf 'feat: build the task\n' > PR.md
+            kill -s USR1 "$PPID"
+            sleep 60
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+        self::assertFileExists($this->output.'/pull-request.md');
+        self::assertStringContainsString("claude stopped on the progress rule, its commits are kept\n", $this->outputFile('build.log'));
+        self::assertStringNotContainsString('claude cut after', $this->outputFile('build.log'));
+    }
+
+    public function testASessionThatEndsOnItsOwnIsNotLoggedAsStopped(): void
+    {
+        $this->givenTheCliRecordsThatItRan();
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertStringNotContainsString('stopped on the progress rule', $this->outputFile('build.log'));
     }
 
     public function testATermReachingTheWatchdogAfterItsKillWasSentStillCountsAsACut(): void

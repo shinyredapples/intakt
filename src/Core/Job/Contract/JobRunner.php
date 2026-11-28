@@ -15,5 +15,5 @@ interface JobRunner
      * @throws JobEventNotRecorded
      */
     #[NoDiscard('the cause and the output are only reported through the result')]
-    public function run(JobSpec $spec): JobResult;
+    public function run(JobSpec $spec, ?JobWatch $watch = null): JobResult;
 }

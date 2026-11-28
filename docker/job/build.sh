@@ -4,7 +4,7 @@
 # Copies the build clone's branches into TMPDIR, runs Claude Code there with the prompt on its input, then bundles the branch's new commits.
 # Each of the session's tool calls may run up to <tool time limit seconds>, so the builder's own bin/check ends inside its call instead of going to the background.
 # The builder's bin/check runs <gates at once> gates at the same time, a count the orchestrator hands over only when it is below what bin/check picks from the job's limits; when it is empty, INTAKT_GATE_SLOTS is left as the job's environment has it (unset unless the image sets it), so bin/check uses the job's limits (its CPUs and memory) to size its gates at once itself.
-# The session ends at its turn limit or when the allowance is used up, and the script outlives it, so what it committed before is still bundled.
+# The session ends at its turn limit, when the allowance is used up or on a USR1 from the orchestrator (its progress rule), and the script outlives it, so what it committed before is still bundled.
 # Writes build.log, handback.bundle (only when the branch has new commits), pull-request.md (only when PR.md is a regular file) and question.json (only when QUESTION.json is a regular file) into INTAKT_JOB_OUTPUT.
 set -u
 
@@ -16,6 +16,22 @@ turns="$5"
 allowance="$6"
 gates="$7"
 tool_time_limit="$8"
+
+# USR1 is how the orchestrator's progress rule ends the session; it ends the session only, never this script, so the commits are still bundled below.
+# The stop is kept in a variable and not a file, because the builder can write any file; a builder that sends the signal itself only ends its own session.
+# Trapped before anything starts, because the first process of a container ignores a signal it has no handler for.
+session=''
+session_reaped=''
+stopped=''
+signalled=''
+end_session() {
+    signalled=1
+    [ -n "$session" ] && [ -z "$session_reaped" ] || return 0
+    stopped=1
+    kill -s KILL -- "-$session" 2>/dev/null
+    return 0
+}
+trap end_session USR1
 
 output="${INTAKT_JOB_OUTPUT:-/output}"
 clone="${TMPDIR:-/work}/clone"
@@ -145,7 +161,8 @@ BASH_MAX_TIMEOUT_MS="$BASH_DEFAULT_TIMEOUT_MS"
 export BASH_DEFAULT_TIMEOUT_MS BASH_MAX_TIMEOUT_MS
 time_limit_settings="$(printf '{"env":{"BASH_DEFAULT_TIMEOUT_MS":"%s","BASH_MAX_TIMEOUT_MS":"%s"}}' "$BASH_DEFAULT_TIMEOUT_MS" "$BASH_MAX_TIMEOUT_MS")"
 # In a session of its own, so the processes it leaves running can be ended with it.
-setsid claude -p --model "$model" --max-turns "$turns" --output-format json --dangerously-skip-permissions --settings "$time_limit_settings" < "$prompt" >> "$log" 2>&1 &
+# The stream form, because its events show the tokens, the edits and the test runs while the session runs, which the orchestrator's progress rule reads; the single JSON result shows them only at the end.
+setsid claude -p --model "$model" --max-turns "$turns" --output-format stream-json --verbose --dangerously-skip-permissions --settings "$time_limit_settings" < "$prompt" >> "$log" 2>&1 &
 session=$!
 # The allowance ends the session only, never this script, so a cut session still reaches the bundle below; the watchdog is in a session of its own too, so its sleep goes with it.
 # It reports the cut by its exit status, not by a file, because the builder can write anywhere a file could be and so stop the kill or fake a cut.
@@ -161,6 +178,15 @@ setsid sh -c 'zombie() { z=; while read -r key value; do case "$key" in State:) 
 watchdog=$!
 wait "$session"
 status=$?
+# A trapped signal makes wait return at once with a status above 128 while the session still runs, so after one the session is waited for again; 127 says it was gone already, and then the first status stands.
+while [ -n "$signalled" ]; do
+    signalled=''
+    wait "$session"
+    again=$?
+    [ "$again" -ne 127 ] || break
+    status=$again
+done
+session_reaped=1
 # Every command from here on is looked up in the system folders only, because the builder may have planted one of the same name in a folder of the PATH the job started with.
 PATH="$system_path"
 export PATH
@@ -217,6 +243,9 @@ if ! printf 'claude exited with %d\n' "$status" >> "$log"; then
 fi
 if [ "$cut" -eq 0 ]; then
     printf 'claude cut after %d seconds, its commits are kept\n' "$allowance" >> "$log"
+fi
+if [ -n "$stopped" ]; then
+    printf 'claude stopped on the progress rule, its commits are kept\n' >> "$log"
 fi
 
 # The builder can write git's global and system settings too, for example an include that waits on a pipe or runs a command, so git no longer reads them.

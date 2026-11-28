@@ -30,12 +30,13 @@ final readonly class JobContainers
     }
 
     // The proxy is closed after the job's container is gone, because the engine removes no network a container still uses.
-    public function runToEnd(JobSpec $spec, string $outputDirectory): ContainerEnd
+    public function runToEnd(JobSpec $spec, string $outputDirectory, ?LiveOutputWatch $watch): ContainerEnd
     {
         $this->refuseImageVolumes($spec);
 
         try {
-            $end = $this->runInContainer($spec, $outputDirectory, $this->egress->open($spec));
+            $request = $this->definition->of($spec, $outputDirectory, $this->egress->open($spec));
+            $end = $this->runInContainer($spec, $request, $watch);
             $this->egress->recordRefusals($spec);
 
             return $end;
@@ -55,14 +56,13 @@ final readonly class JobContainers
     }
 
     // The log is read before the container is removed, because the engine keeps it only as long as the container.
-    private function runInContainer(JobSpec $spec, string $outputDirectory, EgressRoute $route): ContainerEnd
+    private function runInContainer(JobSpec $spec, JobContainerRequest $request, ?LiveOutputWatch $watch): ContainerEnd
     {
-        $request = $this->definition->of($spec, $outputDirectory, $route);
         $container = $this->engine->create('intakt-job-'.$spec->id->value, $request->definition);
 
         try {
             $this->engine->start($container);
-            $end = $this->awaitEnd($container, $this->clock->now()->modify(sprintf('+%d seconds', $spec->limits->seconds)));
+            $end = $this->awaitEnd($container, $this->clock->now()->modify(sprintf('+%d seconds', $spec->limits->seconds)), $watch);
 
             return new ContainerEnd($end, $this->engine->standardErrorHead($container, StartCheckLog::MAX_BYTES), $request->mark);
         } finally {
@@ -71,15 +71,23 @@ final readonly class JobContainers
     }
 
     // The state decides, never the wait's answer, because the engine answers a wait that failed on its side with 200 while the job still runs.
-    private function awaitEnd(string $container, DateTimeImmutable $deadline): JobEnd
+    // A watched job is waited for in slices of the watch's interval, and its session is signalled once when the watch asks; the job still runs to its own exit, so what its script bundles after the session is kept.
+    private function awaitEnd(string $container, DateTimeImmutable $deadline, ?LiveOutputWatch $watch): JobEnd
     {
+        $signalled = false;
+
         // Never called with zero seconds left, because the HTTP client reads a zero duration as no limit.
         while (($seconds = $this->secondsUntil($deadline)) > 0.0) {
-            $this->engine->waitForExit($container, $seconds);
+            $this->engine->waitForExit($container, $watch instanceof LiveOutputWatch ? min($seconds, (float) $watch->intervalSeconds()) : $seconds);
             $state = $this->engine->state($container);
 
             if (!$state->running) {
                 return $this->endOf($state);
+            }
+
+            if ($watch instanceof LiveOutputWatch && !$signalled && $watch->endsSession()) {
+                $this->engine->endSession($container);
+                $signalled = true;
             }
 
             $this->clock->sleep(min(self::RECONNECT_PAUSE_SECONDS, $this->secondsUntil($deadline)));

@@ -12,6 +12,7 @@ use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
+use Intakt\Core\Build\Domain\BuildStopRule;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\GatesAtOnce;
@@ -52,6 +53,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\Filesystem\Exception\IOException;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunBuildJob::class)]
@@ -727,6 +729,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, $this->gate ?? new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $this->script, $this->promptFolder ?? $this->folder.'/prompts', $this->stops, new BuildLimits(1, 1, 1, 1));
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, $this->gate ?? new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $this->script, $this->promptFolder ?? $this->folder.'/prompts', $this->stops, new BuildStopRule(new MockClock()), new BuildLimits(1, 1, 1, 1));
     }
 }

@@ -16,6 +16,7 @@ use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
+use Intakt\Core\Build\Domain\BuildStopRule;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\UseCase\BuildTask\AskedQuestion;
@@ -380,7 +381,7 @@ final class BuildTaskCommandTest extends TestCase
         $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts', new RecordedBuildStops(), new BuildLimits(1, 1, 1, 1));
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts', new RecordedBuildStops(), new BuildStopRule(new MockClock()), new BuildLimits(1, 1, 1, 1));
         $checks = self::createStub(HandBackChecks::class);
         $checks->method('check')->willReturn($this->checked);
         $checkJobs = self::createStub(CheckJobs::class);

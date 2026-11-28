@@ -9,6 +9,7 @@ use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
+use Intakt\Core\Job\Contract\JobWatch;
 use Intakt\Tests\Core\Job\OutputFiles;
 use LogicException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -23,7 +24,7 @@ final readonly class ScriptedJobRunner implements JobRunner
     ) {
     }
 
-    public function run(JobSpec $spec): JobResult
+    public function run(JobSpec $spec, ?JobWatch $watch = null): JobResult
     {
         $folder = is_dir($this->output) ? $this->output : throw new LogicException('BUILD_JOB_OUTPUT names no folder.');
         $files = [];

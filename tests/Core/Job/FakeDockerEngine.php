@@ -43,6 +43,9 @@ final class FakeDockerEngine
     private array $waits = [];
 
     /** @var array<string, list<string>> */
+    private array $signals = [];
+
+    /** @var array<string, list<string>> */
     private array $volumes = [];
 
     /** @var list<string> */
@@ -118,6 +121,14 @@ final class FakeDockerEngine
     public function declareVolumes(string $image, array $paths): void
     {
         $this->volumes[$image] = $paths;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function signalsOf(string $job): array
+    {
+        return $this->signals[$job] ?? [];
     }
 
     public function waitsOf(string $job): int
@@ -359,7 +370,7 @@ final class FakeDockerEngine
         return match ($call) {
             'start' => $this->start($container),
             'wait' => $this->wait($container, $options),
-            'kill' => $this->kill($container),
+            'kill' => $this->kill($container, $options),
             'logs' => $this->logs->answer($container, is_array($options['query'] ?? null) ? $options['query'] : []),
             default => $this->state($container),
         };
@@ -427,8 +438,21 @@ final class FakeDockerEngine
         return $this->json(['StatusCode' => $container->exitCode]);
     }
 
-    private function kill(FakeContainer $container): MockResponse
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function kill(FakeContainer $container, array $options): MockResponse
     {
+        $query = is_array($options['query'] ?? null) ? $options['query'] : [];
+
+        // A signal that is no KILL reaches the job's script, which ends its session and exits on its own, so the job stops with its own status.
+        if (is_string($query['signal'] ?? null) && 'KILL' !== $query['signal']) {
+            $this->signals[$container->job][] = $query['signal'];
+            [$container->running, $container->exitCode] = [false, 0];
+
+            return new MockResponse('', ['http_code' => 204]);
+        }
+
         if (in_array($container->job, $this->unkillable, true)) {
             return new MockResponse('', ['http_code' => 204]);
         }

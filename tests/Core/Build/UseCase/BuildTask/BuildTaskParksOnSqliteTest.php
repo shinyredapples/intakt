@@ -25,6 +25,9 @@ use Intakt\Core\Build\Domain\BugPart;
 use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
+use Intakt\Core\Build\Domain\BuildProgress;
+use Intakt\Core\Build\Domain\BuildStopRule;
+use Intakt\Core\Build\Domain\BuildWatch;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\GatesAtOnce;
@@ -48,6 +51,8 @@ use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobEndFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildLogReading;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildSessionWatch;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
@@ -65,6 +70,7 @@ use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
+use Intakt\Core\Job\Contract\JobWatch;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Domain\EventRecord;
@@ -76,16 +82,20 @@ use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
+use Intakt\Tests\Core\Build\UseCase\RunBuildJob\BuildLogLines;
+use Intakt\Tests\Core\Job\OutputFiles;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -118,6 +128,11 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
 #[UsesClass(RecordedBuildStops::class)]
+#[UsesClass(BuildSessionWatch::class)]
+#[UsesClass(BuildLogReading::class)]
+#[UsesClass(BuildStopRule::class)]
+#[UsesClass(BuildWatch::class)]
+#[UsesClass(BuildProgress::class)]
 #[UsesClass(BuildJobEndFailed::class)]
 #[UsesClass(BuildLimits::class)]
 #[UsesClass(BuildJob::class)]
@@ -150,6 +165,10 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
     private string $folder = '';
 
     private RecordedBuildStops $stops;
+
+    private MockClock $clock;
+
+    private ?BuildLimits $limits = null;
 
     public function testABuildJobThatEndsWithAQuestionParksTheTaskWithItsAskedStepAndRunsNoLaterStep(): void
     {
@@ -257,6 +276,47 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertStringEndsWith('"step":"build_job","outcome":"failed","failure":"'.BuildVerdict::NoCommits->reason().'","stop_cause":"'.$cause->value.'"}', $payload);
     }
 
+    /**
+     * @param list<string> $logs the log of the running job at each look of the watch
+     */
+    #[DataProvider('stopsOfTheWatch')]
+    public function testARunningBuildJobStoppedByTheWatchIsStoredWithItsStopCauseInTheBuildJobLedgerRow(BuildStopCause $cause, BuildLimits $limits, array $logs): void
+    {
+        new Filesystem()->remove([$this->folder.'/output/'.RunBuildJob::QUESTION, $this->folder.'/output/'.RunBuildJob::BUNDLE]);
+        $this->limits = $limits;
+        $scripted = new ScriptedJobRunner($this->folder.'/output');
+        $runner = self::createStub(JobRunner::class);
+        // The mock clock moves one interval before each look, so the order of the looks is the test's and nothing waits.
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec, ?JobWatch $watch) use ($scripted, $logs): JobResult {
+            self::assertInstanceOf(JobWatch::class, $watch);
+            foreach ($logs as $log) {
+                $this->clock->sleep($watch->intervalSeconds());
+                if ($watch->endsSession(OutputFiles::of([RunBuildJob::LOG => $log]))) {
+                    break;
+                }
+            }
+
+            return $scripted->run($spec);
+        });
+
+        $outcome = $this->buildTask(runner: $runner)->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
+        self::assertIsString($payload);
+        self::assertStringEndsWith('"stop_cause":"'.$cause->value.'"}', $payload);
+    }
+
+    /**
+     * @return iterable<string, array{BuildStopCause, BuildLimits, list<string>}>
+     */
+    public static function stopsOfTheWatch(): iterable
+    {
+        yield 'no progress' => [BuildStopCause::NoProgress, new BuildLimits(100, 60, 1000, 1000), [BuildLogLines::usage('m1', 150), BuildLogLines::usage('m1', 150)]];
+        yield 'runaway ceiling' => [BuildStopCause::RunawayCeiling, new BuildLimits(100, 60, 500, 10000), [BuildLogLines::usage('m1', 150).BuildLogLines::edit('c1', 'a', 'b'), BuildLogLines::usage('m1', 150).BuildLogLines::usage('m2', 450).BuildLogLines::edit('c1', 'a', 'b')]];
+        yield 'per-task total' => [BuildStopCause::PerTaskTotal, new BuildLimits(100, 60, 500, 300), [BuildLogLines::usage('m1', 350).BuildLogLines::edit('c1', 'a', 'b')]];
+    }
+
     public function testAStoppedBuildJobWhoseEndEventIsNotRecordedIsStoredWithItsStopCauseInTheFailedRow(): void
     {
         $stopped = new BuildJob('alpha', $this->folder.'/clone', 'feat/task', new BuildBrief('x', new Decisions(), null), Tier::Standard, 'intakt-job-alpha:1');
@@ -294,6 +354,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
     protected function setUp(): void
     {
         $this->stops = new RecordedBuildStops();
+        $this->clock = new MockClock('2026-01-01 00:00:00');
         $this->folder = sys_get_temp_dir().'/intakt-build-task-parks-'.bin2hex(random_bytes(6));
         new Filesystem()->mkdir($this->folder.'/clone');
         // A bundle and a text beside the question, because a question ends the build whatever else the job left.
@@ -344,7 +405,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner ?? new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts', $this->stops, new BuildLimits(1, 1, 1, 1));
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner ?? new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts', $this->stops, new BuildStopRule($this->clock), $this->limits ?? new BuildLimits(1, 1, 1, 1));
         $files = new HandBackFile($checkout, new Filesystem(), $this->folder.'/hand-backs');
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);

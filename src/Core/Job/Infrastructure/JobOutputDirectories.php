@@ -75,6 +75,39 @@ final readonly class JobOutputDirectories
         return new JobOutput(...array_map(static fn (string $name, string $contents): JobOutputFile => new JobOutputFile($name, $contents), array_map(strval(...), array_keys($files)), $files));
     }
 
+    // What a running job has written, read within the same bounds as the end; an entry that is no plain file or does not fit is left out, never refused, because the job is still running and its end reads the output again.
+    public function peek(string $directory): JobOutput
+    {
+        try {
+            $entries = new DirectoryIterator($directory);
+        } catch (UnexpectedValueException) {
+            return new JobOutput();
+        }
+
+        $files = [];
+        $bytes = 0;
+
+        foreach ($entries as $entry) {
+            if ($entry->isDot() || $entry->isLink() || !$entry->isFile() || !$entry->isReadable()) {
+                continue;
+            }
+
+            $bytes += $entry->getSize();
+
+            if (self::MAX_FILES === count($files) || $bytes > self::MAX_BYTES) {
+                break;
+            }
+
+            $contents = file_get_contents($entry->getPathname());
+
+            if (false !== $contents) {
+                $files[] = new JobOutputFile($entry->getFilename(), $contents);
+            }
+        }
+
+        return new JobOutput(...$files);
+    }
+
     public function remove(JobId $job): void
     {
         $directory = $this->of($job);

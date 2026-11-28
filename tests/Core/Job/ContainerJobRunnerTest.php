@@ -22,6 +22,7 @@ use Intakt\Core\Job\Contract\JobOutputRefused;
 use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobSpec;
+use Intakt\Core\Job\Contract\JobWatch;
 use Intakt\Core\Job\Infrastructure\ContainerEnd;
 use Intakt\Core\Job\Infrastructure\ContainerHealth;
 use Intakt\Core\Job\Infrastructure\ContainerJobRunner;
@@ -40,6 +41,7 @@ use Intakt\Core\Job\Infrastructure\JobContainers;
 use Intakt\Core\Job\Infrastructure\JobLedger;
 use Intakt\Core\Job\Infrastructure\JobLocks;
 use Intakt\Core\Job\Infrastructure\JobNetwork;
+use Intakt\Core\Job\Infrastructure\LiveOutputWatch;
 use Intakt\Core\Job\Infrastructure\JobOutputDirectories;
 use Intakt\Core\Job\Infrastructure\OrphanedJobs;
 use Intakt\Core\Job\Infrastructure\StartCheck;
@@ -57,6 +59,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(ContainerJobRunner::class)]
 #[CoversClass(JobContainers::class)]
+#[CoversClass(LiveOutputWatch::class)]
 #[CoversClass(JobContainerDefinition::class)]
 #[UsesClass(JobKeptFolder::class)]
 #[CoversClass(JobOutputDirectories::class)]
@@ -277,6 +280,86 @@ final class ContainerJobRunnerTest extends TestCase
         self::assertEquals(new JobEnd(JobCause::TimedOut, 137), $result->end);
         self::assertSame([['job' => 'build-1', 'cause' => 'timed_out', 'exit_code' => 137]], $this->ledger->payloads());
         self::assertSame([], $this->engine->containerIds());
+    }
+
+    public function testAWatchThatAsksToEndTheSessionSendsTheSessionSignalOnceAndTheJobStillRunsToItsOwnExit(): void
+    {
+        $this->engine->hang('build-1');
+        $watch = new class implements JobWatch {
+            public int $asked = 0;
+
+            public function intervalSeconds(): int
+            {
+                return 5;
+            }
+
+            public function endsSession(JobOutput $live): bool
+            {
+                return 2 <= ++$this->asked;
+            }
+        };
+
+        $result = $this->whenJobRuns($this->spec('build-1'), watch: $watch);
+
+        self::assertSame(['USR1'], $this->engine->signalsOf('build-1'));
+        self::assertEquals(new JobEnd(JobCause::Exited, 0), $result->end);
+        self::assertSame(2, $watch->asked);
+    }
+
+    public function testAWatchThatNeverAsksToEndTheSessionLeavesTheJobToItsRunTime(): void
+    {
+        $this->engine->hang('build-1');
+        $watch = new class implements JobWatch {
+            public function intervalSeconds(): int
+            {
+                return 20;
+            }
+
+            public function endsSession(JobOutput $live): bool
+            {
+                return false;
+            }
+        };
+
+        $result = $this->whenJobRuns($this->spec('build-1'), watch: $watch);
+
+        self::assertSame([], $this->engine->signalsOf('build-1'));
+        self::assertEquals(new JobEnd(JobCause::TimedOut, 137), $result->end);
+    }
+
+    public function testAWatchSeesWhatTheRunningJobHasWrittenToItsOutputAndNothingThatIsNoPlainFile(): void
+    {
+        $this->engine->hang('build-1');
+        $watch = new class($this->root) implements JobWatch {
+            public ?string $seen = null;
+
+            public function __construct(private readonly string $root)
+            {
+            }
+
+            public function intervalSeconds(): int
+            {
+                return 5;
+            }
+
+            public function endsSession(JobOutput $live): bool
+            {
+                $directory = $this->root.'/build-1';
+                file_put_contents($directory.'/build.log', 'line');
+                symlink('/etc/hostname', $directory.'/linked');
+                mkdir($directory.'/folder');
+                $this->seen = implode(',', array_map(static fn (JobOutputFile $file): string => $file->name.'='.$file->contents, new JobOutputDirectories($this->root)->peek($directory)->files()));
+                // Removed again, because the end of the job refuses an output that holds either.
+                unlink($directory.'/linked');
+                rmdir($directory.'/folder');
+
+                return true;
+            }
+        };
+
+        $this->whenJobRuns($this->spec('build-1'), watch: $watch);
+
+        self::assertSame('build.log=line', $watch->seen);
     }
 
     public function testAMemoryKillJustBeforeTheRunTimeEndsIsRecordedAsTheJobsCause(): void
@@ -999,7 +1082,7 @@ final class ContainerJobRunnerTest extends TestCase
         return $entrypoint[4];
     }
 
-    private function whenJobRuns(JobSpec $spec, string $startCheck = self::START_CHECK): JobResult
+    private function whenJobRuns(JobSpec $spec, string $startCheck = self::START_CHECK, ?JobWatch $watch = null): JobResult
     {
         $engine = new DockerEngine($this->engine->client(), FakeDockerEngine::SOCKET);
         $outputs = new JobOutputDirectories($this->root);
@@ -1019,7 +1102,7 @@ final class ContainerJobRunnerTest extends TestCase
             new StartCheckLog(),
         );
 
-        return $runner->run($spec);
+        return $runner->run($spec, $watch);
     }
 
     private function restoreOwnerAccess(string $path): void

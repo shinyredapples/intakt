@@ -11,6 +11,7 @@ use Intakt\Core\Build\Contract\BuildServices;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\BuildStopRule;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
@@ -87,6 +88,7 @@ final readonly class RunBuildJob
         #[Autowire('%kernel.project_dir%/var/prompts')]
         private string $promptFolder,
         private RecordedBuildStops $stops,
+        private BuildStopRule $rule,
         public BuildLimits $limits,
     ) {
         // Checked as given, because the compiled container would turn a YAML true into a one-second limit before a typed parameter saw it.
@@ -126,7 +128,7 @@ final readonly class RunBuildJob
             $spec = $this->specOf($job, $command, $clone, new JobInput($prompt, self::PROMPT));
             // Set only here, so whatever fails before the runner is called, of any exception class, never reads the cause.
             $reachedRunner = true;
-            $outcome = $this->outcomeOfRunning($spec);
+            $outcome = $this->outcomeOfRunning($job, $spec);
         } catch (JobRefused $failure) {
             // Cleared, because a job the runner refused never started, so the cause belongs to the build that holds the branch's job id.
             $reachedRunner = false;
@@ -199,10 +201,11 @@ final readonly class RunBuildJob
         return new JobSpec($job->jobId(), $job->image, $command, array_values($inputs), new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS), $egress);
     }
 
-    private function outcomeOfRunning(JobSpec $spec): BuildJobOutcome
+    // Watched while it runs, so a build over its allowance that makes no progress, or reaches a ceiling, has its session ended with the cause recorded; the job's script still bundles what was committed.
+    private function outcomeOfRunning(BuildJob $job, JobSpec $spec): BuildJobOutcome
     {
         try {
-            $result = $this->jobs->run($spec);
+            $result = $this->jobs->run($spec, new BuildSessionWatch($job, $this->rule, $this->stops, $this->limits));
         } catch (JobOutputRefused) {
             // The reason is fixed because the job's log is part of what was refused, its standard error is the builder's to write, and the runner's message quotes a name the builder chose.
             return new BuildJobOutcome(BuildVerdict::NoResult, log: self::REFUSED_OUTPUT);

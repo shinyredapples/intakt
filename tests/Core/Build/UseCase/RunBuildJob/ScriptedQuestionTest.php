@@ -12,6 +12,7 @@ use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
+use Intakt\Core\Build\Domain\BuildStopRule;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
@@ -45,6 +46,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
@@ -200,6 +202,6 @@ final class ScriptedQuestionTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->output), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->history->folder.'/prompts', new RecordedBuildStops(), new BuildLimits(1, 1, 1, 1));
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->output), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->history->folder.'/prompts', new RecordedBuildStops(), new BuildStopRule(new MockClock()), new BuildLimits(1, 1, 1, 1));
     }
 }
