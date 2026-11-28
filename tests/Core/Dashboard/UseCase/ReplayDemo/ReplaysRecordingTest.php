@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase\ReplayDemo;
 
 use DateTimeImmutable;
+use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Infrastructure\LiveTrends;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
@@ -21,6 +24,7 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Tests\Core\Dashboard\Infrastructure\PublishedLiveEvents;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -40,6 +44,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(LiveEvent::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(ReplayMark::class)]
+#[UsesClass(LiveTrends::class)]
 final class ReplaysRecordingTest extends TestCase
 {
     private const string ROUND = '0196a000-0000-7000-8000-000000000001';
@@ -87,6 +92,16 @@ final class ReplaysRecordingTest extends TestCase
         $this->replays()->replay($this->recordedRun(), 1.0);
 
         self::assertSame([1, 2, 5], array_column($this->updates->published(), 'rows'));
+    }
+
+    public function testEachReplayedRowPushesTheTrendsOnTheShellTopicOnceTheRowIsAppended(): void
+    {
+        $trends = new ClockedLiveUpdates($this->clock, $this->ledger);
+
+        $this->replays($trends)->replay($this->recordedRun(), 1.0);
+
+        self::assertSame([1, 2, 3, 4, 5], array_column($trends->published(), 'rows'));
+        self::assertSame([DashboardTopics::SHELL], array_values(array_unique(array_column($trends->published(), 'topic'))));
     }
 
     public function testAnUpdateWhoseMomentAnAppendHasOverrunIsPublishedWithoutWaiting(): void
@@ -154,7 +169,7 @@ final class ReplaysRecordingTest extends TestCase
         $again = new ClockedLiveUpdates($this->clock, $this->ledger);
 
         try {
-            new ReplaysRecording($this->ledger, $again, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($again, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::judged($this->ledger, $this->marks()))->replay($this->recordedRun(), 1.0);
+            new ReplaysRecording($this->ledger, $again, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($again, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::judged($this->ledger, $this->marks()), TourCaptionsOn::trends($this->ledger, $this->marks()))->replay($this->recordedRun(), 1.0);
         } catch (ReplayIsRefused) {
         }
 
@@ -579,9 +594,9 @@ final class ReplaysRecordingTest extends TestCase
         ])));
     }
 
-    private function replays(): ReplaysRecording
+    private function replays(LiveUpdates $trends = new PublishedLiveEvents()): ReplaysRecording
     {
-        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::judged($this->ledger, $this->marks()));
+        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::judged($this->ledger, $this->marks()), TourCaptionsOn::trends($this->ledger, $this->marks(), $trends));
     }
 
     private function refusal(): ReplayIsRefused

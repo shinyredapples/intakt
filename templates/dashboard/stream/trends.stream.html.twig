@@ -1,0 +1,7 @@
+{%- import 'dashboard/_trends_figures.html.twig' as figures -%}
+{#- Both ways of counting the demo, each into its own target, because every tab hears the same push; one without a review is left out, because its page shows the empty state, whose form token needs a session a worker does not have, and only a review ends it. Morphed, so a push that changes nothing keeps a focused tile term or the demo chip the same node. -#}
+{% for trends in variants|filter(trends => trends.anyReview) %}
+<turbo-stream action="replace" method="morph" target="{{ figures.target(trends) }}"><template>{{ include('dashboard/_trends_figures.html.twig', {trends: trends, bench: bench}, with_context = false) }}</template></turbo-stream>
+{% endfor %}
+{#- Up next counts no figure, so one list serves both ways of counting; morphed, so a row whose round goes on keeps the keyboard focus on its link. -#}
+<turbo-stream action="replace" method="morph" target="up-next"><template>{{ include('dashboard/_trends_up_next.html.twig', {up_next: up_next}, with_context = false) }}</template></turbo-stream>

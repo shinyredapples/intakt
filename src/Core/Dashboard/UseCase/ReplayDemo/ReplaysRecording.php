@@ -8,6 +8,7 @@ use Closure;
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Infrastructure\LiveTrends;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedJudgedState;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
@@ -38,6 +39,7 @@ final readonly class ReplaysRecording
         private ReplayMarks $marks,
         private TourCaptionUpdates $captions,
         private ReplayedJudgedState $judged,
+        private LiveTrends $trends,
     ) {
     }
 
@@ -191,8 +193,9 @@ final readonly class ReplaysRecording
             throw ReplayStopped::at($recording, $number, (string) $result->failure);
         }
 
-        // After each row, because the stage is read from the rows and no recorded update reaches a page that is not the review's.
+        // After each row, because the stage and the Trends figures and Up next are read from the rows and no recorded update reaches a page that is not the review's.
         $this->captions->publishTheStage();
+        $this->trends->publishTheTrends();
     }
 
     private static function roundOf(string $payload): ?string

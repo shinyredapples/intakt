@@ -30,7 +30,7 @@ You will meet these characters on the dashboard. Each one stands where its job h
 3. [Your first real review](03-your-first-real-review.md): add a key and watch the reviewers at work.
 4. [Reading the verdict](04-reading-the-verdict.md): the owl's call, the list To fix, and what a finding tells you.
 5. [Let your agent drive](05-let-your-agent-drive.md): Claude Code starts the review, fixes, and asks again.
-6. [Trends and Status](06-trends-and-status.md): how your reviews go over time, and what runs right now.
+6. [Trends and Status](06-trends-and-status.md): how your reviews go over time, counted again while the page is open, and what runs right now.
 7. [Keys, providers and costs](07-keys-providers-and-costs.md): whose models answer, and what a review costs.
 8. [When something goes wrong](08-when-something-goes-wrong.md): the common surprises, why they happen, what to do.
 9. [Running it for a team](09-running-it-for-a-team.md): your own panel, your own CI, and where the details live.

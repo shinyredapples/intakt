@@ -1,0 +1,163 @@
+{#- The Trends head, tiles and charts, shared by the page and by the update LiveTrends pushes, so a pushed figure never differs from a page loaded after it (D9 of #2864). -#}
+
+{#- One target per way of counting the demo, because every tab hears the same push and a tab showing demo=0 must keep the demo left out. -#}
+{% macro target(trends) %}{{ trends.demoLeftOut ? 'trends-without-demo' : 'trends-with-demo' }}{% endmacro %}
+
+{#- A tile only for a figure there is, because a "No data" tile reads as a failure at a glance (juror walk-through of issue 3141). The label carries its explanation as a tooltip and the caption under the figure says in a few visible words what it counts, so a keyboard or touch reader never depends on the tooltip; a role character sits in the corner of each tile, inside the caption's description element because a dl group holds only dt and dd, decorative because the label already names the figure; an estimated figure carries the same kind label as the review page's cost, so a guess never reads as a reading (decision D5 of #2206). -#}
+{% macro tile(label, figure, tip, at, caption, character, kind = null) %}
+{% if figure is not null %}
+<div class="tile" data-tile="{{ at }}">
+    <dt>{{ _self.hint(label, tip, at) }}{% if kind is not null %} {{ include('dashboard/components/figure_kind.html.twig', {kind: kind, at: at}, with_context = false) }}{% endif %}</dt>
+    <dd>{{ figure }}</dd>
+    <dd class="tile-caption">{{ caption }}{{ include('dashboard/components/character.html.twig', {character: character, size: 48}, with_context = false) }}</dd>
+</div>
+{% endif %}
+{% endmacro %}
+
+{#- A short label whose meaning shows on hover and focus, in the glossary's dotted-underline style; page-local, because these readings belong to Trends alone. Its id is fixed, not random, so two renders of one ledger are the same text and a push that changes nothing morphs nothing. -#}
+{% macro hint(words, tip, at) %}<span class="term" tabindex="0" aria-describedby="hint-{{ at }}">{{ words }}<span class="term-tip" role="tooltip" id="hint-{{ at }}">{{ tip }}</span></span>{% endmacro %}
+
+{#- A chart title of a few words with the kind of its figures, so the reader sees what is counted before the bars. -#}
+{% macro title(id, words, kind) %}
+<h2 id="{{ id }}-title">{{ words }} {{ include('dashboard/components/figure_kind.html.twig', {kind: kind, at: id}, with_context = false) }}</h2>
+{% endmacro %}
+
+{#- Hidden from assistive technology, because each mark's own label already reads the same value first. -#}
+{% macro tip() %}
+<div class="chart-tip" data-chart-target="tip" aria-hidden="true" hidden><strong></strong><span></span></div>
+{% endmacro %}
+
+{% set route = constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_TRENDS') %}
+{% set kinds = enum('Intakt\\Core\\Platform\\Contract\\FigureKind') %}
+<div class="trends-figures" id="{{ _self.target(trends) }}">
+<div class="page-head trends-head">
+    {#- A toggle in the address, not a stored choice, so the address says what the figures count (D1 of #2858); pressed means the demo review is counted. -#}
+    {% if trends.canLeaveOutTheDemo %}
+    <form class="actions" method="get" action="{{ path(route) }}">
+        {% if not trends.demoLeftOut %}<input type="hidden" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\ShowTrends\\ShowTrendsController::LEAVE_OUT_DEMO') }}" value="0">{% endif %}
+        <button type="submit" class="fchip demo-toggle" aria-pressed="{{ trends.includesTheDemo ? 'true' : 'false' }}">{% if trends.includesTheDemo %}{{ include('dashboard/components/icon.html.twig', {name: 'check', small: true}, with_context = false) }}{% endif %}Demo review</button>
+    </form>
+    {% endif %}
+</div>
+{{ include('dashboard/_history_subtabs.html.twig', {current: 'trends'}, with_context = false) }}
+{% set cost = trends.costPerRound %}
+{% set oneReviewerOnly = trends.caughtByOneReviewerOnlyPercent %}
+{% set reviewer = enum('Intakt\\Core\\Dashboard\\Domain\\Character').CodeReviewer %}
+{% set judge = enum('Intakt\\Core\\Dashboard\\Domain\\Character').Judge %}
+{% if bench is not null or trends.anyReview %}
+{#- The page's one primary message, below a hidden h1 so the heading stays the page's name; the octopus joins it only when reviews follow, because the empty state below draws its own and the page shows one. -#}
+<div class="bench-headline" data-bench-headline>
+    {% if trends.anyReview %}{{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Conducting, size: 96}, with_context = false) }}{% endif %}
+    {% if bench is not null %}<div>
+        <p class="bench-result">The review panel found {{ bench.found }} of {{ bench.planted }} planted defects</p>
+        <p class="bench-meta">{{ bench.falseAlarms }} {{ bench.falseAlarms == 1 ? 'false alarm' : 'false alarms' }} in all{% if bench.runs is not null %} {{ bench.runs }} {{ bench.runs == 1 ? 'run' : 'runs' }}{% endif %} {{ include('dashboard/components/figure_kind.html.twig', {kind: kinds.Measured, at: 'bench'}, with_context = false) }} <time datetime="{{ bench.ranOn }}">Run of {{ bench.ranOn }}</time></p>
+    </div>{% endif %}
+</div>
+{% endif %}
+{% if trends.anyReview %}
+<dl class="tiles" aria-label="Review figures">
+    {#- Not the glossary's round, which is a whole build, because this counts every review pass started, a review of its own included. -#}
+    {{ _self.tile('Passes', trends.roundsRun, 'Review passes started, whether run on their own or for a build.', 'passes', 'Reviews run so far', reviewer) }}
+    {{ _self.tile('To fix', trends.seriousActFindings, 'P1 and P2 findings the judge kept for the builder to fix (the act list).', 'to-fix', 'Serious, kept by the judge', judge) }}
+    {{ _self.tile('One reviewer only', oneReviewerOnly is null ? null : oneReviewerOnly ~ '%', 'Share of the findings kept to fix that only one reviewer of the pass reported, over passes with a full record of who reported what.', 'alone', 'Findings no one else raised', reviewer) }}
+    {{ _self.tile('Time to verdict', trends.medianTimeToVerdict, 'Median time from the start of a pass to its verdict.', 'verdict-time', 'Median, start to verdict', judge) }}
+    {{ _self.tile('Cost per pass', cost is null ? null : cost.reading, 'Mean of the passes with a cost estimate, ' ~ (cost is null ? '' : cost.priceDateReading) ~ '.', 'trends-cost', 'Mean over priced passes', judge, kinds.Estimated) }}
+</dl>
+{% endif %}
+{% if not trends.anyReview %}
+{# The same start as step 5 of the setup page; an install without the sample change has nothing to start here, so the action opens that step, which says what is missing (D8 of #2858). Only the page renders it: LiveTrends pushes a way of counting only once it has a review, because a worker has no session for the form token. #}
+<div class="empty">
+    {{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 144}, with_context = false) }}
+    <h2>No reviews yet</h2>
+    <p class="muted">Trends show once the first review has run.</p>
+    {% if sample_can_start %}
+    <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_FIRST_REVIEW')) }}" class="start-first-review">
+        <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartFirstReviewController::TOKEN_ID')) }}">
+        {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start the first review'}, with_context = false) }}
+    </form>
+    {% else %}
+    <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::RUN_SETUP'), {(constant('Intakt\\Core\\Dashboard\\UseCase\\RunSetup\\RunSetupController::STEP')): constant('Intakt\\Core\\Dashboard\\Domain\\SetupStep::Ready').value}) }}#step-first-review">Start the first review</a>
+    {% endif %}
+</div>
+{% else %}
+{% set catches = trends.reviewerCatches %}
+{% set drawnReviewers = catches is null ? [] : catches.reviewers|filter(reviewer => reviewer.bars|filter(bar => (bar.value ?? 0) > 0) is not empty) %}
+{% set outcomes = trends.judgeOutcomes %}
+{% set perDay = trends.reviewsPerDay %}
+{% set costDrawn = perDay is not null and perDay.costBars|filter(bar => (bar.value ?? 0) > 0) is not empty %}
+{#- A chart without data, or of zeros only, is left out, so every chart on the page shows something (juror walk-through of issue 3141); its takeaway stays for a screen reader. -#}
+<div class="charts">
+    {% if drawnReviewers is not empty %}
+    <section class="chart{{ drawnReviewers|length > 1 ? ' wide' }}" id="chart-catches" aria-labelledby="chart-catches-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
+        {{ _self.title('chart-catches', 'Catches by reviewer', kinds.Counted) }}
+        <p class="takeaway sr-only">{{ catches.takeaway }}</p>
+        <p class="legend chart-legend"><span><i class="c-swatch"></i>Found by one reviewer only</span><span><i class="c-swatch c-whole"></i>Also found by others</span></p>
+        <div class="multiples{{ drawnReviewers|length == 1 ? ' one' }}">
+            {% for reviewer in drawnReviewers %}
+            <figure class="multiple">
+                <figcaption class="sub-h">{{ reviewer.role|capitalize }}</figcaption>
+                {{ include('dashboard/components/bar_chart.html.twig', {name: 'Findings of the ' ~ reviewer.role ~ ' reviewer by severity', bars: reviewer.bars, top: catches.scaleTop}, with_context = false) }}
+            </figure>
+            {% endfor %}
+        </div>
+        <table class="sr-only">
+            <thead><tr><th scope="col">Reviewer</th><th scope="col">Severity</th><th scope="col">Findings</th><th scope="col">One reviewer only</th></tr></thead>
+            <tbody>
+            {% for reviewer in drawnReviewers %}
+            {% for bar in reviewer.bars %}
+            <tr><td>{{ reviewer.role|capitalize }}</td><td>{{ bar.label }}</td><td>{{ bar.value }}</td><td>{{ bar.part }}</td></tr>
+            {% endfor %}
+            {% endfor %}
+            </tbody>
+        </table>
+        {{ _self.tip() }}
+    </section>
+    {% endif %}
+    {% if outcomes is not null and outcomes.bars|filter(bar => (bar.value ?? 0) > 0) is not empty %}
+    <section class="chart" id="chart-judge" aria-labelledby="chart-judge-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
+        {{ _self.title('chart-judge', 'Checked findings', kinds.Counted) }}
+        <p class="takeaway sr-only">{{ outcomes.takeaway }}</p>
+        {{ include('dashboard/components/bar_chart.html.twig', {name: 'Findings by what the judge did with them, over every checked pass', bars: outcomes.bars, top: outcomes.scaleTop}, with_context = false) }}
+        <table class="sr-only">
+            <thead><tr><th scope="col">Outcome</th><th scope="col">Findings</th></tr></thead>
+            <tbody>
+            {% for bar in outcomes.bars %}
+            <tr><td>{{ bar.detail }}</td><td>{{ bar.value }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {{ _self.tip() }}
+    </section>
+    {% endif %}
+    {% if perDay is not null %}
+    <section class="chart wide" id="chart-per-day" aria-labelledby="chart-per-day-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
+        <h2 id="chart-per-day-title">{{ costDrawn ? 'Passes and cost per day' : 'Passes per day' }}</h2>
+        <div class="multiples two">
+            <figure class="multiple">
+                <figcaption class="sub-h">{{ _self.hint('Passes', 'Counted by the day each pass started (UTC).', 'per-day') }} {{ include('dashboard/components/figure_kind.html.twig', {kind: kinds.Counted, at: 'per-day-passes'}, with_context = false) }}</figcaption>
+                <p class="takeaway sr-only">{{ perDay.roundsTakeaway }}</p>
+                {{ include('dashboard/components/bar_chart.html.twig', {name: 'Review passes per day', bars: perDay.roundBars, top: perDay.roundsTop}, with_context = false) }}
+            </figure>
+            {% if costDrawn %}
+            <figure class="multiple">
+                <figcaption class="sub-h">Cost (USD) {{ include('dashboard/components/figure_kind.html.twig', {kind: kinds.Estimated, at: 'trends-per-day'}, with_context = false) }}</figcaption>
+                <p class="takeaway sr-only">{{ perDay.costTakeaway }}</p>
+                {{ include('dashboard/components/bar_chart.html.twig', {name: 'Estimated cost per day in US dollars', bars: perDay.costBars, top: perDay.costTop, divisor: perDay.costDivisor}, with_context = false) }}
+            </figure>
+            {% endif %}
+        </div>
+        <table class="sr-only">
+            <thead><tr><th scope="col">Day</th><th scope="col">Passes</th>{% if costDrawn %}<th scope="col">Estimated cost (USD)</th>{% endif %}</tr></thead>
+            <tbody>
+            {% set costBars = perDay.costBars %}
+            {% for bar in perDay.roundBars %}
+            <tr><td>{{ bar.label }}</td><td>{{ bar.directLabel }}</td>{% if costDrawn %}<td>{{ costBars[loop.index0].directLabel }}</td>{% endif %}</tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {{ _self.tip() }}
+    </section>
+    {% endif %}
+</div>
+{% endif %}
+</div>
