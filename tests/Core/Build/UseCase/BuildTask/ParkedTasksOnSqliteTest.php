@@ -67,7 +67,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
 
     public function testAParkedTaskIsStoredWithItsQuestionChoicesAndRecommendationAndAnAskedStep(): void
     {
-        $this->parkedTasks()->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION));
+        $this->parkedTasks()->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION), null);
 
         self::assertSame(
             [['project' => 'sample', 'task' => 42, 'question' => 'Keep the old flag?', 'choices' => ['keep it', 'drop it'], 'recommendation' => 'drop it', 'parked_at' => '2026-11-20 10:00:00', 'run' => 'run-1']],
@@ -85,8 +85,8 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     public function testAClearedTaskLosesItsRowWhileAnotherTaskKeepsItsOwn(): void
     {
         $parked = $this->parkedTasks();
-        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION));
-        $parked->park(new BuildRun('sample', 43, 'run-2'), BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION), null);
+        $parked->park(new BuildRun('sample', 43, 'run-2'), BuildQuestion::fromHandedBack(self::QUESTION), null);
 
         $parked->clear(new BuildRun('sample', 42, 'run-1'));
 
@@ -115,9 +115,9 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     public function testATaskParkedAgainKeepsOneRowWithTheNewerQuestion(): void
     {
         $parked = $this->parkedTasks();
-        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION), null);
 
-        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack('{"question":"Which name?","choices":["a","b"],"recommendation":"a"}'));
+        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack('{"question":"Which name?","choices":["a","b"],"recommendation":"a"}'), null);
 
         self::assertSame(
             [['question' => 'Which name?', 'recommendation' => 'a']],
@@ -129,9 +129,9 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     {
         $this->startBothRuns();
         $parked = $this->parkedTasks();
-        $parked->park($this->newerRun(), BuildQuestion::fromHandedBack(self::NEWER_QUESTION));
+        $parked->park($this->newerRun(), BuildQuestion::fromHandedBack(self::NEWER_QUESTION), null);
 
-        $parked->park($this->olderRun(), BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park($this->olderRun(), BuildQuestion::fromHandedBack(self::QUESTION), null);
 
         self::assertSame([['Which name?', self::NEWER_RUN]], $this->parkedQuestionsWithRuns());
         self::assertSame(
@@ -147,9 +147,9 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     {
         $this->startBothRuns();
         $parked = $this->parkedTasks();
-        $parked->park($this->olderRun(), BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park($this->olderRun(), BuildQuestion::fromHandedBack(self::QUESTION), null);
 
-        $parked->park($this->newerRun(), BuildQuestion::fromHandedBack(self::NEWER_QUESTION));
+        $parked->park($this->newerRun(), BuildQuestion::fromHandedBack(self::NEWER_QUESTION), null);
 
         self::assertSame([['Which name?', self::NEWER_RUN]], $this->parkedQuestionsWithRuns());
     }
@@ -160,10 +160,10 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         $this->appendTaskStep($first);
         $this->startBothRuns();
         $parked = $this->parkedTasks();
-        $parked->park($first, BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park($first, BuildQuestion::fromHandedBack(self::QUESTION), null);
 
-        $this->parkedTasksWhoseOrderLookupFirst(fn () => $parked->park($this->olderRun(), BuildQuestion::fromHandedBack(self::QUESTION)))
-            ->park($this->newerRun(), BuildQuestion::fromHandedBack(self::NEWER_QUESTION));
+        $this->parkedTasksWhoseOrderLookupFirst(fn () => $parked->park($this->olderRun(), BuildQuestion::fromHandedBack(self::QUESTION), null))
+            ->park($this->newerRun(), BuildQuestion::fromHandedBack(self::NEWER_QUESTION), null);
 
         self::assertSame([['Which name?', self::NEWER_RUN]], $this->parkedQuestionsWithRuns());
         self::assertFalse($this->connection()->isTransactionActive());
@@ -179,7 +179,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     public function testARunWhoseRowAnotherOneReplacesAtEveryAttemptIsNotParked(): void
     {
         $this->startBothRuns();
-        $this->parkedTasks()->park($this->olderRun(), BuildQuestion::fromHandedBack(self::QUESTION));
+        $this->parkedTasks()->park($this->olderRun(), BuildQuestion::fromHandedBack(self::QUESTION), null);
         $before = $this->ledgerRows();
         $lookups = 0;
         $replaced = $this->parkedTasksWhoseOrderLookupFirst(function () use (&$lookups): void {
@@ -198,7 +198,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     {
         $this->startBothRuns();
         $parked = $this->parkedTasks();
-        $parked->park($this->newerRun(), BuildQuestion::fromHandedBack(self::NEWER_QUESTION));
+        $parked->park($this->newerRun(), BuildQuestion::fromHandedBack(self::NEWER_QUESTION), null);
 
         $parked->clear($this->olderRun());
 
@@ -209,7 +209,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     {
         $this->startBothRuns();
         $parked = $this->parkedTasks();
-        $parked->park($this->olderRun(), BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park($this->olderRun(), BuildQuestion::fromHandedBack(self::QUESTION), null);
 
         $parked->clear($this->newerRun());
 
@@ -223,7 +223,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         $this->appendTaskStep($this->newerRun());
         $this->appendTaskStep($this->olderRun());
         $parked = $this->parkedTasks();
-        $parked->park($this->newerRun(), BuildQuestion::fromHandedBack(self::NEWER_QUESTION));
+        $parked->park($this->newerRun(), BuildQuestion::fromHandedBack(self::NEWER_QUESTION), null);
 
         $parked->clear($this->olderRun());
 
@@ -234,10 +234,10 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     {
         $this->startBothRuns();
         $parked = $this->parkedTasks();
-        $parked->park($this->olderRun(), BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park($this->olderRun(), BuildQuestion::fromHandedBack(self::QUESTION), null);
         $this->connection()->executeStatement('UPDATE build_parked_task SET run = NULL');
 
-        $parked->park($this->olderRun(), BuildQuestion::fromHandedBack(self::NEWER_QUESTION));
+        $parked->park($this->olderRun(), BuildQuestion::fromHandedBack(self::NEWER_QUESTION), null);
         $replaced = $this->parkedQuestionsWithRuns();
         $this->connection()->executeStatement('UPDATE build_parked_task SET run = NULL');
         $parked->clear($this->olderRun());
@@ -248,7 +248,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
 
     public function testAQuestionWithANulCharacterInsideItsTextsIsStoredWhole(): void
     {
-        $this->parkedTasks()->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack('{"question":"Keep a\u0000b?","choices":["a\u0000b","c"],"recommendation":"a\u0000b"}'));
+        $this->parkedTasks()->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack('{"question":"Keep a\u0000b?","choices":["a\u0000b","c"],"recommendation":"a\u0000b"}'), null);
 
         self::assertSame(
             [['question' => "Keep a\0b?", 'choices' => ["a\0b", 'c'], 'recommendation' => "a\0b"]],
@@ -276,7 +276,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         }
 
         $parked = $this->parkedTasks();
-        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION));
+        $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION), null);
         $this->connection()->executeStatement("CREATE TRIGGER refuse_event BEFORE INSERT ON ledger_event BEGIN SELECT RAISE(ROLLBACK, 'refused'); END");
 
         $failure = $this->failureOfParking($parked);
@@ -484,7 +484,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     private function failureOfParking(ParkedTasks $parked): string
     {
         try {
-            $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION));
+            $parked->park(new BuildRun('sample', 42, 'run-1'), BuildQuestion::fromHandedBack(self::QUESTION), null);
         } catch (TaskNotParked $notParked) {
             self::assertNull($notParked->getPrevious());
 

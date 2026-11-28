@@ -34,6 +34,7 @@ use Intakt\Core\Build\Domain\ReadableLines;
 use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
+use Intakt\Core\Build\UseCase\BuildTask\AskedQuestion;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
@@ -199,6 +200,7 @@ use Symfony\Component\Uid\Uuid;
 #[CoversClass(BuildTaskRequest::class)]
 #[CoversClass(BuildRun::class)]
 #[CoversClass(EndedStep::class)]
+#[UsesClass(AskedQuestion::class)]
 #[CoversClass(BuildStepNotRecorded::class)]
 #[CoversClass(GitBuildCheckout::class)]
 #[CoversClass(BuildCheckoutFailed::class)]
