@@ -54,6 +54,16 @@ final class ProjectCopyTest extends TestCase
         self::assertSame($copied, fileinode($autoload));
     }
 
+    // Because bin/check --reuse counts each file's inode change time, a copy that links the checkout's files would keep Intakt's own full check from recording its pass.
+    public function testACopyLeavesTheInodesOfTheCheckoutsVendorFilesAsTheyWere(): void
+    {
+        $before = $this->inodeOfTheCheckoutsAutoloadFile();
+
+        $this->refresh();
+
+        self::assertSame($before, $this->inodeOfTheCheckoutsAutoloadFile());
+    }
+
     protected function setUp(): void
     {
         $this->project = sys_get_temp_dir().'/intakt-project-copy-test-'.bin2hex(random_bytes(6));
@@ -63,6 +73,18 @@ final class ProjectCopyTest extends TestCase
     protected function tearDown(): void
     {
         new Filesystem()->remove($this->project);
+    }
+
+    /**
+     * @return array{nlink: int, ctime: int}
+     */
+    private function inodeOfTheCheckoutsAutoloadFile(): array
+    {
+        clearstatcache();
+        $status = stat(self::ROOT.'/vendor/autoload.php');
+        self::assertIsArray($status);
+
+        return ['nlink' => $status['nlink'], 'ctime' => $status['ctime']];
     }
 
     private function refresh(): void

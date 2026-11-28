@@ -15,7 +15,6 @@ use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\RebuiltContainer;
 use PHPUnit\Framework\Attributes\CoversNothing;
-use PHPUnit\Framework\Attributes\Group;
 use ReflectionMethod;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
@@ -25,9 +24,8 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
-// Covers nothing because it proves the wiring of config/packages/ai.php, which is not a class; the key-presence rule itself is unit-tested in ProviderKeySourceTest; serial because its vaults create config/secrets/, which the workers share, and a container another worker compiles meanwhile keeps the vault loader for good.
+// Covers nothing because it proves the wiring of config/packages/ai.php, which is not a class; the key-presence rule itself is unit-tested in ProviderKeySourceTest.
 #[CoversNothing]
-#[Group('serial')]
 final class AiProvidersTest extends KernelTestCase
 {
     private const string BODY = 'abcdefgh12345678';
@@ -41,8 +39,8 @@ final class AiProvidersTest extends KernelTestCase
         'CLAUDE_CODE_OAUTH_TOKEN',
     ];
 
-    // A runtime environment of its own, so the test vault never mixes with a real one under config/secrets/.
-    private const string VAULT_ENVIRONMENT_PREFIX = 'ai_providers_test';
+    // A runtime environment of its own, so the vault folder is named for this test.
+    private const string VAULT_ENVIRONMENT = 'ai_providers_test';
 
     /** @var array<string, array{server: mixed, env: mixed, process: string|false}> */
     private array $saved = [];
@@ -280,7 +278,7 @@ final class AiProvidersTest extends KernelTestCase
     {
         $this->containers = self::compiledContainers();
 
-        foreach ([...self::VARIABLES, 'APP_RUNTIME_ENV', 'SYMFONY_DECRYPTION_SECRET', 'INTAKT_PROVIDER_KEY_DIR'] as $name) {
+        foreach ([...self::VARIABLES, 'APP_RUNTIME_ENV', 'SYMFONY_DECRYPTION_SECRET', 'INTAKT_PROVIDER_KEY_DIR', 'INTAKT_SECRETS_DIR'] as $name) {
             $this->saved[$name] = [
                 'server' => $_SERVER[$name] ?? null,
                 'env' => $_ENV[$name] ?? null,
@@ -289,6 +287,7 @@ final class AiProvidersTest extends KernelTestCase
         }
 
         $_SERVER['INTAKT_PROVIDER_KEY_DIR'] = $this->keptKeyDirectory();
+        $_SERVER['INTAKT_SECRETS_DIR'] = $this->secretsDirectory();
     }
 
     protected function tearDown(): void
@@ -308,8 +307,7 @@ final class AiProvidersTest extends KernelTestCase
 
         parent::tearDown();
         $this->containers->restoreTheSharedCache();
-        new Filesystem()->remove([$this->vaultDirectory(), $this->keptKeyDirectory()]);
-        $this->removeTheVaultsFolderWhenEmpty();
+        new Filesystem()->remove([$this->secretsDirectory(), $this->keptKeyDirectory()]);
     }
 
     // Base64 of the wrong length, because libsodium rejects it with an exception, where a right-length wrong key only fails to decrypt.
@@ -396,35 +394,31 @@ final class AiProvidersTest extends KernelTestCase
         new KeptProviderKeyFile($this->keptKeyDirectory(), $providers)->keep(ProviderKey::recognise($key, $providers));
     }
 
-    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's.
+    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's; named for the checkout, so two checkouts that share TMPDIR keep theirs apart.
     private function keptKeyDirectory(): string
     {
-        return sys_get_temp_dir().'/ai-providers-test-kept-key';
+        return sys_get_temp_dir().'/ai-providers-test-kept-key-'.hash('xxh128', dirname(__DIR__, 2));
+    }
+
+    // Under the worker's own TMPDIR, so the run leaves the checkout as it found it (the quality check records a pass only for a tree nothing changed in) and none removes another worker's vault; named for the checkout, so two checkouts that share TMPDIR keep theirs apart.
+    private function secretsDirectory(): string
+    {
+        return sys_get_temp_dir().'/ai-providers-test-secrets-'.hash('xxh128', dirname(__DIR__, 2));
     }
 
     private function vaultDirectory(): string
     {
-        return self::createKernel()->getProjectDir().'/config/secrets/'.$this->vaultEnvironment();
+        return $this->secretsDirectory().'/'.$this->vaultEnvironment();
     }
 
-    // Because every test worker has a TMPDIR of its own, each gets a vault folder of its own and none removes another's.
     private function vaultEnvironment(): string
     {
-        return self::VAULT_ENVIRONMENT_PREFIX.'_'.hash('xxh128', sys_get_temp_dir());
+        return self::VAULT_ENVIRONMENT;
     }
 
     private function unsetVariable(string $name): void
     {
         unset($_SERVER[$name], $_ENV[$name]);
         putenv($name);
-    }
-
-    // Because the framework keeps its vault env loader whenever config/secrets/ exists, so a folder left empty here would change every container built after this test.
-    private function removeTheVaultsFolderWhenEmpty(): void
-    {
-        $vaults = dirname($this->vaultDirectory());
-        if (is_dir($vaults) && [] === array_diff((array) scandir($vaults), ['.', '..'])) {
-            rmdir($vaults);
-        }
     }
 }

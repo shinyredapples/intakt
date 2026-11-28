@@ -43,7 +43,7 @@ With your agent: the clone's `.mcp.json` connects Claude Code. The review is liv
 
 With a key: on http://localhost:7781/setup?step=3, the setup wizard's **AI account** step, paste one provider key or Hugging Face token, press **Keep the key**, run `docker compose restart intakt`, then press **Start the first review** on step 5 ([Hugging Face details](docs/reference/user-manual.md#running-the-demo-on-a-hugging-face-token)). Or from the terminal: `docker compose exec intakt php bin/console intakt:demo` prints the verdict ([read it](docs/reference/user-manual.md#reading-a-verdict)). Calls are billed to the key's owner. The [demo walkthrough](docs/guide/demo-walkthrough.md) retells the run in plain words; [the review flow](docs/architecture/review-flow.md) draws it inside.
 
-Without Docker or a key: `composer install`, then `bin/check` runs the quality gates every change passes (one JSON line per gate), `bin/check --journeys` the user journeys ([what they cover](docs/guide/checking-the-whole-product.md)) and `bin/console about` boots the app on SQLite.
+Without Docker or a key: `composer install`, then `bin/check` runs the quality gates every change passes (one JSON line per gate; with `--reuse`, an unchanged tree that passed reuses that pass and runs only the audit again, unless the tree is too large to be noted), `bin/check --journeys` the user journeys ([what they cover](docs/guide/checking-the-whole-product.md)) and `bin/console about` boots the app on SQLite.
 
 ## Measured
 

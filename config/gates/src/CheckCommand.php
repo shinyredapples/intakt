@@ -217,27 +217,46 @@ final readonly class CheckCommand
             return 2;
         }
 
-        $runningTheChangesCode = array_map(static fn (Gate $gate): string => $gate->name(), array_values(array_filter($selected, static fn (Gate $gate): bool => $gate instanceof RunsTheChangesCode)));
-
         $root = $options->root ?? $this->home;
+        $passed = PassedTree::before(new TreeFingerprint($root, $this->home, $options, getenv()));
+        // Because a tree whose every input is unchanged since it passed would pass again, a caller who asks for it is spared the second run.
+        $reused = $options->reuse && $passed->hasPassed();
+        // Because a new advisory can hit an unchanged lock file, the audit never stands on an earlier pass.
+        $toRun = $reused ? array_values(array_filter($selected, static fn (Gate $gate): bool => $gate instanceof ComposerAuditGate)) : $selected;
+
+        if ($reused && [] === $toRun) {
+            $this->print(['result' => 'pass', 'failed' => [], 'reused' => PassedTree::RECORD]);
+
+            return 0;
+        }
+
+        $runningTheChangesCode = array_map(static fn (Gate $gate): string => $gate->name(), array_values(array_filter($toRun, static fn (Gate $gate): bool => $gate instanceof RunsTheChangesCode)));
+
         $children = new GateChildren($this->home, $root, $slots, $runningTheChangesCode);
         $scratch = $children->scratchOutsideTheTree();
-        $reports = $children->reportsOf($names, $arguments, $scratch);
+        $reports = $children->reportsOf(array_map(static fn (Gate $gate): string => $gate->name(), $toRun), $arguments, $scratch);
 
         // Because without the scratch folder no gate could keep its whole result, a report then would hold only the lines, so none is written.
-        return $this->runGates($reports, $scratch instanceof ScratchDirectory ? new FullReport($root, $reports) : null);
+        return $this->runGates($reports, $scratch instanceof ScratchDirectory ? new FullReport($root, $reports) : null, $reused ? null : $passed);
     }
 
+    // Because a run that reused a pass ran only some gates, it records nothing ($passed null) and names the record it stood on.
     /**
      * @param list<GateReport> $reports
      */
-    private function runGates(array $reports, ?FullReport $fullReport): int
+    private function runGates(array $reports, ?FullReport $fullReport, ?PassedTree $passed): int
     {
         $failed = $this->reportOn($reports);
         $summary = ['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed];
         $file = $fullReport?->write();
 
-        $this->print(null === $file ? $summary : [...$summary, 'report' => $file]);
+        // Because a pass is recorded only beside the report that holds it, a run that could not keep its report leaves nothing to reuse.
+        if ([] === $failed && null !== $file) {
+            $passed?->recordPass();
+        }
+
+        $summary = null === $file ? $summary : [...$summary, 'report' => $file];
+        $this->print($passed instanceof PassedTree ? $summary : [...$summary, 'reused' => PassedTree::RECORD]);
 
         return [] === $failed ? 0 : 1;
     }
