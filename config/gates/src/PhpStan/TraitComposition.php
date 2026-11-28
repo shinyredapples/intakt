@@ -157,7 +157,7 @@ final readonly class TraitComposition
         );
     }
 
-    // because a method the class or trait declares itself wins over a trait's, and the first trait that brings a name keeps it
+    // because a method the class or trait declares itself wins over a trait's, and the first trait that brings a name keeps it, except that PHP binds a concrete method in place of an abstract one another trait brings, whichever comes first
     /**
      * @param array<string, ComposedTraitMethod> $taken
      * @param list<string>                       $own
@@ -167,7 +167,9 @@ final readonly class TraitComposition
     private function bound(array $taken, ComposedTraitMethod $copy, array $own): array
     {
         $name = strtolower($copy->name());
+        $kept = $taken[$name] ?? null;
+        $takesName = !$kept instanceof ComposedTraitMethod || ($kept->isAbstract() && !$copy->isAbstract());
 
-        return in_array($name, $own, true) ? $taken : $taken + [$name => $copy];
+        return in_array($name, $own, true) || !$takesName ? $taken : [...$taken, $name => $copy];
     }
 }
