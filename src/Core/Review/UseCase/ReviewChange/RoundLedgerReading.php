@@ -14,6 +14,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
@@ -132,7 +133,12 @@ final readonly class RoundLedgerReading implements RoundCosts
     // One read of the usage rows for all the rounds, because a review page with several rounds read the ledger once more for each. Priced per call by the model its tier resolved to, because a round's reviewers and its judge may each run on another model, and the vendor's answer names none (Claude Code, Codex) or a dated snapshot. A call without usages, or without an ending row yet, is still priced, because its model's price may be unknown, and that must not read as zero. A usage without input tokens makes the cost unknown, because the output alone would read as the whole cost.
     public function costsOf(string ...$roundIds): RoundCostList
     {
-        $recorded = $this->usageRows();
+        return $this->costsIn($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), ...$roundIds);
+    }
+
+    public function costsIn(RecordedEvents $usage, string ...$roundIds): RoundCostList
+    {
+        $recorded = iterator_to_array($usage, false);
         $started = $this->startedByRound($roundIds, $recorded);
         $models = $this->roundsByCall($started);
         $costs = array_fill_keys($roundIds, Cost::none());

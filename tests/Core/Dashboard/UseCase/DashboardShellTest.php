@@ -333,7 +333,7 @@ final class DashboardShellTest extends DashboardPageTestCase
         $this->ledger->startRound('round-1', 'alpha');
         $this->ledger->startRound('round-2', 'beta');
 
-        $rows = $this->browser->request('GET', '/projects')->filter('main.content .list > [data-project]');
+        $rows = $this->browser->request('GET', '/projects')->filter('main.content #project-cards > [data-project]');
 
         self::assertEqualsCanonicalizing(['alpha', 'beta'], $rows->each(static fn (Crawler $row): string => (string) $row->attr('data-project')));
     }

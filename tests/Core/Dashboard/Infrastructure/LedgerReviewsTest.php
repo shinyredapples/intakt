@@ -290,6 +290,7 @@ final class LedgerReviewsTest extends TestCase
         $costs = $this->createMock(RoundCosts::class);
         $costs->expects($this->never())->method('costOf');
         $costs->expects($this->never())->method('costsOf');
+        $costs->expects($this->never())->method('costsIn');
         $queries = $this->createMock(MessageBusInterface::class);
         $queries->expects($this->never())->method('dispatch');
 

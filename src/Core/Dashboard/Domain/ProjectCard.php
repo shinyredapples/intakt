@@ -1,0 +1,54 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Dashboard\Domain;
+
+use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+// A value of its own beside ProjectSummary, because the search and the project filter need only the name and the counts of rounds.
+#[Exclude]
+final readonly class ProjectCard
+{
+    /**
+     * @param list<WorkingCard>    $working
+     * @param list<ProjectOutcome> $recent
+     * @param list<TierLine>       $tiers
+     */
+    public function __construct(
+        public string $name,
+        public int $running,
+        public int $judged,
+        public int $failing,
+        public int $waitingOnYou,
+        public ?string $problem,
+        public TokenFigures $tokens,
+        public Cost $cost,
+        public array $working,
+        public array $recent,
+        public array $tiers,
+    ) {
+    }
+
+    // From the name and never the position, because a push that adds a card before this one must not give it another project's id; hashed, because a name may hold characters an id may not.
+    public function elementId(): string
+    {
+        return 'project-'.hash('sha256', $this->name);
+    }
+
+    public function isFailing(): bool
+    {
+        return $this->failing > 0;
+    }
+
+    public function status(): ProjectStatus
+    {
+        return match (true) {
+            $this->isFailing() => ProjectStatus::Failing,
+            $this->running > 0 => ProjectStatus::Running,
+            default => ProjectStatus::Quiet,
+        };
+    }
+}

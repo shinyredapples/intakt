@@ -27,6 +27,7 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\CountedQuotes;
@@ -854,7 +855,8 @@ final class LedgerRoundsTest extends TestCase
     {
         $costs = $this->createMock(RoundCosts::class);
         $costs->expects($this->never())->method('costOf');
-        $costs->expects($this->once())->method('costsOf')->with('r1', 'r2')->willReturn(new RoundCostList(['r1' => Cost::inUsd(0.5), 'r2' => Cost::inUsd(0.25)]));
+        $costs->expects($this->never())->method('costsOf');
+        $costs->expects($this->once())->method('costsIn')->with(self::isInstanceOf(RecordedEvents::class), 'r1', 'r2')->willReturn(new RoundCostList(['r1' => Cost::inUsd(0.5), 'r2' => Cost::inUsd(0.25)]));
         $this->costs = $costs;
 
         $review = $this->reviewOf(

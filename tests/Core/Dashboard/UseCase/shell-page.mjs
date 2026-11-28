@@ -140,6 +140,16 @@ class FakeWorkingNow extends FakeElement {
     }
 }
 
+// The Projects page's cards as a push brings them: one per project, none hidden.
+class FakeProjectCards extends FakeElement {
+    id = 'project-cards';
+
+    constructor(page, projects) {
+        super(page);
+        this.cards = projects.map((project) => Object.assign(new FakeElement(page), { dataset: { project }, hidden: false }));
+    }
+}
+
 class FakeKey {
     defaultPrevented = false;
 
@@ -247,7 +257,7 @@ export class Browser {
         const trail = this.projects.includes(linkedProject) ? Object.assign(new FakeElement(page), { dataset: { projectTrail: linkedProject } }) : null;
         const projectsItem = new FakeElement(page);
         const workingNow = new FakeWorkingNow(page, ['alpha', 'beta']);
-        const shownElements = { body, '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet, '[data-project-trail]': trail, '#col-in-review': new FakeColumn(page, 'col-in-review'), '#col-done': new FakeColumn(page, 'col-done', true), '#working-now': workingNow };
+        const shownElements = { body, '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet, '[data-project-trail]': trail, '#col-in-review': new FakeColumn(page, 'col-in-review'), '#col-done': new FakeColumn(page, 'col-done', true), '#working-now': workingNow, '#project-cards': new FakeProjectCards(page, []) };
         if (trail) {
             projectsItem.setAttribute('aria-current', 'page');
             trail.remove = () => {
@@ -362,6 +372,24 @@ export class Browser {
                         render: () => {
                             shownElements['#working-now'] = new FakeWorkingNow(page, projects);
                             show(shownElements, { ...allShown, '[data-project]': [...rows, ...shownElements['#working-now'].cards] });
+                        },
+                    },
+                };
+                (documentListeners.get('turbo:before-stream-render') ?? []).forEach((listener) => listener(event));
+                event.detail.render(stream);
+            },
+            shownProjectCards: () => shownElements['#project-cards'].cards.filter((card) => !card.hidden).map((card) => card.dataset.project),
+            // What Turbo does with the Projects page's replace stream: put the server's cards, every project's shown, where the shown ones were.
+            pushProjectCards: (projects = ['alpha', 'beta']) => {
+                const stream = new FakeElement(page);
+                stream.setAttribute('action', 'replace');
+                stream.setAttribute('target', 'project-cards');
+                const event = {
+                    target: stream,
+                    detail: {
+                        render: () => {
+                            shownElements['#project-cards'] = new FakeProjectCards(page, projects);
+                            show(shownElements, { ...allShown, '[data-project]': [...rows, ...shownElements['#project-cards'].cards] });
                         },
                     },
                 };

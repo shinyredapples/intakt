@@ -269,6 +269,19 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame(1, $counting->reads);
     }
 
+    public function testRoundsArePricedFromTheGivenUsageRowsWithoutAnotherRead(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+        $given = $this->ledger->readOfKind(LedgerEventKind::UsageRecorded);
+        $this->recordCall('c2', self::ROUND, 'settled');
+        $counting = new ReadCountingLedger($this->ledger);
+
+        $cost = $this->reading($counting)->costsIn($given, self::ROUND)->of(self::ROUND);
+
+        self::assertEqualsWithDelta((100 * 2.0 + 20 * 10.0) / 1_000_000, $cost->usd, 1e-12);
+        self::assertSame(0, $counting->reads);
+    }
+
     public function testEachRoundOfABatchIsPricedByTheModelsOfItsOwnCalls(): void
     {
         $this->recordCall('c1', self::ROUND, 'settled');

@@ -1,0 +1,7 @@
+{#- The head's links. The board links the setup wizard until a review has run, and without a project the empty state holds the link, so it shows here once any project has a card (#2067, D3); later projects are added from here then (mock projects.html). Its element is always there, so the push that brings the first card finds it. -#}
+<div class="actions" id="projects-setup">
+{% if projects is not empty %}
+    <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::RUN_SETUP')) }}">Set up Intakt</a>
+    <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::ADD_PROJECT')) }}">Add a project</a>
+{% endif %}
+</div>

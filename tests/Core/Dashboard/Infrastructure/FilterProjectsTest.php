@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use DateTimeImmutable;
+use Intakt\Core\Ai\Contract\ProjectNames;
+use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Dashboard\Domain\ProjectOrder;
 use Intakt\Core\Dashboard\Domain\ProjectSummary;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Dashboard\Infrastructure\ConfiguredProjects;
 use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
@@ -26,27 +30,36 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(FilterProjects::class)]
+#[CoversClass(ProjectOrder::class)]
+#[CoversClass(ProjectSummary::class)]
+#[CoversClass(ConfiguredProjects::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(RoundPayloads::class)]
 #[UsesClass(LedgerPayloads::class)]
-#[UsesClass(ProjectSummary::class)]
 #[UsesClass(ReviewSummary::class)]
 #[UsesClass(RoundStart::class)]
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(RecordedEvents::class)]
 #[UsesClass(LedgerEvent::class)]
+#[UsesClass(ProjectNames::class)]
 final class FilterProjectsTest extends TestCase
 {
-    public function testAReviewedAndABuiltProjectThatDifferOnlyInCaseKeepTheOrderTheyWereListedIn(): void
+    public function testAReviewedAndABuiltProjectThatDifferOnlyInCaseComeInByteOrderWhicheverWasListedFirst(): void
     {
-        self::assertSame(['zeta', 'Zeta'], $this->projectsOf(['zeta'], ['Zeta'])->names());
+        self::assertSame(['Zeta', 'zeta'], $this->projectsOf(['zeta'], ['Zeta'])->names());
+        self::assertSame(['Zeta', 'zeta'], $this->projectsOf(['Zeta'], ['zeta'])->names());
     }
 
-    public function testAPageProjectThatDiffersFromASharedOneOnlyInCaseComesAfterIt(): void
+    public function testAConfiguredProjectIsListedBeforeItsFirstReview(): void
     {
-        self::assertSame(['zeta', 'Zeta'], $this->projectsOf(['zeta'])->namesWith(['Zeta']));
+        self::assertSame(['alpha', 'idle', 'watched', 'zeta'], $this->projectsOf(['zeta'], ['alpha'], ['idle'])->names());
+    }
+
+    public function testAPageProjectThatDiffersFromASharedOneOnlyInCaseComesInByteOrder(): void
+    {
+        self::assertSame(['Zeta', 'zeta'], $this->projectsOf(['zeta'])->namesWith(['Zeta']));
     }
 
     public function testAPageProjectWithALeadingZeroComesBeforeTheSameNumberWithout(): void
@@ -57,8 +70,9 @@ final class FilterProjectsTest extends TestCase
     /**
      * @param list<string> $reviewed
      * @param list<string> $built
+     * @param list<string> $configured
      */
-    private function projectsOf(array $reviewed, array $built = []): FilterProjects
+    private function projectsOf(array $reviewed, array $built = [], array $configured = []): FilterProjects
     {
         $events = [];
 
@@ -75,6 +89,17 @@ final class FilterProjectsTest extends TestCase
         $ledger = self::createStub(Ledger::class);
         $ledger->method('readInOrder')->willReturn(new RecordedEvents($events));
 
-        return new FilterProjects(ListedReviews::on($ledger));
+        return new FilterProjects(ListedReviews::on($ledger), $this->configured($configured));
+    }
+
+    /**
+     * @param list<string> $names
+     */
+    private function configured(array $names): ConfiguredProjects
+    {
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('projects')->willReturn(new ProjectNames(...$names));
+
+        return new ConfiguredProjects($tiers, [] === $names ? [] : ['watched' => []]);
     }
 }

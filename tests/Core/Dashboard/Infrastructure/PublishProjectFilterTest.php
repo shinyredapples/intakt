@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use DateTimeImmutable;
+use Intakt\Core\Ai\Contract\ProjectNames;
+use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Domain\ProjectSummary;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Dashboard\Infrastructure\ConfiguredProjects;
 use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
@@ -44,6 +47,7 @@ use Twig\Loader\FilesystemLoader;
 
 #[CoversClass(PublishProjectFilter::class)]
 #[UsesClass(FilterProjects::class)]
+#[UsesClass(ConfiguredProjects::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
@@ -58,6 +62,7 @@ use Twig\Loader\FilesystemLoader;
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(RecordedEvents::class)]
 #[UsesClass(LedgerEvent::class)]
+#[UsesClass(ProjectNames::class)]
 final class PublishProjectFilterTest extends TestCase
 {
     // A simulated hub on its own address, reached through Symfony's Hub over a MockHttpClient, so the post is the one a real hub would get.
@@ -236,7 +241,7 @@ final class PublishProjectFilterTest extends TestCase
 
     private function publisher(MockHttpClient $hub, Ledger $ledger, LockFactory $locks = new LockFactory(new InMemoryStore())): PublishProjectFilter
     {
-        $projects = new FilterProjects(ListedReviews::on($ledger));
+        $projects = new FilterProjects(ListedReviews::on($ledger), new ConfiguredProjects(self::createConfiguredStub(TierResolver::class, ['projects' => new ProjectNames()]), []));
         $updates = new MercureLiveUpdates(new Hub(self::HUB, new StaticTokenProvider(self::TOKEN), httpClient: $hub), $this->log);
 
         return new PublishProjectFilter($projects, new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')), $updates, $locks, $this->log);

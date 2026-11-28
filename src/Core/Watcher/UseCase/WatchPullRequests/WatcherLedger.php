@@ -12,6 +12,7 @@ use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;
+use Intakt\Core\Watcher\Contract\WatcherLineRecorded;
 use Intakt\Core\Watcher\Domain\BootKey;
 use Intakt\Core\Watcher\Domain\FailedBoot;
 use Intakt\Core\Watcher\Domain\HeadAdmission;
@@ -19,6 +20,8 @@ use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Core\Watcher\Domain\HeadFailure;
 use Intakt\Core\Watcher\Domain\StartedRound;
 use Intakt\Plugin\Forge\Contract\OpenChange;
+use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 final readonly class WatcherLedger
 {
@@ -27,6 +30,7 @@ final readonly class WatcherLedger
     public function __construct(
         private Ledger $ledger,
         private FailingMains $failingMains = new FailingMains(),
+        private EventDispatcherInterface $events = new EventDispatcher(),
     ) {
     }
 
@@ -156,5 +160,7 @@ final readonly class WatcherLedger
         if (!$result->succeeded()) {
             throw WatcherEventNotRecorded::for($kind->value, (string) $result->failure);
         }
+
+        $this->events->dispatch(new WatcherLineRecorded($kind));
     }
 }

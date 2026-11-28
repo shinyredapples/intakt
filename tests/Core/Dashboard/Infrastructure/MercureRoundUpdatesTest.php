@@ -21,6 +21,7 @@ use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
@@ -114,7 +115,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->ledger = $ledger;
         $asked = [];
         $costs = $this->createMock(RoundCosts::class);
-        $costs->expects($this->atLeastOnce())->method('costsOf')->willReturnCallback(static function (string ...$rounds) use (&$asked): RoundCostList {
+        $costs->expects($this->atLeastOnce())->method('costsIn')->willReturnCallback(static function (RecordedEvents $usage, string ...$rounds) use (&$asked): RoundCostList {
             $asked += array_fill_keys($rounds, true);
 
             return new UnpricedRoundCosts()->costsOf(...$rounds);

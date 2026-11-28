@@ -411,15 +411,23 @@ test('a kept page project goes back where the server put it, also before a share
     assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'alpha', 'zeta-02', 'zeta-2']);
 });
 
-test('a kept page project that differs from shared ones only in case goes after them, which keep the pushed order', () => {
-    const page = new Browser('light', { address: 'http://localhost/history', projects: ['zeta', 'Zeta', 'ZETA'], rows: ['ZETA'], pageProjects: ['ZETA'] }).open();
+test('a kept page project that differs from shared ones only in case goes back between them in byte order', () => {
+    const page = new Browser('light', { address: 'http://localhost/history', projects: ['ZETA', 'Zeta', 'zeta'], rows: ['Zeta'], pageProjects: ['Zeta'] }).open();
 
-    page.pushStream('projfilter', ['zeta', 'Zeta']);
+    page.pushStream('projfilter', ['ZETA', 'zeta']);
 
-    assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'zeta', 'Zeta', 'ZETA']);
+    assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'ZETA', 'Zeta', 'zeta']);
 });
 
-test('a kept page project that differs from a shared one only in case goes after it, as on the server', () => {
+test('a kept page project that differs from a shared one only in case goes before it when its bytes do, as on the server', () => {
+    const page = new Browser('light', { address: 'http://localhost/history', projects: ['Alpha', 'alpha'], rows: ['Alpha'], pageProjects: ['Alpha'] }).open();
+
+    page.pushStream('projfilter', ['alpha']);
+
+    assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'Alpha', 'alpha']);
+});
+
+test('a kept page project that differs from a shared one only in case goes after it when its bytes do, as on the server', () => {
     const page = new Browser('light', { address: 'http://localhost/history', projects: ['Zeta', 'zeta'], rows: ['zeta'], pageProjects: ['zeta'] }).open();
 
     page.pushStream('projfilter', ['Zeta']);
@@ -702,6 +710,15 @@ test('a pushed Working now hides the cards of the projects the filter hides', ()
     page.pushWorkingNow(['alpha', 'beta', 'beta']);
 
     assert.deepEqual(page.shownWorkingNow(), ['alpha']);
+});
+
+test('pushed project cards hide the cards of the projects the filter hides', () => {
+    const page = new Browser('light').open();
+    page.chooseProject('alpha');
+
+    page.pushProjectCards(['alpha', 'beta', 'gamma']);
+
+    assert.deepEqual(page.shownProjectCards(), ['alpha']);
 });
 
 test('a card focused in Working now keeps focus when Working now is pushed', () => {

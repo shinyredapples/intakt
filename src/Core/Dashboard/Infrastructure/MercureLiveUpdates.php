@@ -6,6 +6,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Contract\RefusalLogging;
 use Override;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -33,6 +34,10 @@ final readonly class MercureLiveUpdates implements LiveUpdates
             return true;
             // Boundary: logs a failed publication and swallows it, because a hub that is down must never fail the request or the work that published.
         } catch (Throwable $failure) {
+            if (RefusalLogging::ByCaller === $event->refusals) {
+                return false;
+            }
+
             $this->logger->warning('A live dashboard update was not published.', ['topic' => $event->topic, 'exception' => $failure]);
 
             return false;

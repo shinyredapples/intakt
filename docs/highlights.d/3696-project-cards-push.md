@@ -1,0 +1,2 @@
+## Symfony components
+| Messenger worker events (`WorkerMessageHandledEvent`, `WorkerMessageFailedEvent`) with an EventDispatcher contract event | the watcher dispatches one event per ledger line it writes, and the Projects page's cards are pushed once the worker is done with the watch tick, after its transactions ended, so a pushed card never shows a state that is rolled back | in progress | #3696 (part 1 of #914), `src/Core/Watcher/Contract/WatcherLineRecorded.php`, `src/Core/Dashboard/Infrastructure/ProjectCardsWatcherUpdates.php` |

@@ -15,6 +15,7 @@ use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\Timeline;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\ChangeDecision;
@@ -70,6 +71,10 @@ final class LedgerRounds
     // Taken on the first unjudged round of this read, because a read's rounds all share one look at the failure transport.
     private ?RoundEndingLookup $lookup = null;
 
+    // Kept beside the tokens counted from them, because a round's cost must come from the rows its tokens come from.
+    /** @var list<RecordedEvent> */
+    private array $usage = [];
+
     private readonly LedgerTokens $tokens;
 
     public function __construct(
@@ -119,14 +124,7 @@ final class LedgerRounds
     {
         $rounds = $this->membersOf($round);
 
-        if ([] === $rounds) {
-            return null;
-        }
-
-        // Priced together, because each pricing reads every usage row of the ledger.
-        $costs = $this->costs->costsOf(...array_map(static fn (ReviewedRound $member): string => $member->round, $rounds));
-
-        return new Review(array_map(fn (ReviewedRound $member): ReviewedRound => $this->completed($member, $costs), $rounds), $this->timelineOf($rounds));
+        return [] === $rounds ? null : $this->reviewOn($rounds, $this->costsOf($rounds));
     }
 
     // Empty for a round never started readably; known from the starts alone, so a read of one review can learn which rounds to read before it reads them.
@@ -162,19 +160,25 @@ final class LedgerRounds
      */
     public function reviews(): array
     {
-        $reviews = [];
+        $grouped = [];
         $seen = [];
 
         foreach ($this->started as $started) {
-            $review = isset($seen[$started->round]) ? null : $this->reviewOf($started->round);
+            $rounds = isset($seen[$started->round]) ? [] : $this->membersOf($started->round);
 
-            if ($review instanceof Review) {
-                $reviews[] = $review;
-                $seen += array_fill_keys(array_map(static fn (ReviewedRound $member): string => $member->round, $review->rounds), true);
+            if ([] !== $rounds) {
+                $grouped[] = $rounds;
+                $seen += array_fill_keys(array_map(static fn (ReviewedRound $member): string => $member->round, $rounds), true);
             }
         }
 
-        return $reviews;
+        if ([] === $grouped) {
+            return [];
+        }
+
+        $costs = $this->costsOf(array_merge(...$grouped));
+
+        return array_map(fn (array $rounds): Review => $this->reviewOn($rounds, $costs), $grouped);
     }
 
     // In the ledger order of each round's first readable start, because the review list sorts by it and a later start must not move a round; without cost, tokens or replay mark, because the list shows none of them and each costs a query per round.
@@ -232,6 +236,7 @@ final class LedgerRounds
 
     private function addUsage(RecordedEvent $recorded): void
     {
+        $this->usage[] = $recorded;
         $usage = $this->payloads->usageOf($recorded);
 
         if (null !== $usage) {
@@ -364,6 +369,23 @@ final class LedgerRounds
     private function unrecordedReasonOf(Decision $decision): ?string
     {
         return Decision::Blocked === $decision ? self::UNRECORDED_REASON : null;
+    }
+
+    // Priced together, because each pricing goes through every usage row of the read.
+    /**
+     * @param list<ReviewedRound> $rounds
+     */
+    private function costsOf(array $rounds): RoundCostList
+    {
+        return $this->costs->costsIn(new RecordedEvents($this->usage), ...array_map(static fn (ReviewedRound $round): string => $round->round, $rounds));
+    }
+
+    /**
+     * @param non-empty-list<ReviewedRound> $rounds
+     */
+    private function reviewOn(array $rounds, RoundCostList $costs): Review
+    {
+        return new Review(array_map(fn (ReviewedRound $member): ReviewedRound => $this->completed($member, $costs), $rounds), $this->timelineOf($rounds));
     }
 
     private function completed(ReviewedRound $round, RoundCostList $costs): ReviewedRound

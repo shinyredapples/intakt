@@ -113,7 +113,7 @@
             return null;
         }
     };
-    // FilterProjects' order (PHP's strnatcasecmp on the UTF-8 bytes) ported step by step, because a merged list must match the server's and no browser comparison does: localeCompare calls 'zeta-2' and 'zeta-02' equal.
+    // ProjectOrder's order (PHP's strnatcasecmp on the UTF-8 bytes, then the bytes themselves) ported step by step, because a merged list must match the server's and no browser comparison does: localeCompare calls 'zeta-2' and 'zeta-02' equal.
     const utf8 = new TextEncoder();
     const isDigit = (byte) => byte >= 48 && byte <= 57;
     const isSpace = (byte) => byte === 32 || (byte >= 9 && byte <= 13);
@@ -178,7 +178,16 @@
             cb = b[j];
         }
     };
-    const nameOrder = (one, other) => natural(utf8.encode(one), utf8.encode(other));
+    const byteOrder = (a, b) => {
+        const differing = a.findIndex((byte, i) => byte !== b[i]);
+
+        return differing < 0 || differing >= b.length ? Math.sign(a.length - b.length) : Math.sign(a[differing] - b[differing]);
+    };
+    const nameOrder = (one, other) => {
+        const [a, b] = [utf8.encode(one), utf8.encode(other)];
+
+        return natural(a, b) || byteOrder(a, b);
+    };
     // Looks the select up when called, because a listener bound once calls it after a visit has replaced the body.
     const showProject = () => {
         const shownFilter = document.querySelector('#projfilter');
@@ -258,6 +267,15 @@
                 };
                 return;
             }
+            if (event.target.getAttribute('action') === 'replace' && replaced?.id === 'project-cards') {
+                const render = event.detail.render;
+                // The pushed cards are every project's, so the project choice is put back on them; the morph keeps the keyboard focus.
+                event.detail.render = (stream) => {
+                    render(stream);
+                    showProject();
+                };
+                return;
+            }
             if (event.target.getAttribute('action') === 'replace' && replaced?.matches('.board > .col')) {
                 const render = event.detail.render;
                 // The pushed column comes from the server with its start state and every card shown, so the person's own fold, Show more and project choice are put back on it; the Show more mark goes back before the filter runs, because assets/column-more.js reads it there.
@@ -295,7 +313,7 @@
                 render(stream);
                 const lost = pageOptions.filter((kept) => ![...shownFilter.options].some((option) => option.value === kept.value));
                 if (lost.length > 0) {
-                    // The pushed list keeps its own order; each kept option goes after every name the order calls equal, as FilterProjects' stable sort puts it.
+                    // The pushed list is already in the server's order, so each kept option goes before the first name that order puts after it, where the server had it.
                     const [all, ...named] = [...shownFilter.options];
                     for (const kept of lost) {
                         const after = named.findIndex((option) => nameOrder(option.value, kept.value) > 0);
