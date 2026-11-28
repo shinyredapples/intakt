@@ -91,6 +91,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 ### Builds
 
 - [Build task](build-task.md): `intakt:build:task`, every step from the task to the pushed branch.
+- [Task sizing](task-sizing.md): `intakt:build:size`, the readiness check and size estimate of one new task.
 - [Build job](build-job.md): the builder's CLI in a job container and what it returns.
 - [Builder prompt](builder-prompt.md): what a builder is told, with every untrusted input fenced.
 - [Hand-back checks](hand-back.md): the checks on what a build returns before anything is pushed.

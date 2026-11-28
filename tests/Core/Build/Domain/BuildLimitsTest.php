@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Build\Domain;
 
 use Intakt\Core\Build\Domain\BuildLimits;
-use InvalidArgumentException;
+use Intakt\Core\Build\Domain\BuildLimitsRefused;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(BuildLimits::class)]
+#[CoversClass(BuildLimitsRefused::class)]
 final class BuildLimitsTest extends TestCase
 {
     /**
@@ -30,14 +31,14 @@ final class BuildLimitsTest extends TestCase
     #[DataProvider('limitsWithANonPositiveValue')]
     public function testLimitsWithAValueBelowOneAreRefused(array $limits): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(BuildLimitsRefused::class);
 
         new BuildLimits(...$limits);
     }
 
     public function testLimitsWithACeilingBelowTheAllowanceAreRefused(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(BuildLimitsRefused::class);
 
         new BuildLimits(1_000, 600, 999, 10_000);
     }

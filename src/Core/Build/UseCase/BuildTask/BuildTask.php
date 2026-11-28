@@ -257,7 +257,7 @@ final readonly class BuildTask
      */
     private function prePushCheck(BuildTaskRequest $request, ListedIssue $task, array $results): RegressionRuns|string|null
     {
-        $failure = $this->updateMirror($request);
+        $failure = $this->refreshMirror($request);
 
         if (null !== $failure) {
             return $failure;
@@ -266,6 +266,17 @@ final readonly class BuildTask
         $checked = $this->prePushChecks->resultOf($request, $this->bundleIn($results), TaskKind::fromLabels(new Labels(...$task->labels)));
 
         return $checked->failure ?? $this->textChecks->failureOf($request, $task->body, $this->bodyOf($this->textIn($results))) ?? $checked->runs;
+    }
+
+    private function refreshMirror(BuildTaskRequest $request): ?string
+    {
+        try {
+            $this->checkout->refreshMirror($request->project, $request->remote);
+        } catch (BuildCheckoutFailed $failure) {
+            return $failure->getMessage();
+        }
+
+        return null;
     }
 
     /**

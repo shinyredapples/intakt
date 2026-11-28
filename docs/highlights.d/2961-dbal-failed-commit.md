@@ -1,2 +1,0 @@
-## Found in the beta
-| Doctrine DBAL: a commit the database refuses leaves the driver's transaction open while DBAL counts it as ended, so `rollBack()` throws `NoActiveTransaction` | in progress | T56 (#2673, part #2961), `upstream/dbal-failed-commit-leaves-transaction-open/` | filed as pull request doctrine/dbal#7633 against 4.6.x (checked 2026-11-20): still fails on 4.6.0 and 4.6.x, a regression of doctrine/dbal#6545; no duplicate found; `fix.patch` revised after filing, the owner pushes the revision |

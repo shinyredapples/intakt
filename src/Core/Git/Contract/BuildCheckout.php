@@ -12,6 +12,12 @@ interface BuildCheckout
      */
     public function updateMirror(string $project, string $remote): void;
 
+    // Never held below a disk floor, because the build that asks is already running.
+    /**
+     * @throws BuildCheckoutFailed
+     */
+    public function refreshMirror(string $project, string $remote): void;
+
     /**
      * @throws BuildCheckoutFailed
      */
