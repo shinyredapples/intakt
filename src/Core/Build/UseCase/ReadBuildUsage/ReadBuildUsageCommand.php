@@ -12,15 +12,12 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Component\Filesystem\Exception\IOException;
-use Symfony\Component\Filesystem\Filesystem;
 
 #[AsCommand(name: 'intakt:build:usage', description: 'Read the usage a build job\'s build.log reports, in a separate process under the same limits as after a build')]
 final readonly class ReadBuildUsageCommand
 {
     public function __construct(
         private IsolatedSessionLog $sessionLog,
-        private Filesystem $filesystem,
     ) {
     }
 
@@ -48,24 +45,22 @@ final readonly class ReadBuildUsageCommand
         return !is_link($path) && is_file($path);
     }
 
-    // The size is checked before the file is read, so a huge log never reaches memory.
+    // One byte past the limit is read from the opened file and no more, so a log that grows after the check still never reaches memory whole.
     private function usageIn(string $path): ?SessionUsage
     {
-        $size = filesize($path);
+        $handle = is_readable($path) ? fopen($path, 'rb') : false;
 
-        if (false === $size) {
+        if (false === $handle) {
             return null;
-        }
-
-        if ($size > IsolatedSessionLog::MAX_BYTES) {
-            return SessionUsage::withoutUsage(UsageReading::TooLarge);
         }
 
         try {
-            return $this->sessionLog->usageIn($this->filesystem->readFile($path));
-        } catch (IOException) {
-            return null;
+            $log = stream_get_contents($handle, IsolatedSessionLog::MAX_BYTES + 1);
+        } finally {
+            fclose($handle);
         }
+
+        return false === $log ? null : $this->sessionLog->usageIn($log);
     }
 
     private function printed(SymfonyStyle $io, BuildUsage $usage): int

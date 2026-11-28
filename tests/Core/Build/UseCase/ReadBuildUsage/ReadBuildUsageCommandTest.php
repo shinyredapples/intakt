@@ -58,6 +58,35 @@ final class ReadBuildUsageCommandTest extends TestCase
         self::assertStringContainsString('usage not read: too_large', $tester->getDisplay());
     }
 
+    public function testACutLogWithoutAResultLinePrintsTheUsageOfItsMessages(): void
+    {
+        $tester = $this->usageCommand(self::LOGS.'/cut.log');
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame("reading read\ninput_tokens 5500\noutput_tokens 1000\ncache_read_input_tokens 435000\ncache_creation_input_tokens 19000\ntotal 460500\n", $tester->getDisplay());
+    }
+
+    public function testALogThatGrowsPastTheByteLimitBetweenTheCheckAndTheReadIsRefused(): void
+    {
+        new Filesystem()->dumpFile($this->folder.'/build.log', (string) file_get_contents(self::LOGS.'/sample.log'));
+        $read = new ReadBytes();
+        stream_context_set_default([GrowingLog::PROTOCOL => ['read' => $read]]);
+        stream_wrapper_register(GrowingLog::PROTOCOL, GrowingLog::class);
+
+        try {
+            $tester = $this->usageCommand(GrowingLog::PROTOCOL.'://'.$this->folder.'/build.log');
+        } finally {
+            stream_wrapper_unregister(GrowingLog::PROTOCOL);
+            stream_context_set_default([GrowingLog::PROTOCOL => ['read' => null]]);
+        }
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('usage not read: too_large', $tester->getDisplay());
+        self::assertGreaterThan(IsolatedSessionLog::MAX_BYTES + 1, filesize($this->folder.'/build.log'));
+        // Plus one chunk, because PHP's stream layer asks the wrapper for whole 8 KiB chunks and keeps what the command did not take.
+        self::assertLessThanOrEqual(IsolatedSessionLog::MAX_BYTES + 1 + 8192, $read->total());
+    }
+
     public function testALinkToALogIsNeverRead(): void
     {
         new Filesystem()->symlink(realpath(self::LOGS.'/sample.log') ?: '', $this->folder.'/build.log');
@@ -102,7 +131,7 @@ final class ReadBuildUsageCommandTest extends TestCase
     private function usageCommand(string $log): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new ReadBuildUsageCommand(new IsolatedSessionLog(__DIR__.'/../../../../../vendor/autoload.php'), new Filesystem()));
+        $application->addCommand(new ReadBuildUsageCommand(new IsolatedSessionLog(__DIR__.'/../../../../../vendor/autoload.php')));
         $tester = new CommandTester($application->find('intakt:build:usage'));
         $tester->execute(['log' => $log]);
 
