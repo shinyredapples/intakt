@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
+use PhpParser\Node\Identifier;
 use PhpParser\Modifiers;
 use PhpParser\Node;
 use PhpParser\Node\Name;
@@ -87,8 +88,8 @@ final readonly class TraitComposition
             }
 
             if (!$this->isExcluded($adaptations, $trait, $method)) {
-                $changes = array_filter($this->adaptationsOf($adaptations, $trait, $method), fn (Alias $alias): bool => null === $alias->newName && null !== $this->visibility($alias));
-                $methods[$name] ??= $method->withVisibility(null === array_last($changes) ? null : $this->visibility(array_last($changes)));
+                $changes = array_filter($this->adaptationsOf($adaptations, $trait, $method), fn (Alias $alias): bool => !$alias->newName instanceof Identifier && null !== $this->visibility($alias));
+                $methods[$name] ??= $method->withVisibility(array_last($changes) instanceof Alias ? $this->visibility(array_last($changes)) : null);
             }
         }
 
@@ -112,7 +113,7 @@ final readonly class TraitComposition
      */
     private function adaptationsOf(array $adaptations, Name $trait, TraitMethod $method): array
     {
-        return array_values(array_filter($adaptations, static fn (Node $adaptation): bool => $adaptation instanceof Alias && 0 === strcasecmp($adaptation->method->toString(), $method->name) && (null === $adaptation->trait || 0 === strcasecmp($adaptation->trait->toString(), $trait->toString()))));
+        return array_values(array_filter($adaptations, static fn (Node $adaptation): bool => $adaptation instanceof Alias && 0 === strcasecmp($adaptation->method->toString(), $method->name) && (!$adaptation->trait instanceof Name || 0 === strcasecmp($adaptation->trait->toString(), $trait->toString()))));
     }
 
     /**

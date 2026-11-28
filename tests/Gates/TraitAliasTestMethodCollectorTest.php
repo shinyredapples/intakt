@@ -204,6 +204,20 @@ final class TraitAliasTestMethodCollectorTest extends PhpStanRuleTestCase
         parent::tearDown();
     }
 
+    protected function ruleFor(string $root): TestMethodSentenceRule
+    {
+        return new TestMethodSentenceRule($root);
+    }
+
+    /**
+     * @return array<Collector<Node, mixed>>
+     */
+    #[Override]
+    protected function getCollectors(): array
+    {
+        return [new TestMethodCollector(), new TraitAliasTestMethodCollector(self::createReflectionProvider()), new TestProviderCollector(self::createReflectionProvider())];
+    }
+
     private function wrapped(string $inner, string $wrapper, string $use): Sandbox
     {
         $sandbox = Sandbox::empty();
@@ -218,19 +232,5 @@ final class TraitAliasTestMethodCollectorTest extends PhpStanRuleTestCase
     private function findingsAtTheClassAlias(string ...$methods): string
     {
         return implode("\n", array_map(static fn (string $method): string => 'tests/SampleTest.php:7 intakt.testMethodSentence Test method Intakt\Sample\SampleTest::'.$method.'()'.self::FINDING, $methods));
-    }
-
-    protected function ruleFor(string $root): TestMethodSentenceRule
-    {
-        return new TestMethodSentenceRule($root);
-    }
-
-    /**
-     * @return array<Collector<Node, mixed>>
-     */
-    #[Override]
-    protected function getCollectors(): array
-    {
-        return [new TestMethodCollector(), new TraitAliasTestMethodCollector(self::createReflectionProvider()), new TestProviderCollector(self::createReflectionProvider())];
     }
 }
