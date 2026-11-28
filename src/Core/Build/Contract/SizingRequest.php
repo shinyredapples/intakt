@@ -12,7 +12,7 @@ final readonly class SizingRequest
     public function __construct(
         public string $project,
         public int $task,
-        // Untrusted, like the body: both reach the prompt only fenced.
+        // Untrusted, like the body, because both come from the issue author and so reach the prompt only fenced.
         public string $title,
         public string $body,
     ) {

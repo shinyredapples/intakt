@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\SizeTask;
 
-use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Core\Build\Contract\ReadinessGap;
 use Intakt\Core\Build\Contract\SizingRequest;
 use Intakt\Core\Build\Contract\SizingVerdict;
@@ -18,11 +17,20 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
+use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
+use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
+use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
+use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
+use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
+use Intakt\Plugin\Vendor\Contract\ProviderUnreachable;
 use Intakt\Plugin\Vendor\Contract\SizingVendor;
+use Intakt\Plugin\Vendor\Contract\UsageNotRecorded;
+use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
+use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
 use NoDiscard;
 use Symfony\Component\Uid\Uuid;
 
-// Plain code decides every step: the model answers one typed object, and only a valid one that says not ready parks the task.
+// Plain code decides every step, because the model only answers one typed object and a steered answer must not park or split a task by itself.
 final readonly class SizeTask
 {
     public function __construct(
@@ -35,32 +43,40 @@ final readonly class SizeTask
 
     /**
      * @throws TaskNotSized
+     * @throws UsageNotRecorded
+     * @throws ProviderRateLimited
+     * @throws ProviderFailedTransiently
+     * @throws VendorAccountOut
+     * @throws VendorAccountBusy
+     * @throws NoProviderLeft
+     * @throws ProviderRejectedTheKey
+     * @throws ProviderUnreachable
      */
     #[NoDiscard('the outcome says whether the task was parked')]
     public function run(string $project, int $number): SizingOutcome
     {
-        $request = $this->requestFor($project, $number);
-        $verdict = $this->vendor->size($project, $request);
+        $run = new BuildRun($project, $number, Uuid::v4()->toRfc4122());
+        $verdict = $this->vendor->size($project, $this->requestFor($run));
         $outcome = $this->outcomeOf($verdict);
 
-        $this->record($project, $number, $outcome, $verdict);
+        $this->record($run, $outcome, $verdict);
 
-        return $this->parkedWhenNotReady($project, $number, $outcome, $verdict);
+        return $this->parkedWhenNotReady($run, $outcome, $verdict);
     }
 
-    private function requestFor(string $project, int $number): SizingRequest
+    private function requestFor(BuildRun $run): SizingRequest
     {
         try {
-            $task = $this->issues->readOpen($project, $number);
+            $task = $this->issues->readOpen($run->project, $run->task);
         } catch (ForgeReadFailed|ForgeRateLimited $failure) {
-            throw TaskNotSized::unreadable($project, $number, $failure->getMessage());
+            throw TaskNotSized::unreadable($run->project, $run->task, $failure->getMessage());
         }
 
         if (!$task instanceof ListedIssue) {
-            throw TaskNotSized::unreadable($project, $number, 'it is not an open issue');
+            throw TaskNotSized::unreadable($run->project, $run->task, 'it is not an open issue');
         }
 
-        return new SizingRequest($project, $number, $task->title, $task->body);
+        return new SizingRequest($run->project, $run->task, $task->title, $task->body);
     }
 
     private function outcomeOf(?SizingVerdict $verdict): SizingOutcome
@@ -73,11 +89,11 @@ final readonly class SizeTask
     }
 
     // The task by its number and the verdict's closed fields only, because the title and the model's reason are untrusted text.
-    private function record(string $project, int $number, SizingOutcome $outcome, ?SizingVerdict $verdict): void
+    private function record(BuildRun $run, SizingOutcome $outcome, ?SizingVerdict $verdict): void
     {
         $payload = json_encode([
-            'project' => $project,
-            'task' => (string) $number,
+            'project' => $run->project,
+            'task' => (string) $run->task,
             'outcome' => $outcome->value,
             'missing' => array_map(static fn (ReadinessGap $gap): string => $gap->value, $verdict->missing ?? []),
             'size' => $verdict?->size->value,
@@ -87,14 +103,14 @@ final readonly class SizeTask
         $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::TaskSized, $payload));
 
         if (!$appended->succeeded()) {
-            throw TaskNotSized::notRecorded($project, $number, (string) $appended->failure);
+            throw TaskNotSized::notRecorded($run->project, $run->task, (string) $appended->failure);
         }
     }
 
     /**
      * @throws TaskNotSized
      */
-    private function parkedWhenNotReady(string $project, int $number, SizingOutcome $outcome, ?SizingVerdict $verdict): SizingOutcome
+    private function parkedWhenNotReady(BuildRun $run, SizingOutcome $outcome, ?SizingVerdict $verdict): SizingOutcome
     {
         // An empty list never reaches here, because the agent refuses a verdict that is not ready with nothing missing.
         if (SizingOutcome::Parked !== $outcome || !$verdict instanceof SizingVerdict || [] === $verdict->missing) {
@@ -102,9 +118,9 @@ final readonly class SizeTask
         }
 
         try {
-            $this->parkedTasks->park(new BuildRun($project, $number, Uuid::v4()->toRfc4122()), BuildQuestion::forMissingReadiness($verdict->missing));
+            $this->parkedTasks->park($run, BuildQuestion::forMissingReadiness($verdict->missing));
         } catch (TaskNotParked) {
-            throw TaskNotSized::notParked($project, $number);
+            throw TaskNotSized::notParked($run->project, $run->task);
         }
 
         return $outcome;

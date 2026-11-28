@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\Contract;
 
-// The first point of the Definition of Ready (docs/design/01-intent.md), one case per thing a task can lack.
+// Closed, because the question that people read is worded from these cases and never from the model text (docs/design/01-intent.md, Definition of Ready).
 enum ReadinessGap: string
 {
     case ObservableResult = 'observable_result';

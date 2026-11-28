@@ -54,7 +54,7 @@ final class SizeTaskTest extends TestCase
         $ledger = new InMemoryLedger();
         $parked = ParkedTaskTable::inMemory();
 
-        $outcome = $this->sizing($this->verdict(true, [], SizeTier::Medium, 240), $ledger, $parked)->run('alpha', 7);
+        $outcome = $this->sizing($this->verdict([], SizeTier::Medium, 240), $ledger, $parked)->run('alpha', 7);
 
         self::assertSame(SizingOutcome::Ready, $outcome);
         self::assertSame([['project' => 'alpha', 'task' => '7', 'outcome' => 'ready', 'missing' => [], 'size' => 'medium', 'estimated_lines' => 240]], $ledger->payloads());
@@ -67,7 +67,7 @@ final class SizeTaskTest extends TestCase
         $ledger = new InMemoryLedger();
         $parked = ParkedTaskTable::inMemory();
 
-        $outcome = $this->sizing($this->verdict(false, [ReadinessGap::AcceptanceCondition], SizeTier::Small, 20), $ledger, $parked)->run('alpha', 7);
+        $outcome = $this->sizing($this->verdict([ReadinessGap::AcceptanceCondition], SizeTier::Small, 20), $ledger, $parked)->run('alpha', 7);
 
         self::assertSame(SizingOutcome::Parked, $outcome);
         self::assertSame('"This task is not ready to build. It lacks: an acceptance condition."', $parked->fetchOne('SELECT question FROM build_parked_task'));
@@ -79,9 +79,11 @@ final class SizeTaskTest extends TestCase
     {
         $parked = ParkedTaskTable::inMemory();
 
-        (void) $this->sizing($this->verdict(false, [ReadinessGap::SingleOutcome], SizeTier::Large, 900), new InMemoryLedger(), $parked)->run('alpha', 7);
+        (void) $this->sizing($this->verdict([ReadinessGap::SingleOutcome], SizeTier::Large, 900), new InMemoryLedger(), $parked)->run('alpha', 7);
 
-        self::assertStringContainsString('a single outcome', (string) $parked->fetchOne('SELECT question FROM build_parked_task'));
+        $question = $parked->fetchOne('SELECT question FROM build_parked_task');
+        self::assertIsString($question);
+        self::assertStringContainsString('a single outcome', $question);
     }
 
     public function testAnInvalidSizingAnswerParksNothingAndSplitsNothing(): void
@@ -103,10 +105,12 @@ final class SizeTaskTest extends TestCase
         $vendor = $this->createMock(SizingVendor::class);
         $vendor->expects(self::never())->method('size');
 
-        $this->expectException(TaskNotSized::class);
-        $this->expectExceptionMessage('Issue 7 of project "alpha" cannot be sized: it is not an open issue');
-
-        (void) new SizeTask($reads, $vendor, $this->parkedTasks(ParkedTaskTable::inMemory(), new InMemoryLedger()), new InMemoryLedger())->run('alpha', 7);
+        try {
+            (void) new SizeTask($reads, $vendor, $this->parkedTasks(ParkedTaskTable::inMemory(), new InMemoryLedger()), new InMemoryLedger())->run('alpha', 7);
+            self::fail('An issue that is not open was sized.');
+        } catch (TaskNotSized $notSized) {
+            self::assertSame('Issue 7 of project "alpha" cannot be sized: it is not an open issue', $notSized->getMessage());
+        }
     }
 
     public function testAnIssueTheForgeCannotReadIsNotSized(): void
@@ -114,10 +118,12 @@ final class SizeTaskTest extends TestCase
         $reads = self::createStub(IssueReads::class);
         $reads->method('readOpen')->willThrowException(new ForgeReadFailed('the forge is down'));
 
-        $this->expectException(TaskNotSized::class);
-        $this->expectExceptionMessage('the forge is down');
-
-        (void) new SizeTask($reads, self::createStub(SizingVendor::class), $this->parkedTasks(ParkedTaskTable::inMemory(), new InMemoryLedger()), new InMemoryLedger())->run('alpha', 7);
+        try {
+            (void) new SizeTask($reads, self::createStub(SizingVendor::class), $this->parkedTasks(ParkedTaskTable::inMemory(), new InMemoryLedger()), new InMemoryLedger())->run('alpha', 7);
+            self::fail('An issue the forge could not read was sized.');
+        } catch (TaskNotSized $notSized) {
+            self::assertSame('Issue 7 of project "alpha" cannot be sized: the forge is down', $notSized->getMessage());
+        }
     }
 
     public function testAVerdictTheLedgerDoesNotRecordParksNothing(): void
@@ -125,7 +131,7 @@ final class SizeTaskTest extends TestCase
         $parked = ParkedTaskTable::inMemory();
 
         try {
-            (void) $this->sizing($this->verdict(false, [ReadinessGap::ObservableResult], SizeTier::Small, 10), new InMemoryLedger(0), $parked)->run('alpha', 7);
+            (void) $this->sizing($this->verdict([ReadinessGap::ObservableResult], SizeTier::Small, 10), new InMemoryLedger(0), $parked)->run('alpha', 7);
             self::fail('A verdict the ledger refused was acted on.');
         } catch (TaskNotSized $notSized) {
             self::assertStringContainsString('did not record the sizing', $notSized->getMessage());
@@ -137,9 +143,9 @@ final class SizeTaskTest extends TestCase
     /**
      * @param list<ReadinessGap> $missing
      */
-    private function verdict(bool $ready, array $missing, SizeTier $size, int $lines): SizingVerdict
+    private function verdict(array $missing, SizeTier $size, int $lines): SizingVerdict
     {
-        return new SizingVerdict($ready, $missing, $size, $lines, 'Because.');
+        return new SizingVerdict([] === $missing, $missing, $size, $lines, 'Because.');
     }
 
     private function sizing(?SizingVerdict $verdict, InMemoryLedger $ledger, Connection $parked): SizeTask

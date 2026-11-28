@@ -11,7 +11,7 @@ use NoDiscard;
 // Apart from Vendor, because only the sizing call needs it and every other implementation of Vendor would have to stub it.
 interface SizingVendor
 {
-    // Null when the model's answer is no valid verdict; the call's tokens are charged to the task either way.
+    // Null when the model's answer is no valid verdict, because an invalid answer must not park a task; its tokens are charged to the task either way.
     /**
      * @throws UsageNotRecorded
      * @throws ProviderRateLimited
