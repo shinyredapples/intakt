@@ -260,7 +260,7 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         $run = $sandbox->runGate(new IgnoredFilesGate());
 
         self::assertTrue($run->failed('ignored'), $run->output());
-        self::assertStringContainsString('.gitignore: marked assume-unchanged or skip-worktree; clear each mark with its own command',$run->findingsOf('ignored'));
+        self::assertStringContainsString('.gitignore: marked assume-unchanged or skip-worktree; clear each mark with its own command', $run->findingsOf('ignored'));
     }
 
     public function testASkipWorktreeGitignoreFailsTheGate(): void
