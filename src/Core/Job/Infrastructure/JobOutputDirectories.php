@@ -154,12 +154,6 @@ final readonly class JobOutputDirectories
         return self::PLAIN_FILE === ($opened['mode'] & self::FILE_TYPE) && [$opened['dev'], $opened['ino']] === [$listed['dev'], $listed['ino']];
     }
 
-    // The tail only, from the followed file, because the end of a watched job hands back that much of it.
-    private function tailStart(string $name, int $size, ?string $followed): int
-    {
-        return $followed === $name ? max(0, $size - self::TAIL_BYTES) : 0;
-    }
-
     private function isNoOutput(DirectoryIterator $entry): bool
     {
         return $entry->isDot();
@@ -173,6 +167,12 @@ final readonly class JobOutputDirectories
         }
 
         return $entry->getSize();
+    }
+
+    // The tail only, from the followed file, because the end of a watched job hands back that much of it.
+    private function tailStart(string $name, int $size, ?string $followed): int
+    {
+        return $followed === $name ? max(0, $size - self::TAIL_BYTES) : 0;
     }
 
     private function contentsOf(SplFileInfo $entry, int $skipped): string
