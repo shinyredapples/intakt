@@ -30,7 +30,7 @@ final readonly class PartIssueCalls
      *
      * @throws ForgeReadFailed
      */
-    public function read(string $path, array $query): ReadAnswer
+    public function read(string $path, array $query): IssueRead
     {
         $options = ['auth_bearer' => $this->bearer(), 'query' => $query, 'headers' => ['Accept' => 'application/vnd.github+json']];
 
@@ -49,7 +49,7 @@ final readonly class PartIssueCalls
             throw new ForgeReadFailed(sprintf('GitHub answered %d to a read of %s.', $status, $path), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
         }
 
-        return new ReadAnswer($body, $this->nextLinks->namesNext($links, $target));
+        return new IssueRead($body, $this->nextLinks->namesNext($links, $target));
     }
 
     /**
