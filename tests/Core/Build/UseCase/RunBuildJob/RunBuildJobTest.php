@@ -575,6 +575,44 @@ final class RunBuildJobTest extends TestCase
         self::assertNull($this->stops->causeFor($this->job()));
     }
 
+    public function testADockerFailureBeforeTheRunnerIsCalledLeavesTheCauseOfTheBuildThatHoldsTheBranch(): void
+    {
+        $this->stops->record($this->job(), BuildStopCause::NoProgress);
+        $original = DockerEngineFailed::notStoppedAfterKill('intakt-job-demo', 10);
+        $this->gate = self::createStub(Gate::class);
+        $this->gate->method('registryHosts')->willThrowException($original);
+
+        try {
+            (void) $this->useCase(self::createStub(JobRunner::class), new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+            self::fail('the setup failure was not passed on');
+        } catch (DockerEngineFailed $failure) {
+            self::assertSame($original, $failure);
+        }
+
+        self::assertSame(BuildStopCause::NoProgress, $this->stops->causeFor($this->job()));
+    }
+
+    public function testAFailedPromptRemovalDoesNotHideAJobEndFailureAndItsStopCause(): void
+    {
+        $original = JobEventNotRecorded::for('job_ended', 'the database is locked');
+        $filesystem = new class extends Filesystem {
+            /**
+             * @param string|iterable<mixed> $files
+             */
+            public function remove(string|iterable $files): void
+            {
+                throw new IOException('prompt cleanup failed');
+            }
+        };
+
+        try {
+            (void) $this->useCase($this->runnerThatStopsAndFails(BuildStopCause::NoProgress, $original), new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'), $filesystem)->run($this->job());
+            self::fail('the job end failure was not passed on');
+        } catch (BuildJobEndFailed $failure) {
+            self::assertSame([BuildStopCause::NoProgress, $original], [$failure->stopCause, $failure->getPrevious()]);
+        }
+    }
+
     public function testAStopCauseOfAnotherBranchIsNotCarried(): void
     {
         $this->stops->record(new BuildJob('demo', $this->folder.'/clone', 'other', new BuildBrief('x', new Decisions(), null), Tier::Standard, 'img'), BuildStopCause::PerTaskTotal);
