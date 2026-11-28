@@ -105,6 +105,29 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertTrue($run->passed('ignored'), $run->output());
     }
 
+    public function testANegatedRuleUnderAnExcludedDirectoryStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryIgnoring("/out/\n!/out/a.txt\n");
+        $sandbox->write('out/a.txt', "kept\n");
+        $sandbox->git('add', '--force', 'out/a.txt');
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertTrue($run->failed('ignored'), $run->output());
+        self::assertStringContainsString('out/a.txt', $run->findingsOf('ignored'));
+    }
+
+    public function testANegatedRuleUnderADirectoryContentsRuleLetsATrackedFilePass(): void
+    {
+        $sandbox = $this->repositoryIgnoring("/out/*\n!/out/a.txt\n");
+        $sandbox->write('out/a.txt', "kept\n");
+        $sandbox->commitAll('chore: keep one output');
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertTrue($run->passed('ignored'), $run->output());
+    }
+
     public function testAPathWithThreeIndexStagesGivesExactlyOneFinding(): void
     {
         $sandbox = $this->repositoryIgnoring("*.log\n");
@@ -138,6 +161,39 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         $findings = $this->fullFindingsOf($sandbox->gateResult(new IgnoredFilesGate()));
 
         self::assertSame(['"notes\n\"draft\".tmp": tracked, but .gitignore excludes it'], $findings);
+    }
+
+    public function testAPathWithAUnicodeNextLineIsQuotedWithOctalBytesInTheFullReport(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.tmp\n");
+        $sandbox->write("one\u{0085}two.tmp", "data\n");
+        $sandbox->git('add', '--force', "one\u{0085}two.tmp");
+
+        $findings = $this->fullFindingsOf($sandbox->gateResult(new IgnoredFilesGate()));
+
+        self::assertSame(['"one\302\205two.tmp": tracked, but .gitignore excludes it'], $findings);
+    }
+
+    public function testAPathWithAUnicodeLineSeparatorIsQuotedWithOctalBytesInTheFullReport(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.tmp\n");
+        $sandbox->write("one\u{2028}two.tmp", "data\n");
+        $sandbox->git('add', '--force', "one\u{2028}two.tmp");
+
+        $findings = $this->fullFindingsOf($sandbox->gateResult(new IgnoredFilesGate()));
+
+        self::assertSame(['"one\342\200\250two.tmp": tracked, but .gitignore excludes it'], $findings);
+    }
+
+    public function testAPathWithATabAndABellIsQuotedWithCEscapesInTheFullReport(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.tmp\n");
+        $sandbox->write("a\tb\x07\\c.tmp", "data\n");
+        $sandbox->git('add', '--force', "a\tb\x07\\c.tmp");
+
+        $findings = $this->fullFindingsOf($sandbox->gateResult(new IgnoredFilesGate()));
+
+        self::assertSame(['"a\tb\a\\\\c.tmp": tracked, but .gitignore excludes it'], $findings);
     }
 
     public function testAPathInValidUtf8WithoutControlCharactersStaysAsItIs(): void

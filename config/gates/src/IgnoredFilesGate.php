@@ -7,8 +7,6 @@ namespace Intakt\Gates;
 // Refuses tracked files that the `.gitignore` files exclude; local excludes (.git/info/exclude, core.excludesFile) do not count, because they differ per clone.
 final readonly class IgnoredFilesGate implements Gate
 {
-    private const array C_ESCAPES = ["\x07" => 'a', "\x08" => 'b', "\t" => 't', "\n" => 'n', "\v" => 'v', "\f" => 'f', "\r" => 'r', '"' => '"', '\\' => '\\'];
-
     public function name(): string
     {
         return 'ignored';
@@ -53,21 +51,11 @@ final readonly class IgnoredFilesGate implements Gate
     }
 
     // Because the full report must name a file the reader can untrack, a path JSON would mangle or a line break would split is quoted as git quotes it.
+    // A path that is not UTF-8 fails the match, and so does one with a Unicode control (C0, DEL, C1 such as U+0085) or line separator.
     private function shown(string $path): string
     {
-        $plain = 1 === preg_match('//u', $path) && 1 !== preg_match('/[\x00-\x1F\x7F]/', $path) && !str_starts_with($path, '"');
+        $plain = 1 === preg_match('/^[^\p{Cc}\p{Zl}\p{Zp}]*$/u', $path) && !str_starts_with($path, '"');
 
-        return $plain ? $path : '"'.implode('', array_map($this->quotedByte(...), str_split($path))).'"';
-    }
-
-    private function quotedByte(string $byte): string
-    {
-        if (isset(self::C_ESCAPES[$byte])) {
-            return '\\'.self::C_ESCAPES[$byte];
-        }
-
-        $code = ord($byte[0]);
-
-        return $code < 0x20 || $code > 0x7E ? sprintf('\\%03o', $code) : $byte;
+        return $plain ? $path : '"'.addcslashes($path, "\0..\37\"\\\177..\377").'"';
     }
 }
