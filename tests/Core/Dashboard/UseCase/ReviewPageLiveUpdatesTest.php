@@ -1348,7 +1348,20 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $this->givenARunningRound();
         $page = $this->browser->request('GET', '/reviews/round-1/record');
-        $answer = ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/Cart.php', 12, null, 'The last item drops out of the total.', FixableBy::Builder, false, null, null, title: 'Total off by one', kind: FindingKind::Logic)], [], []));
+        $answer = ReadAnswer::of(new Verdict(Decision::Changes, [new Finding(
+            'F1',
+            Severity::P1,
+            'src/Cart.php',
+            12,
+            null,
+            'The last item drops out of the total.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: 'Total off by one',
+            kind: FindingKind::Logic,
+        )], [], []));
 
         $updated = $this->replaced($page, $this->stream('answer_read', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'answer' => $answer]));
 

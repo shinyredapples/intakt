@@ -86,7 +86,20 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
     public function testAFindingWithATitleAndKindIsListedByTheKindInWordsAndItsTitle(): void
     {
-        $titled = new Finding('F1', Severity::P1, 'src/PushGate.php', 12, null, 'Read the status per push. It is cached.', FixableBy::Builder, false, null, null, title: 'Status read once only', kind: FindingKind::Logic);
+        $titled = new Finding(
+            'F1',
+            Severity::P1,
+            'src/PushGate.php',
+            12,
+            null,
+            'Read the status per push. It is cached.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: 'Status read once only',
+            kind: FindingKind::Logic,
+        );
         $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), new Paths(), [$titled], [$titled->withId('F4')], [], false));
 
         $crawler = $this->browser->request('GET', '/reviews/round-2/record');

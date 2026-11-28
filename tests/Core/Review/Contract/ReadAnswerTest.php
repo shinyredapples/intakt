@@ -36,14 +36,40 @@ final class ReadAnswerTest extends TestCase
 
     public function testAFindingsTitleIsTheReviewersTitleWhenItHasOne(): void
     {
-        $read = ReadFinding::of(new Finding('F1', Severity::P1, null, null, null, 'The last item drops out of the total.', FixableBy::Builder, false, null, null, title: ' Total off by one ', kind: FindingKind::Logic));
+        $read = ReadFinding::of(new Finding(
+            'F1',
+            Severity::P1,
+            null,
+            null,
+            null,
+            'The last item drops out of the total.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: ' Total off by one ',
+            kind: FindingKind::Logic,
+        ));
 
         self::assertSame('Total off by one', $read->title);
     }
 
     public function testAFindingsKindIsKept(): void
     {
-        $read = ReadFinding::of(new Finding('F1', Severity::P1, null, null, null, 'Broken.', FixableBy::Builder, false, null, null, title: 'Total off by one', kind: FindingKind::Logic));
+        $read = ReadFinding::of(new Finding(
+            'F1',
+            Severity::P1,
+            null,
+            null,
+            null,
+            'Broken.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: 'Total off by one',
+            kind: FindingKind::Logic,
+        ));
 
         self::assertSame(FindingKind::Logic, $read->kind);
     }
