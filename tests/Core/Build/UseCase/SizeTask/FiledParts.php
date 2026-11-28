@@ -18,7 +18,7 @@ final class FiledParts implements TaskParts
      */
     public array $filed = [];
 
-    // The create of this filing (counted from 1) is stored but answered as failed, as GitHub can answer 502 to an issue it created.
+    // The create of this filing (counted from 1) is stored but answered as failed, because GitHub can answer 502 to an issue it created.
     public ?int $answerLostFor = null;
 
     public ?ForgeReadFailed $unreadable = null;

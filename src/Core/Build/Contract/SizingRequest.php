@@ -18,7 +18,7 @@ final readonly class SizingRequest
         // Untrusted, like the body, because both come from the issue author and so reach the prompt only fenced.
         public string $title,
         public string $body,
-        // Never sent to the model: a split gives each part its original's labels.
+        // Never sent to the model, because only a split reads them: each part gets its original's labels.
         public array $labels = [],
     ) {
     }

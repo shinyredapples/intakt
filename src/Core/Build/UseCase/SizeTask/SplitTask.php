@@ -50,7 +50,7 @@ final readonly class SplitTask
      */
     public function planned(BuildRun $run, SizingRequest $request, SizingVerdict $verdict): SplitPlan
     {
-        $this->appended(LedgerEventKind::TaskSplitPlanned, $request->project, $request->task, SplitPlan::payloadOf($request, $verdict, $run->id));
+        $this->appended(new LedgerEvent(LedgerEventKind::TaskSplitPlanned, SplitPlan::payloadOf($request, $verdict, $run->id), SizingRecords::keyOf($request->project, $request->task)), $request->project, $request->task);
 
         return $this->planOf($request) ?? throw TaskNotSized::notRecorded($request->project, $request->task, 'the split plan is not on record after its append');
     }
@@ -67,7 +67,8 @@ final readonly class SplitTask
 
         $filed = $this->filedInOrder($plan);
         $this->umbrellaNamed($plan, $filed);
-        $this->appended(LedgerEventKind::TaskSplit, $plan->project, $plan->task, json_encode(['project' => $plan->project, 'task' => (string) $plan->task, 'run' => $plan->run, 'parts' => array_values($filed)], JSON_THROW_ON_ERROR));
+        $payload = json_encode(['project' => $plan->project, 'task' => (string) $plan->task, 'run' => $plan->run, 'parts' => array_values($filed)], JSON_THROW_ON_ERROR);
+        $this->appended(new LedgerEvent(LedgerEventKind::TaskSplit, $payload, SizingRecords::keyOf($plan->project, $plan->task)), $plan->project, $plan->task);
 
         return SizingOutcome::Split;
     }
@@ -75,9 +76,9 @@ final readonly class SplitTask
     /**
      * @throws TaskNotSized
      */
-    private function appended(LedgerEventKind $kind, string $project, int $task, string $payload): void
+    private function appended(LedgerEvent $event, string $project, int $task): void
     {
-        $appended = $this->ledger->append(new LedgerEvent($kind, $payload, SizingRecords::keyOf($project, $task)));
+        $appended = $this->ledger->append($event);
 
         if (!$appended->succeeded()) {
             throw TaskNotSized::notRecorded($project, $task, (string) $appended->failure);

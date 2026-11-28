@@ -119,6 +119,6 @@ final readonly class SplitLines
             $chains[$part->number] = 1 + max([0, ...array_map(static fn (int $earlier): int => $chains[$earlier], $part->dependsOn)]);
         }
 
-        return max($chains);
+        return max([0, ...$chains]);
     }
 }

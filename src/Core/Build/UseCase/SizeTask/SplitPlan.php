@@ -78,9 +78,9 @@ final readonly class SplitPlan
         return $this->parts;
     }
 
-    // The `Waits for` lines name the parts this one depends on by the numbers they were filed under, so the build order follows the split's own order.
+    // The `Waits for` lines name the parts this one depends on by the issue numbers they were filed under (keyed by part number), so the build order follows the split's own order.
     /**
-     * @param array<int, int> $filed the issue number of each part filed so far, by part number
+     * @param array<int, int> $filed
      */
     public function issueOf(SplitPart $part, array $filed): PartIssue
     {
@@ -96,7 +96,13 @@ final readonly class SplitPlan
      */
     private static function textsIn(mixed $values): array
     {
-        return is_array($values) && array_is_list($values) && array_all($values, static fn (mixed $value): bool => is_string($value)) ? $values : [];
+        if (!is_array($values) || !array_is_list($values)) {
+            return [];
+        }
+
+        $texts = array_values(array_filter($values, is_string(...)));
+
+        return count($texts) === count($values) ? $texts : [];
     }
 
     // The task's sizing key and the part's number, so a part of one split is never taken for a part of another.
