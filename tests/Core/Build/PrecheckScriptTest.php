@@ -210,6 +210,58 @@ final class PrecheckScriptTest extends TestCase
         self::assertSame(HandBackRefusal::Malformed->reason()."\n", $run->getOutput());
     }
 
+    public function testABranchHeadWhoseContentDoesNotMatchItsIdIsReportedAsOneGitWouldNotWrite(): void
+    {
+        $head = $this->history->commit('feat: build the task');
+        $this->givenThePullRequestText();
+        $other = trim($this->git(['commit-tree', $head.'^{tree}', '-p', $this->base], "another message\n"));
+        $this->storeUnder($head, $other);
+
+        $run = $this->whenThePrecheckRuns();
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertSame(HandBackRefusal::Malformed->reason()."\n", $run->getOutput());
+    }
+
+    public function testABranchHeadThatIsMissingIsReportedAsOneGitWouldNotWrite(): void
+    {
+        $head = $this->history->commit('feat: build the task');
+        $this->givenThePullRequestText();
+        new Filesystem()->remove($this->objectPath($head));
+
+        $run = $this->whenThePrecheckRuns();
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertSame(HandBackRefusal::Malformed->reason()."\n", $run->getOutput());
+    }
+
+    public function testABranchThatPointsAtAnObjectThatIsNoCommitIsReportedAsOneGitWouldNotWrite(): void
+    {
+        $this->history->commitFile('built.txt', "built\n", 'feat: build the task');
+        $this->givenThePullRequestText();
+        // Written as a file, because git itself refuses to point a branch at a tree.
+        file_put_contents(trim($this->git(['rev-parse', '--absolute-git-dir'])).'/refs/heads/task', $this->git(['rev-parse', 'HEAD^{tree}']));
+
+        $run = $this->whenThePrecheckRuns();
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertSame(HandBackRefusal::Malformed->reason()."\n", $run->getOutput());
+    }
+
+    public function testAValidObjectWithAReplaceRefInTheClonePassesThePrecheck(): void
+    {
+        $this->history->commitFile('built.txt', "built\n", 'feat: build the task');
+        $this->givenThePullRequestText();
+        $blob = trim($this->git(['rev-parse', 'HEAD:built.txt']));
+        $other = trim($this->git(['hash-object', '-w', '--stdin'], "a local substitute\n"));
+        $this->git(['replace', $blob, $other]);
+
+        $run = $this->whenThePrecheckRuns();
+
+        self::assertSame("precheck clean\n", $run->getOutput());
+        self::assertSame(0, $run->getExitCode());
+    }
+
     public function testABranchRewoundBehindTheSessionsStartPrintsOnlyTheFastForwardLine(): void
     {
         $this->base = $this->history->commit('feat: the pushed head');
@@ -236,6 +288,25 @@ final class PrecheckScriptTest extends TestCase
     private function givenThePullRequestText(): void
     {
         file_put_contents($this->history->work.'/PR.md', "feat: build the task\n\n## Summary\n");
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function git(array $arguments, ?string $input = null): string
+    {
+        return new Process(['git', ...$arguments], $this->history->work, $this->environment($this->base), $input)->mustRun()->getOutput();
+    }
+
+    private function objectPath(string $id): string
+    {
+        return trim($this->git(['rev-parse', '--absolute-git-dir'])).'/objects/'.substr($id, 0, 2).'/'.substr($id, 2);
+    }
+
+    private function storeUnder(string $id, string $other): void
+    {
+        new Filesystem()->remove($this->objectPath($id));
+        new Filesystem()->copy($this->objectPath($other), $this->objectPath($id));
     }
 
     private function whenThePrecheckRuns(?string $folder = null, ?string $base = null): Process

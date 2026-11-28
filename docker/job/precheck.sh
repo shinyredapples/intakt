@@ -18,6 +18,9 @@ if ! top="$(git rev-parse --show-toplevel 2> /dev/null)" || ! cd "$top"; then
     exit 2
 fi
 
+# A replace ref of the clone would make git read another object's content under an ID; the bundle packs the objects themselves, so the check reads them too.
+export GIT_NO_REPLACE_OBJECTS=1
+
 refused=0
 refuse() {
     printf '%s\n' "$1"
@@ -34,8 +37,12 @@ ids_match() {
 }
 
 # The branch by its full name, because only refs/heads/<branch> is bundled, whatever the checkout is on.
-if ! head="$(git rev-parse --verify --quiet "refs/heads/$branch^{commit}")" || [ "$head" = "$base" ]; then
+# The ref is read without peeling it to its commit, which would read the object and fail on a damaged one as it does on a missing branch.
+if ! head="$(git rev-parse --verify --quiet "refs/heads/$branch" 2> /dev/null)" || [ "$head" = "$base" ]; then
     refuse 'the build made no commit on the task'"'"'s branch'
+# The head itself first, because every check below reads it and would fail on a damaged one with another line.
+elif [ "$(git cat-file -t "$head" 2> /dev/null)" != commit ] || ! ids_match "$head"; then
+    refuse 'the bundle holds a commit git would not write'
 else
     fast_forward=1
     # Stricter than the hand-back on a first build, which accepts any start on main, because the builder is told to build on the branch as it received it.
