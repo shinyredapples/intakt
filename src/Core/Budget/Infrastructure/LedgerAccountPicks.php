@@ -48,7 +48,7 @@ final readonly class LedgerAccountPicks implements AccountPicks
     #[Override]
     public function latestOf(Provider $provider): ?AccountPick
     {
-        $newest = array_last(iterator_to_array($this->ledger->readOfKindAbout(LedgerEventKind::AccountPicked, $provider->value), false));
+        $newest = $this->ledger->newestOfKindAbout(LedgerEventKind::AccountPicked, $provider->value);
 
         return $newest instanceof RecordedEvent ? $this->pickOf($newest, $provider) : null;
     }

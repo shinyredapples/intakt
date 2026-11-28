@@ -18,6 +18,9 @@ interface Ledger
     // Matched on the subject the event was appended with, exactly, so an event appended without one is never read here.
     public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents;
 
+    // The last one readOfKindAbout() would read, fetched alone, because a caller that needs only the current state of a subject must not load its whole history.
+    public function newestOfKindAbout(LedgerEventKind $kind, string $subject): ?RecordedEvent;
+
     // Kept apart from readOfKindAbout(), because rows stored before the ledger had a subject carry none and are never back-filled, so a caller reads them only as a fallback.
     public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents;
 

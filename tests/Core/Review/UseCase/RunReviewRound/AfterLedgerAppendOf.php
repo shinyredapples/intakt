@@ -10,6 +10,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\Mentions;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 
 // Runs the other work right after a row of one kind was appended, so a test can force a competing writer's row in before the appender's next step.
@@ -44,6 +45,11 @@ final readonly class AfterLedgerAppendOf implements Ledger
     public function readOfKind(LedgerEventKind $kind): RecordedEvents
     {
         return $this->inner->readOfKind($kind);
+    }
+
+    public function newestOfKindAbout(LedgerEventKind $kind, string $subject): ?RecordedEvent
+    {
+        return array_last(iterator_to_array($this->readOfKindAbout($kind, $subject), false));
     }
 
     public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents

@@ -49,6 +49,12 @@ final class RecordingLedger implements Ledger
     }
 
     #[Override]
+    public function newestOfKindAbout(LedgerEventKind $kind, string $subject): ?RecordedEvent
+    {
+        return array_last(iterator_to_array($this->readOfKindAbout($kind, $subject), false));
+    }
+
+    #[Override]
     public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
     {
         return $this->recorded(array_values(array_filter($this->events, static fn (LedgerEvent $event): bool => $event->kind === $kind && $event->subject === $subject)));

@@ -14,18 +14,22 @@ use Intakt\Core\Budget\Contract\RankedAccounts;
 use Intakt\Core\Budget\Infrastructure\AccountPicked;
 use Intakt\Core\Budget\Infrastructure\LedgerAccountPicks;
 use Intakt\Core\Budget\Infrastructure\PickedLeftOut;
+use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use Intakt\Tests\Support\Log\LogRecords;
 use Intakt\Tests\Support\Log\RecordingLogger;
 use Intakt\Tests\Support\StoredSerializerFactory;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(LedgerAccountPicks::class)]
 #[CoversClass(AccountPicked::class)]
@@ -93,6 +97,17 @@ final class LedgerAccountPicksTest extends TestCase
         $picks->record(Provider::ClaudeCode, new RankedAccounts([new Account(Provider::ClaudeCode, Account::DEFAULT)], []));
 
         self::assertEquals(new Account(Provider::ClaudeCode, Account::DEFAULT), $picks->latestOf(Provider::ClaudeCode)?->picked);
+    }
+
+    public function testTheNewestPickIsReadWithoutLoadingTheOlderPicks(): void
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readOfKindAbout')->willThrowException(new LogicException('Every pick of the provider was read.'));
+        $ledger->method('newestOfKindAbout')->willReturn(new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::AccountPicked, '{"provider":"claude_code","picked":"team","left_out":[]}', 'claude_code'), new DateTimeImmutable('2026-11-28T12:00:00+00:00')));
+
+        $picks = new LedgerAccountPicks($ledger, new LedgerPayloads(StoredSerializerFactory::create()), StoredSerializerFactory::create(), new NullLogger());
+
+        self::assertEquals(new Account(Provider::ClaudeCode, 'team'), $picks->latestOf(Provider::ClaudeCode)?->picked);
     }
 
     public function testAProviderWithNoRecordedStartHasNoPick(): void
