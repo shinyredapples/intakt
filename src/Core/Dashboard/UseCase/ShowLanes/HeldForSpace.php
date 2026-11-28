@@ -10,6 +10,7 @@ use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
 use Intakt\Core\Disk\Contract\NearestFolder;
 use Intakt\Core\Git\Contract\GitServices;
+use Intakt\Core\Git\Contract\MirrorFolders;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 
@@ -22,6 +23,7 @@ final readonly class HeldForSpace
 
     public function __construct(
         private DiskSpace $disk,
+        private MirrorFolders $mirrors,
         // The mirrors folder, because every mirror update starts there; a build clone's folder is the caller's choice, so the page has none to measure.
         #[Autowire(param: GitServices::MIRRORS_DIRECTORY)]
         private string $mirrorsDirectory,
@@ -33,13 +35,19 @@ final readonly class HeldForSpace
      */
     public function now(): ?array
     {
+        $unreadable = null;
+
         foreach ($this->folders() as $folder) {
             try {
                 $hold = $this->disk->holdAt($folder);
-            } catch (FreeSpaceUnreadable $unreadable) {
-                return $this->unreadable($unreadable);
+            } catch (FreeSpaceUnreadable $failed) {
+                $unreadable ??= $failed;
+
+                continue;
             } catch (ProcessTimedOutException $timedOut) {
-                return $this->unreadable(new FreeSpaceUnreadable($folder, sprintf('df timed out after %s seconds', $timedOut->getExceededTimeout())));
+                $unreadable ??= new FreeSpaceUnreadable($folder, sprintf('df timed out after %s seconds', $timedOut->getExceededTimeout()));
+
+                continue;
             }
 
             if ($hold instanceof DiskHold) {
@@ -47,7 +55,8 @@ final readonly class HeldForSpace
             }
         }
 
-        return null;
+        // Only after every folder was asked, because a hold that was read on one disk says more than a reading that failed on another.
+        return $unreadable instanceof FreeSpaceUnreadable ? $this->unreadable($unreadable) : null;
     }
 
     /**
@@ -55,11 +64,8 @@ final readonly class HeldForSpace
      */
     private function folders(): array
     {
-        // Needed because a mirror can sit on a disk of its own, which UpdateMirror measures.
-        $folders = [NearestFolder::of($this->mirrorsDirectory)];
-        $mirrors = glob($this->mirrorsDirectory.'/*', GLOB_ONLYDIR);
-
-        return false === $mirrors ? $folders : [...$folders, ...$mirrors];
+        // Needed because a mirror can sit on a disk of its own, which UpdateMirror measures; a folder there that is no mirror is never written to, so it is not asked.
+        return [NearestFolder::of($this->mirrorsDirectory), ...array_map(NearestFolder::of(...), $this->mirrors->existing())];
     }
 
     /**

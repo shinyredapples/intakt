@@ -25,6 +25,7 @@ use Intakt\Core\Disk\Contract\NearestFolder;
 use Intakt\Core\Disk\Infrastructure\DiskConfiguration;
 use Intakt\Core\Disk\Infrastructure\FlooredDiskSpace;
 use Intakt\Core\Git\Contract\GitServices;
+use Intakt\Core\Git\UseCase\UpdateMirror\MirrorsOnDisk;
 use Intakt\Tests\Core\Disk\ControlledFreeSpaceReader;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -46,6 +47,7 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(RefuseForeignHost::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(HeldForSpace::class)]
+#[UsesClass(MirrorsOnDisk::class)]
 #[UsesClass(FlooredDiskSpace::class)]
 #[UsesClass(DiskHold::class)]
 #[UsesClass(NearestFolder::class)]

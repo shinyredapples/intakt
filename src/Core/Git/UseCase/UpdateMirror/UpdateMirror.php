@@ -126,7 +126,8 @@ final readonly class UpdateMirror
         return $path;
     }
 
-    private function isMirror(string $path): bool
+    // Public, because the list of existing mirrors (MirrorsOnDisk) must name exactly the folders an update measures and fetches into.
+    public function isMirror(string $path): bool
     {
         // Because git looks upward from a folder that is not a repository and would find the install's own checkout.
         if (!is_file($path.'/HEAD') || !is_dir($path.'/objects') || !is_dir($path.'/refs')) {
