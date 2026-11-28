@@ -9,6 +9,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\Mentions;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 
 final readonly class AppendRefusingLedger implements Ledger
@@ -35,6 +36,11 @@ final readonly class AppendRefusingLedger implements Ledger
     public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
     {
         return $this->reads->readOfKindAbout($kind, $subject);
+    }
+
+    public function newestOfKindAbout(LedgerEventKind $kind, string $subject): ?RecordedEvent
+    {
+        return $this->reads->newestOfKindAbout($kind, $subject);
     }
 
     public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents

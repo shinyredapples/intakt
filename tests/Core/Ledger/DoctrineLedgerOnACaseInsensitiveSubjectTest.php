@@ -49,6 +49,21 @@ final class DoctrineLedgerOnACaseInsensitiveSubjectTest extends KernelTestCase
         self::assertSame(['first'], array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($this->ledger->readOfKindAbout(LedgerEventKind::ReviewerStarted, 'r1'))));
     }
 
+    public function testTheNewestOfKindAboutReadSkipsANewerEventWhoseSubjectDiffersOnlyInCase(): void
+    {
+        self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, 'exact', 'R1'))->succeeded());
+        self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, 'case variant', 'r1'))->succeeded());
+
+        self::assertSame('exact', $this->ledger->newestOfKindAbout(LedgerEventKind::ReviewerStarted, 'R1')?->event->payload);
+    }
+
+    public function testTheNewestOfKindAboutReadForASubjectThatDiffersOnlyInCaseReadsNothing(): void
+    {
+        self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, 'first', 'r1'))->succeeded());
+
+        self::assertNull($this->ledger->newestOfKindAbout(LedgerEventKind::ReviewerStarted, 'R1'));
+    }
+
     protected function setUp(): void
     {
         $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);

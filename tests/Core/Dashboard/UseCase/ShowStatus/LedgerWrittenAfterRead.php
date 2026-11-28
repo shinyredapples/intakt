@@ -10,6 +10,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\Mentions;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 
 // The watcher appends without waiting for a status read to end, so a line can land between two reads of the same status.
@@ -34,6 +35,11 @@ final class LedgerWrittenAfterRead implements Ledger
     public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
     {
         return $this->ledger->readOfKindAbout($kind, $subject);
+    }
+
+    public function newestOfKindAbout(LedgerEventKind $kind, string $subject): ?RecordedEvent
+    {
+        return $this->ledger->newestOfKindAbout($kind, $subject);
     }
 
     public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
