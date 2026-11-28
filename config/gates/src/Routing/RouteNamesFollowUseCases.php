@@ -17,17 +17,21 @@ final class RouteNamesFollowUseCases
     /**
      * @var array<string, string>
      */
-    private array $declaredClasses = [];
+    private readonly array $declaredClasses;
 
     /**
      * @param array<string, string> $classOfService
      */
-    public function __construct(private readonly array $classOfService = [])
+    public function __construct(private readonly array $classOfService)
     {
+        $declaredClasses = [];
+
         foreach ($classOfService as $class) {
             $class = ltrim($class, '\\');
-            $this->declaredClasses[strtolower($class)] = $class;
+            $declaredClasses[strtolower($class)] = $class;
         }
+
+        $this->declaredClasses = $declaredClasses;
     }
 
     /**

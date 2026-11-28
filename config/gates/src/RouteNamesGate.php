@@ -42,6 +42,8 @@ final class RouteNamesGate implements RunsTheChangesCode
             $listing = $workspace->command([PHP_BINARY, $console, 'debug:router', ...self::OPTIONS], $environment);
             // Because a route may name its controller by service ID, the services' classes say which use case serves it.
             $services = $workspace->command([PHP_BINARY, $console, 'debug:container', ...self::OPTIONS], $environment);
+            // Because Symfony serves a route from a hidden service (an ID starting with a dot) too, and --show-hidden lists only those.
+            $hiddenServices = $workspace->command([PHP_BINARY, $console, 'debug:container', '--show-hidden', ...self::OPTIONS], $environment);
         } finally {
             $cache->discard();
         }
@@ -56,11 +58,13 @@ final class RouteNamesGate implements RunsTheChangesCode
             return GateResult::failedBecause($this->name(), 'debug:router printed no route list in JSON, so the routes cannot be read');
         }
 
-        if (!$services->succeeded()) {
-            return GateResult::failedBecause($this->name(), 'debug:container exited with '.$services->exitCode.': '.$services->firstErrorLine());
+        foreach ([$services, $hiddenServices] as $listed) {
+            if (!$listed->succeeded()) {
+                return GateResult::failedBecause($this->name(), 'debug:container exited with '.$listed->exitCode.': '.$listed->firstErrorLine());
+            }
         }
 
-        $classOfService = $this->classOfServiceFrom($services->output);
+        $classOfService = $this->classOfServiceFrom($services->output, $hiddenServices->output);
 
         if (null === $classOfService) {
             return GateResult::failedBecause($this->name(), 'debug:container printed no service list in JSON, so controllers named by service ID cannot be read');
@@ -102,17 +106,26 @@ final class RouteNamesGate implements RunsTheChangesCode
     /**
      * @return array<string, string>|null
      */
-    private function classOfServiceFrom(string $json): ?array
+    private function classOfServiceFrom(string ...$listings): ?array
     {
-        $listed = $this->decoded($json);
+        $definitions = [];
+        $aliases = [];
 
-        if (!is_array($listed) || !is_array($listed['definitions'] ?? null) || !is_array($listed['aliases'] ?? [])) {
-            return null;
+        foreach ($listings as $json) {
+            $listed = $this->decoded($json);
+
+            if (!is_array($listed) || !is_array($listed['definitions'] ?? null) || !is_array($listed['aliases'] ?? [])) {
+                return null;
+            }
+
+            $definitions += $listed['definitions'];
+            $aliases += $listed['aliases'] ?? [];
         }
 
-        $classes = $this->definedClasses($listed['definitions']);
+        // Because a visible alias may point at a hidden definition and the other way round, both listings are joined before aliases are resolved.
+        $classes = $this->definedClasses($definitions);
 
-        return $classes + $this->aliasedClasses($listed['aliases'] ?? [], $classes);
+        return $classes + $this->aliasedClasses($aliases, $classes);
     }
 
     /**
