@@ -7,7 +7,7 @@ namespace Intakt\Core\Build\Domain;
 use Intakt\Core\HandBack\Contract\RegressionRun;
 use Intakt\Core\HandBack\Contract\RegressionRuns;
 
-// Fixed words and the test paths read from the diff, never the builder's text or a log, because the body goes to the forge as written; ReadableLines finds the headings (fences, indented code and HTML blocks hide none), and the body is otherwise left alone.
+// Fixed words and the test paths read from the diff, never the builder's text or a log, because the body goes to the forge as written; ReadableLines finds the headings (it skips those inside fences, indented code and HTML blocks) and what is still open where the results go, and the body is otherwise left alone.
 final readonly class RegressionEvidence
 {
     private const string SAFE_PATH = '#^[A-Za-z0-9_./@+ -]+$#';
@@ -25,16 +25,16 @@ final readonly class RegressionEvidence
         $readable = ReadableLines::of($lines);
         $headings = $readable->headings;
         $evidence = $this->evidenceIn($headings);
-        $closing = (null === $readable->openFence ? '' : "\n".$readable->openFence).(null === $readable->openElement ? '' : "\n</".$readable->openElement.'>');
 
         if (null === $evidence) {
-            return $this->joined(rtrim($body.$closing), "## Evidence\n\n".$this->resultLines(), '');
+            return $this->joined(rtrim($body).$readable->closing(),"## Evidence\n\n".$this->resultLines(), '');
         }
 
         $end = $this->endOf($evidence, $headings, count($lines));
-        $kept = implode("\n", array_slice($lines, 0, $end));
+        $kept = array_slice($lines, 0, $end);
 
-        return $this->joined(rtrim($kept.($end === count($lines) ? $closing : '')), $this->resultLines(), implode("\n", array_slice($lines, $end)));
+        // The lines up to the section's end are read again, because an element left open there would hide the results even when the body closes it later.
+        return $this->joined(rtrim(implode("\n", $kept)).ReadableLines::of($kept)->closing(), $this->resultLines(), implode("\n", array_slice($lines, $end)));
     }
 
     /**

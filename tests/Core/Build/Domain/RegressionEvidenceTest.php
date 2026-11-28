@@ -165,6 +165,74 @@ final class RegressionEvidenceTest extends TestCase
         self::assertSame("<textarea>\n</pre>\n```\ncode\n```\n</textarea>\n\n## Evidence\n\n".self::LINES, $body);
     }
 
+    public function testAnElementLeftOpenInsideTheEvidenceSectionIsClosedBeforeTheResults(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\n<textarea>\nx\n</pre>\n\n## Follow-ups\n\n- none");
+
+        self::assertSame("## Evidence\n\n<textarea>\nx\n</pre>\n</textarea>\n\n".self::LINES."\n\n## Follow-ups\n\n- none", $body);
+    }
+
+    public function testAnElementClosedOnlyAfterTheEvidenceSectionIsClosedBeforeTheResults(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\n<textarea>\n</pre>\n\n## Follow-ups\n\n</textarea>");
+
+        self::assertSame("## Evidence\n\n<textarea>\n</pre>\n</textarea>\n\n".self::LINES."\n\n## Follow-ups\n\n</textarea>", $body);
+    }
+
+    public function testAnEndTagInsideAFenceLeavesTheElementOpen(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<textarea>\n</pre>\n```\n</textarea>\n```");
+
+        self::assertSame("<textarea>\n</pre>\n```\n</textarea>\n```\n</textarea>\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnEndTagInIndentedCodeLeavesTheElementOpen(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<textarea>\n</pre>\n\n    </textarea>");
+
+        self::assertSame("<textarea>\n</pre>\n\n    </textarea>\n</textarea>\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnEndTagInAParagraphClosesTheElement(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<textarea>\n</pre>\n\nText </textarea>");
+
+        self::assertSame("<textarea>\n</pre>\n\nText </textarea>\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function unterminatedBlocksOfKindsTwoToFive(): iterable
+    {
+        yield 'comment' => ['<!--', '-->'];
+        yield 'processing instruction' => ['<?php', '?>'];
+        yield 'declaration' => ['<!DOCTYPE html', '>'];
+        yield 'CDATA' => ['<![CDATA[', ']]>'];
+    }
+
+    #[DataProvider('unterminatedBlocksOfKindsTwoToFive')]
+    public function testAnUnterminatedBlockOfKindsTwoToFiveIsClosedBeforeTheResults(string $opening, string $closer): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo($opening."\ntext\n");
+
+        self::assertSame($opening."\ntext\n".$closer."\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnUnterminatedCommentInsideTheEvidenceSectionIsClosedBeforeTheResults(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\n<!--\nnote");
+
+        self::assertSame("## Evidence\n\n<!--\nnote\n-->\n\n".self::LINES, $body);
+    }
+
+    public function testAVerticalTabLineDoesNotEndAKindSixBlock(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<div>\n\x0B\n## Evidence\n\n- E1: shown");
+
+        self::assertSame("<div>\n\x0B\n## Evidence\n\n- E1: shown\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
     /**
      * @return iterable<string, array{string, string}>
      */

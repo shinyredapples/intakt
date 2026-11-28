@@ -43,10 +43,23 @@ enum HtmlBlock
             self::Instruction => '/\?>/',
             self::Declaration => '/>/',
             self::CData => '/\]\]>/',
-            self::Block, self::Tag => '/^\s*$/',
+            // A CommonMark blank line holds only spaces and tabs, so a vertical tab or form feed keeps the block open.
+            self::Block, self::Tag => '/^[ \t]*$/',
         };
 
         return 1 === preg_match($end, $line);
+    }
+
+    // The marker that ends a block still open after the body's last line; a kind 1 block ends at its element's own end tag, which the reading tracks, and kinds 6 and 7 at the blank line before the results.
+    public function closer(): ?string
+    {
+        return match ($this) {
+            self::Raw, self::Block, self::Tag => null,
+            self::Comment => '-->',
+            self::Instruction => '?>',
+            self::Declaration => '>',
+            self::CData => ']]>',
+        };
     }
 
     // Kinds 6 and 7 end at a blank line, which cannot be the line that opened them.

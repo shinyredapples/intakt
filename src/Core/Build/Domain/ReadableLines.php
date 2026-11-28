@@ -35,15 +35,35 @@ final readonly class ReadableLines
         return $read;
     }
 
+    // What closes the fence, the HTML block and the element still open after the last line read, because lines added after them would be read as their content.
+    public function closing(): string
+    {
+        $closers = array_filter([$this->openFence, $this->html?->closer(), null === $this->openElement ? null : '</'.$this->openElement.'>']);
+
+        return implode('', array_map(static fn (string $closer): string => "\n".$closer, $closers));
+    }
+
     private function after(int $number, string $line): self
     {
         $next = $this->read($number, $line);
 
-        if (null !== $next->openElement && false !== stripos($line, '</'.$next->openElement.'>')) {
+        // An end tag in code is rendered as text, so only one read as HTML closes the element.
+        if (null !== $next->openElement && !$this->isCode($next, $line) && false !== stripos($line, '</'.$next->openElement.'>')) {
             return clone($next, ['openElement' => null]);
         }
 
         return $next;
+    }
+
+    private function isCode(self $next, string $line): bool
+    {
+        return null !== $this->openFence || null !== $next->openFence || (!$this->html instanceof HtmlBlock && [] === $this->paragraph && $this->isIndented($line));
+    }
+
+    // Up to three spaces and a tab start indented code like four spaces, because a tab moves to the next multiple of four columns.
+    private function isIndented(string $line): bool
+    {
+        return 1 === preg_match('/^(?: {0,3}\t| {4})/', $line);
     }
 
     private function read(int $number, string $line): self
@@ -169,8 +189,7 @@ final readonly class ReadableLines
             return [];
         }
 
-        // Up to three spaces and a tab start indented code like four spaces, because a tab moves to the next multiple of four columns.
-        if ([] === $paragraph && 1 === preg_match('/^(?: {0,3}\t| {4})/', $line)) {
+        if ([] === $paragraph && $this->isIndented($line)) {
             return [];
         }
 
