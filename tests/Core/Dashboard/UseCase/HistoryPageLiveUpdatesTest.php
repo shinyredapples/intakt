@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use DOMNode;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
@@ -205,7 +206,7 @@ final class HistoryPageLiveUpdatesTest extends DashboardPageTestCase
     {
         foreach (new Crawler($streams)->filter('turbo-stream')->each(static fn (Crawler $stream): Crawler => $stream) as $stream) {
             $target = $page->filter('#'.$stream->attr('target'))->getNode(0);
-            if (null === $target) {
+            if (!$target instanceof DOMNode) {
                 continue;
             }
 

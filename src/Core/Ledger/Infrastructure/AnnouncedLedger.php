@@ -39,7 +39,7 @@ final readonly class AnnouncedLedger implements Ledger
     {
         $result = $this->inner->append($event);
 
-        if (null !== $result->id) {
+        if ($result->id instanceof Uuid) {
             $this->announcements->announce(new LedgerEventAppended(new RecordedEvent($result->id, $event, $this->recordedAtOf($result->id))));
         }
 
