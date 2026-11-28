@@ -37,7 +37,7 @@ final readonly class BuilderPrompt
 
     private const string SELF_CHECK = 'Before you end with PR.md, run "sh %s" in the checkout. It repeats the checks of what you hand back that you can fix here: a new commit on the task\'s branch, a history that continues from the branch as you received it, no merge commit, and PR.md. Fix each line it prints and run it again until it prints "precheck clean". It is advice: Intakt checks what you hand back itself.';
 
-    private const string QUESTION ='If you need a decision the task does not cover, do not guess and write no PR.md: write the file %s in the checkout root instead, a JSON object with "question" (text), "choices" (a list of one or more texts) and "recommendation" (one of the choices), and stop.';
+    private const string QUESTION = 'If you need a decision the task does not cover, do not guess and write no PR.md: write the file %s in the checkout root instead, a JSON object with "question" (text), "choices" (a list of one or more texts) and "recommendation" (one of the choices), and stop.';
 
     public function __construct(
         private Fence $fence,
