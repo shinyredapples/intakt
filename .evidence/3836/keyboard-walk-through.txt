@@ -1,0 +1,149 @@
+
+== D5 flow at 1440x900 (desktop) ==
+ok   open /history: /history, current tab "Ledger", 14 rows shown
+ok   project picker (#projfilter): reached with Tab x8 (select#projfilter.select "Project"), focus ring shown
+ok   filter by project: ArrowDown picks "demo-replay" (options ["","demo-replay"]), shared filter "demo-replay", 14 rows shown (14 rows of that project or of none), focus stays on the picker
+ok   back to All projects: ArrowUp, 14 rows shown
+ok   Trends sub-tab: reached with Tab x3 (a "Trends"), focus ring shown
+ok   switch to Trends: Enter -> /trends, current tab "Trends"
+ok   Ledger sub-tab: reached with Tab x11 (a "Ledger"), focus ring shown
+ok   back to the Ledger: Enter -> /history, current tab "Ledger", 14 rows shown
+ok   chip "By Intakt": reached with Tab x14 (button.fchip "By Intakt"), focus ring shown
+ok   chip "By Intakt": Space presses it, 14 rows shown
+ok   chip "Everything": Shift+Tab x2, Enter presses it, 14 rows shown
+ok   text filter: reached with Tab x6 (input#history-text.input "Filter by text"), focus ring shown
+ok   text filter: typing "verdict" leaves 2 rows shown
+ok   text filter cleared with Backspace: 14 rows shown
+ok   search button: reached with Tab x13 (button.search-trigger "Search tasks, pull requests, settings…Se"), focus ring shown
+ok   search window: Enter opens it (true), Esc closes it (true), focus back on the search button (true)
+
+== Tab sweep of /history at 1440x900: every control, its focus ring ==
+ok   Tab 1: a.brand "Intakt home"
+ok   Tab 2: a.nav "Now"
+ok   Tab 3: a.nav "You"
+ok   Tab 4: a.nav "History"
+ok   Tab 5: a.nav "Projects"
+ok   Tab 6: button.nav "Collapse"
+ok   Tab 7: button.search-trigger "Search tasks, pull requests, settings…Se"
+ok   Tab 8: select#projfilter.select "Project"
+ok   Tab 9: button.icon-btn "Switch light or dark theme"
+ok   Tab 10: a "Ledger"
+ok   Tab 11: a "Trends"
+ok   Tab 12: button.fchip "Everything"
+ok   Tab 13: button.fchip "From the dashboard"
+ok   Tab 14: button.fchip "By Intakt"
+ok   Tab 15: button.fchip "Limits"
+ok   Tab 16: button.fchip "Projects"
+ok   Tab 17: button.fchip "Accounts"
+ok   Tab 18: input#history-text.input "Filter by text"
+ok   Tab 19: div.table-scroll "History"
+ok   Tab 20: a.tour-review "Open the review"
+ok   Tab 21: button.btn "Pause"
+ok   Tab 22: button.btn "Close"
+ok   22 controls reached with Tab; visible controls out of the tab order: none
+
+== Tab sweep of /trends at 1440x900: every control, its focus ring ==
+ok   Tab 1: a.brand "Intakt home"
+ok   Tab 2: a.nav "Now"
+ok   Tab 3: a.nav "You"
+ok   Tab 4: a.nav "History"
+ok   Tab 5: a.nav "Projects"
+ok   Tab 6: button.nav "Collapse"
+ok   Tab 7: button.search-trigger "Search tasks, pull requests, settings…Se"
+ok   Tab 8: select#projfilter.select "Project"
+ok   Tab 9: button.icon-btn "Switch light or dark theme"
+ok   Tab 10: button.fchip "Demo review"
+ok   Tab 11: a "Ledger"
+ok   Tab 12: a "Trends"
+ok   Tab 13: span.term "PassesReview passes started, whether run"
+ok   Tab 14: span.term "To fixP1 and P2 findings the judge kept "
+ok   Tab 15: span.term "One reviewer onlyShare of the findings k"
+ok   Tab 16: span.term "Time to verdictMedian time from the star"
+ok   Tab 17: rect.c-hit "2 P1 findings, Correctness reviewer, 0 f"
+ok   Tab 18: rect.c-hit "2 P2 findings, Correctness reviewer, 2 f"
+ok   Tab 19: rect.c-hit "0 P3 findings, Correctness reviewer, 0 f"
+ok   Tab 20: rect.c-hit "1 P1 finding, Security reviewer, 0 found"
+ok   Tab 21: rect.c-hit "2 P2 findings, Security reviewer, 0 foun"
+ok   Tab 22: rect.c-hit "1 P3 finding, Security reviewer, 1 found"
+ok   Tab 23: rect.c-hit "5 findings, Kept to fix"
+ok   Tab 24: rect.c-hit "3 findings, Merged as duplicate"
+ok   Tab 25: rect.c-hit "0 findings, Deferred to a follow-up issu"
+ok   Tab 26: rect.c-hit "0 findings, Rejected"
+ok   Tab 27: a.tour-review "Open the review"
+ok   Tab 28: button.btn "Pause"
+ok   Tab 29: button.btn "Close"
+ok   29 controls reached with Tab; visible controls out of the tab order: none
+
+== D5 flow at 390x844 (phone) ==
+ok   open /history: /history, current tab "Ledger", 14 rows shown
+ok   project picker ([data-history-filter] select): reached with Tab x16 (select#history-project.select "Project"), focus ring shown
+ok   filter by project: ArrowDown picks "demo-replay" (options ["","demo-replay"]), shared filter "demo-replay", 14 rows shown (14 rows of that project or of none), focus stays on the picker
+ok   back to All projects: ArrowUp, 14 rows shown
+ok   Trends sub-tab: reached with Tab x14 (a "Trends"), focus ring shown
+ok   switch to Trends: Enter -> /trends, current tab "Trends"
+ok   Ledger sub-tab: reached with Tab x9 (a "Ledger"), focus ring shown
+ok   back to the Ledger: Enter -> /history, current tab "Ledger", 14 rows shown
+ok   chip "By Intakt": reached with Tab x12 (button.fchip "By Intakt"), focus ring shown
+ok   chip "By Intakt": Space presses it, 14 rows shown
+ok   chip "Everything": Shift+Tab x2, Enter presses it, 14 rows shown
+ok   text filter: reached with Tab x7 (input#history-text.input "Filter by text"), focus ring shown
+ok   text filter: typing "verdict" leaves 2 rows shown
+ok   text filter cleared with Backspace: 14 rows shown
+ok   search button: reached with Tab x11 (button.search-trigger "Search tasks, pull requests, settings…Se"), focus ring shown
+ok   search window: Enter opens it (true), Esc closes it (true), focus back on the search button (true)
+ok   More button: reached with Tab x19 (button.nav "More"), focus ring shown
+ok   More sheet: Enter opens it (true, focus on "More"), Esc closes it (true), focus back on More (true)
+
+== Tab sweep of /history at 390x844: every control, its focus ring ==
+ok   Tab 1: a.nav "Now"
+ok   Tab 2: a.nav "You"
+ok   Tab 3: a.nav "History"
+ok   Tab 4: button.nav "More"
+ok   Tab 5: a.brand-m "Intakt home"
+ok   Tab 6: button.search-trigger "Search tasks, pull requests, settings…Se"
+ok   Tab 7: button.icon-btn "Switch light or dark theme"
+ok   Tab 8: a "Ledger"
+ok   Tab 9: a "Trends"
+ok   Tab 10: button.fchip "Everything"
+ok   Tab 11: button.fchip "From the dashboard"
+ok   Tab 12: button.fchip "By Intakt"
+ok   Tab 13: button.fchip "Limits"
+ok   Tab 14: button.fchip "Projects"
+ok   Tab 15: button.fchip "Accounts"
+ok   Tab 16: select#history-project.select "Project"
+ok   Tab 17: input#history-text.input "Filter by text"
+ok   Tab 18: div.table-scroll "History"
+ok   Tab 19: a.tour-review "Open the review"
+ok   Tab 20: button.btn "Close"
+ok   20 controls reached with Tab; visible controls out of the tab order: none
+
+== Tab sweep of /trends at 390x844: every control, its focus ring ==
+ok   Tab 1: a.nav "Now"
+ok   Tab 2: a.nav "You"
+ok   Tab 3: a.nav "History"
+ok   Tab 4: button.nav "More"
+ok   Tab 5: a.brand-m "Intakt home"
+ok   Tab 6: button.search-trigger "Search tasks, pull requests, settings…Se"
+ok   Tab 7: button.icon-btn "Switch light or dark theme"
+ok   Tab 8: button.fchip "Demo review"
+ok   Tab 9: a "Ledger"
+ok   Tab 10: a "Trends"
+ok   Tab 11: span.term "PassesReview passes started, whether run"
+ok   Tab 12: span.term "To fixP1 and P2 findings the judge kept "
+ok   Tab 13: span.term "One reviewer onlyShare of the findings k"
+ok   Tab 14: span.term "Time to verdictMedian time from the star"
+ok   Tab 15: rect.c-hit "2 P1 findings, Correctness reviewer, 0 f"
+ok   Tab 16: rect.c-hit "2 P2 findings, Correctness reviewer, 2 f"
+ok   Tab 17: rect.c-hit "0 P3 findings, Correctness reviewer, 0 f"
+ok   Tab 18: rect.c-hit "1 P1 finding, Security reviewer, 0 found"
+ok   Tab 19: rect.c-hit "2 P2 findings, Security reviewer, 0 foun"
+ok   Tab 20: rect.c-hit "1 P3 finding, Security reviewer, 1 found"
+ok   Tab 21: rect.c-hit "5 findings, Kept to fix"
+ok   Tab 22: rect.c-hit "3 findings, Merged as duplicate"
+ok   Tab 23: rect.c-hit "0 findings, Deferred to a follow-up issu"
+ok   Tab 24: rect.c-hit "0 findings, Rejected"
+ok   Tab 25: a.tour-review "Open the review"
+ok   Tab 26: button.btn "Close"
+ok   26 controls reached with Tab; visible controls out of the tab order: none
+
+Keyboard walk: 0 failed steps.
