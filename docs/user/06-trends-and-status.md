@@ -59,6 +59,10 @@ Trends mostly looks back. For the present moment, open **Now** in the menu. The 
 
 When nobody works, the page says so: "No reviewer is working right now: reviewers appear here while they review a change".
 
+## When the Status page says new work is paused
+
+Intakt pauses new work when the disk of its mirrors folder runs low on free space or on file slots (inodes). While it does, the Status page shows a line saying which one ran low, on which folder, and how much is left against the limit. Free space on that disk and reload the page: the line is gone, and new work starts again by itself.
+
 ## Status for scripts
 
 Your own scripts can ask the same question. The dashboard serves one JSON document at `/status`, for example <http://localhost:7781/status> on the demo. Inside the container, `php bin/console intakt:status --format=json` prints it too.

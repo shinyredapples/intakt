@@ -12,7 +12,7 @@ Callers can ask whether a folder's disk is close to full and hold new work there
 
 `DiskHold` (`src/Core/Disk/Contract/DiskHold.php`) is the typed value a caller or a page reads: `floor` (which floor was crossed), `folder` (where), `free` (the reading) and `minimum` (the floor). `DiskHold::reason()` words it for a failure message: `the disk of <folder> holds new work: <free> free bytes, below the floor of <minimum>` (or `inodes`).
 
-The hold is measured on every call and never stored, so it clears by itself on the first call after space is back. It only answers whether new work may start; it does not stop work that is already running. Showing the hold on the Status page is a later issue.
+The hold is measured on every call and never stored, so it clears by itself on the first call after space is back. It only answers whether new work may start; it does not stop work that is already running. The Status page shows it (see [The Status page](#the-status-page)).
 
 ## The callers
 
@@ -22,6 +22,10 @@ Two Git use cases ask the check before they write, each on the folder it writes 
 - `MakeBuildClone::make()` (`src/Core/Git/UseCase/MakeBuildClone/MakeBuildClone.php`), on the parent folder of the clone (or the nearest folder above it), after the mirror and branch checks and before it reserves the clone's folder. A hold throws `BuildCloneNotMade` with `DiskHold::reason()` and a `NewWorkHeld` as its previous exception, so no folder is made. See [Build clones](build-clone.md).
 
 In both, a `FreeSpaceUnreadable` is caught and thrown again as the same failure, with its message as the reason and itself as the previous exception. An inode read that times out is caught there too and thrown as the same failure with fixed words, `The free space of <folder> cannot be read: df timed out after 10 seconds.`, without the timeout as its cause (its message holds the command line). Both failures are `ReportableFailure`s: `intakt:mirror:update` and `intakt:build:clone` print them and exit with 1, and `GitBuildCheckout` turns them into `BuildCheckoutFailed`, so `intakt:build:task` records a failed `mirror` or `clone` step ([Build task](build-task.md)); `BuildCheckoutFailed` keeps the step's failure as its previous exception, so the `NewWorkHeld` of a hold stays in the chain.
+
+## The Status page
+
+`HeldForSpace::now()` (`src/Core/Dashboard/UseCase/ShowLanes/HeldForSpace.php`) asks `DiskSpace::holdAt()` on every load of `/lanes` for `NearestFolder::of()` of the mirrors folder (`GitServices::MIRRORS_DIRECTORY`), the folder every mirror update starts from. A build clone's folder comes from the caller (`intakt:build:task --directory`), so there is no folder to measure for it. It keeps nothing, so the line is gone on the first load after space is back. A `DiskHold` becomes plain words written in the dashboard, not `DiskHold::reason()`: the floor (free space, or free file slots for inodes), the folder, the reading and the floor, bytes in binary units with one decimal rounded down (so a reading just below its floor never shows as equal to it), inodes as grouped whole numbers, and the setting's key. A `FreeSpaceUnreadable`, or a `ProcessTimedOutException` worded as `df timed out after <n> seconds`, becomes a broken line with its message, so the page still renders. See [Dashboard](dashboard.md).
 
 ## A hold is a wait
 
@@ -59,5 +63,6 @@ A value that is not a whole number of at least 1, or an unknown key under `disk`
 - `tests/Core/Disk/Contract/NewWorkHeldTest.php`: the hold it carries and its message.
 - `tests/Core/Watcher/UseCase/WatchPullRequests/FailedHeadsTest.php`: a head held by the disk (the hold two causes deep) waiting a minute with no failure counted and no card, a held head with three failures in a row not handed over, two held heads starting no failure back-off, and an unreadable disk still counted as a failure.
 - `tests/Core/Git/UseCase/UpdateMirror/UpdateMirrorBelowTheDiskFloorsTest.php` and `tests/Core/Git/UseCase/MakeBuildClone/MakeBuildCloneBelowTheDiskFloorsTest.php`: each use case held below each floor without making a folder, a mirror, a fetch or a clone, with the `NewWorkHeld` as the failure's cause, measured at the nearest folder that exists, going ahead at the floors, and failing on a reader that throws or an inode read that times out (naming `df`); an existing mirror held when only its own disk is below a floor, a folder that is no mirror held when only the mirrors folder is below a floor and replaced when only that folder reads below it, and `UpdateMirror::refresh()` going ahead below the floors.
+- `tests/Core/Dashboard/UseCase/ShowLanes/HeldForSpaceTest.php` and `tests/Core/Dashboard/UseCase/ShowLanesControllerTest.php`: the plain words for each floor, the rounding, no line above the floors, the line gone on the next read, the nearest folder measured, an unreadable disk and a `df` timeout as a broken line, and the wired page with and without the banner.
 - `tests/Core/Disk/Contract/NearestFolderTest.php`: the nearest folder that exists, past missing folders and a file on the path.
 - `tests/Core/Build/UseCase/BuildTask/BuildTaskTest.php`: a reader that throws at the mirrors folder or at the clone's parent ends the run at the `mirror` or the `clone` step with the failure recorded, and a disk that falls below a floor after the build job still reaches the check job.

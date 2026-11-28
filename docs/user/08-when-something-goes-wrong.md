@@ -83,7 +83,7 @@ It is Friday afternoon. You started a review half an hour ago, and the page stil
 
 ## A step stops because the disk is low
 
-- **What you see:** a mirror update or a build clone stops with "holds new work", naming the folder, the free space and the floor.
+- **What you see:** a mirror update or a build clone stops with "holds new work", naming the folder, the free space and the floor. While the mirrors folder's disk is low, the Status page (`/lanes`) says "New work is paused" too.
 - **Why:** that disk is below `disk.min_free_bytes` or `disk.min_free_inodes`. Intakt starts no new work there, so nothing fails half-way. A watched pull request held this way waits and is not counted as failing.
 - **What to do:** free space on that disk, then run the step again. Of Intakt's own folders, remove only build folders you have confirmed no build is still using.
 
