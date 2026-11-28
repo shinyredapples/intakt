@@ -19,6 +19,7 @@ use PhpParser\Node;
 use PHPStan\Collectors\Collector;
 use PHPStan\Parser\Parser;
 use PHPUnit\Framework\Attributes\CoversClass;
+use ReflectionMethod;
 
 /**
  * @extends PhpStanRuleTestCase<TestMethodSentenceRule>
@@ -723,6 +724,75 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
         require_once $sandbox->root.'/tests/Gates/Fixtures/ShieldingWrapper.php';
 
         self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAnAliasOfAWrapperThatIsNotAnalyzedStaysPublicWhenTheWrapperHidesTheMethodInsteadofExcludes(): void
+    {
+        $sandbox = $this->emptySandbox();
+        // because the gate excludes its fixtures folder, a wrapper there stands for an unchanged file a changed-files run leaves out
+        $sandbox->write('tests/Gates/Fixtures/ExcludedHiding.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait ExcludedLeft { public function verify(): void {} }\ntrait ExcludedRight { public function verify(): void {} }\ntrait ExcludedHidingWrapper { use ExcludedLeft, ExcludedRight { ExcludedRight::verify insteadof ExcludedLeft; ExcludedLeft::verify as private; } }\n");
+        $sandbox->write('tests/ExcludedHidingTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class ExcludedHidingTest extends \PHPUnit\Framework\TestCase
+        {
+            use ExcludedHidingWrapper { verify as testGo; }
+        }
+        PHP_WRAP);
+        // because the analysis finds a class it does not analyze only once PHP has loaded it
+        require_once $sandbox->root.'/tests/Gates/Fixtures/ExcludedHiding.php';
+        require_once $sandbox->root.'/tests/ExcludedHidingTest.php';
+
+        self::assertTrue(new ReflectionMethod('Intakt\Sample\ExcludedHidingTest', 'testGo')->isPublic());
+        self::assertSame('tests/ExcludedHidingTest.php:7 intakt.testMethodSentence Test method Intakt\Sample\ExcludedHidingTest::testGo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAnAliasOfAWrapperThatIsNotAnalyzedStaysHiddenWhenTheWrapperHidesTheMethodInsteadofSelects(): void
+    {
+        $sandbox = $this->emptySandbox();
+        // because the gate excludes its fixtures folder, a wrapper there stands for an unchanged file a changed-files run leaves out
+        $sandbox->write('tests/Gates/Fixtures/SelectedHiding.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait SelectedLeft { public function verify(): void {} }\ntrait SelectedRight { public function verify(): void {} }\ntrait SelectedHidingWrapper { use SelectedLeft, SelectedRight { SelectedRight::verify insteadof SelectedLeft; \\Intakt\\Sample\\SELECTEDRIGHT::verify as private; } }\n");
+        $sandbox->write('tests/SelectedHidingTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class SelectedHidingTest extends \PHPUnit\Framework\TestCase
+        {
+            use SelectedHidingWrapper { verify as testGo; }
+        }
+        PHP_WRAP);
+        // because the analysis finds a class it does not analyze only once PHP has loaded it
+        require_once $sandbox->root.'/tests/Gates/Fixtures/SelectedHiding.php';
+        require_once $sandbox->root.'/tests/SelectedHidingTest.php';
+
+        self::assertFalse(new ReflectionMethod('Intakt\Sample\SelectedHidingTest', 'testGo')->isPublic());
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAShortPublicAliasThroughTwoWrappersThatAreNotAnalyzedIsReported(): void
+    {
+        $sandbox = $this->emptySandbox();
+        // because the gate excludes its fixtures folder, wrappers there stand for unchanged files a changed-files run leaves out
+        $sandbox->write('tests/Gates/Fixtures/NestedWrappers.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait NestedLeaf { public function helper(): void {} }\ntrait NestedInner { use NestedLeaf { helper as private; helper as verify; } }\ntrait NestedOuter { use NestedInner; }\n");
+        $sandbox->write('tests/NestedWrappersTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class NestedWrappersTest extends \PHPUnit\Framework\TestCase
+        {
+            use NestedOuter { verify as testGo; }
+        }
+        PHP_WRAP);
+        // because the analysis finds a class it does not analyze only once PHP has loaded it
+        require_once $sandbox->root.'/tests/Gates/Fixtures/NestedWrappers.php';
+        require_once $sandbox->root.'/tests/NestedWrappersTest.php';
+
+        self::assertTrue(new ReflectionMethod('Intakt\Sample\NestedWrappersTest', 'testGo')->isPublic());
+        self::assertSame('tests/NestedWrappersTest.php:7 intakt.testMethodSentence Test method Intakt\Sample\NestedWrappersTest::testGo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
     }
 
     public function testAShortPublicProviderAliasIsReportedWhenASubclassThatDoesNotReferenceItRunsIt(): void
