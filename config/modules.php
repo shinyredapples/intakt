@@ -15,6 +15,7 @@ return [
     'Core/Job',
     'Core/Lanes',
     'Core/Ledger',
+    'Core/Maintainer',
     'Core/Mcp',
     'Core/Memory',
     'Core/Outage',

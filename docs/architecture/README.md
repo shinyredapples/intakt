@@ -86,6 +86,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [GitHub App identity](github-app-identity.md): how Intakt acts on GitHub as its App.
 - [Pull requests handed to Intakt](handed-to-intakt.md): how Intakt decides which pull requests are its own to review and publish on.
 - [Work intake from GitHub issues](work-intake.md): how labeled issues become tasks, and how `GitHubWorkSource` picks the next one.
+- [The Maintainer's flow report](maintainer.md): how plain code counts hand-overs, overdue milestones and the priority mix.
 - [Workflow risk scan](workflow-risk-scan.md): how a change to the CI workflows is checked, and held for the owner when risky.
 
 ### Builds
