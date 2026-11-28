@@ -156,14 +156,13 @@ final class SizingASampleTaskTest extends KernelTestCase
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private static function payloadOf(RecordedEvent $recorded): array
     {
         $payload = json_decode($recorded->event->payload, true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($payload);
 
-        /** @var array<string, mixed> $payload */
         return $payload;
     }
 
