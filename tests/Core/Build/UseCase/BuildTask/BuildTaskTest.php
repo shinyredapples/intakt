@@ -1157,6 +1157,18 @@ final class BuildTaskTest extends TestCase
         self::assertSame("Summary.\n\n    Evidence\n---\n\nEvidence\n--------\n\n- E1: shown\n\n- Regression tests: `tests/FooTest.php`\n- On the base: failed\n- On the head: passed\n\nFollow-ups\n----------\n\n- none", $this->changes->text?->body);
     }
 
+    public function testABugHeadWhoseBodyHasAnEvidenceHeadingAfterAnHtmlBlockGetsTheRegressionLinesInThatSection(): void
+    {
+        $this->runner = $this->committingRunner(text: "fix: task 7\n\n<div>\n## Evidence\n\n## Evidence\n\n- E1: shown\n");
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n"]);
+        $this->regressionTests = $this->regressionRuns(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Failed, RegressionRun::Passed));
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7, ['intakt', 'bug'], ['body' => self::BUG_BODY])])->run($this->request(7, $this->remote->path));
+
+        self::assertContains(BuildStep::Push, $outcome->passedSteps());
+        self::assertSame("<div>\n## Evidence\n\n## Evidence\n\n- E1: shown\n\n- Regression tests: `tests/FooTest.php`\n- On the base: failed\n- On the head: passed", $this->changes->text?->body);
+    }
+
     public function testAFeatureHeadIsPushedWithItsBodyUnchanged(): void
     {
         $this->runner = $this->committingRunner();

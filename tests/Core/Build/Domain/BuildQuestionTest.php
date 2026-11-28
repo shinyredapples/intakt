@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\Domain;
 
+use Intakt\Core\Build\Contract\ReadinessGap;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\QuestionRefused;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(BuildQuestion::class)]
 #[CoversClass(QuestionRefused::class)]
+#[UsesClass(ReadinessGap::class)]
 final class BuildQuestionTest extends TestCase
 {
     public function testAQuestionWithChoicesAndARecommendationAmongThemIsAccepted(): void
@@ -19,6 +22,13 @@ final class BuildQuestionTest extends TestCase
         $question = BuildQuestion::fromHandedBack('{"question":" Which store? ","choices":["SQLite","Postgres"],"recommendation":"SQLite"}');
 
         self::assertSame(['Which store?', ['SQLite', 'Postgres'], 'SQLite'], [$question->question, $question->choices, $question->recommendation]);
+    }
+
+    public function testAQuestionForMissingReadinessReadsAsOneCommentWithItsChoices(): void
+    {
+        $comment = BuildQuestion::forMissingReadiness([ReadinessGap::ObservableResult, ReadinessGap::SingleOutcome])->asComment();
+
+        self::assertSame("This task is not ready to build. It lacks: an observable result, a single outcome (the task states more than one).\n\n- Add the missing items to the task\n- Close the task", $comment);
     }
 
     #[TestWith(['{"\u0000note":1,"question":"Which store?","choices":["SQLite"],"recommendation":"SQLite"}'])]
