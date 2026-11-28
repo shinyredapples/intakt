@@ -94,49 +94,18 @@ final readonly class ReviewersAgree
             return $text;
         }
 
-        // Every closer is looked up once, ahead of the cursor, because the text is model output of any length and a rescan per opener would take quadratic time.
-        $closers = $this->backtickRunsByLength($text);
-        $next = [];
+        $runs = new BacktickRuns($text);
         $words = '';
         $cursor = 0;
         while (1 === preg_match(self::BACKSLASH_ESCAPE_OR_BACKTICK_RUN_OR_WHITE_SPACE, $text, $match, PREG_OFFSET_CAPTURE, $cursor)) {
             [$token, $offset] = $match[0];
-            $length = strlen($token);
-            $words .= substr($text, $cursor, $offset - $cursor);
-            $cursor = $offset + $length;
-            if ('`' !== $token[0]) {
-                $words .= '\\' === $token[0] ? $token : ' ';
-
-                continue;
-            }
-
+            $end = $offset + strlen($token);
             // Spans are kept byte for byte because "A B" and "A  B" name different literals.
-            $next[$length] ??= 0;
-            while (isset($closers[$length][$next[$length]]) && $closers[$length][$next[$length]] < $cursor) {
-                ++$next[$length];
-            }
-            $closer = $closers[$length][$next[$length]] ?? null;
-            if (null !== $closer) {
-                $cursor = $closer + $length;
-                $token = substr($text, $offset, $cursor - $offset);
-            }
-            $words .= $token;
+            $end = '`' === $token[0] ? $runs->spanEnd(strlen($token), $end) : $end;
+            $words .= substr($text, $cursor, $offset - $cursor).(str_contains('\\`', $token[0]) ? substr($text, $offset, $end - $offset) : ' ');
+            $cursor = $end;
         }
 
         return trim($words.substr($text, $cursor));
-    }
-
-    /**
-     * @return array<int, list<int>>
-     */
-    private function backtickRunsByLength(string $text): array
-    {
-        preg_match_all('/`+/', $text, $runs, PREG_OFFSET_CAPTURE);
-        $byLength = [];
-        foreach ($runs[0] as [$run, $offset]) {
-            $byLength[strlen($run)][] = $offset;
-        }
-
-        return $byLength;
     }
 }

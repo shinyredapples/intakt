@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FollowUpNote;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\BacktickRuns;
 use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Domain\ReviewersAgree;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -18,6 +19,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ReviewersAgree::class)]
+#[UsesClass(BacktickRuns::class)]
 #[UsesClass(QuotesInChange::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(Finding::class)]
