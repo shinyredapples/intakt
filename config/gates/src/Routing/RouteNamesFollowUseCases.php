@@ -8,7 +8,7 @@ use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
 use Symfony\Component\String\UnicodeString;
 
-final class RouteNamesFollowUseCases
+final readonly class RouteNamesFollowUseCases
 {
     private const string CONTROLLER = '/^Intakt\\\\(?:Core|Plugin)\\\\(\w+)\\\\UseCase\\\\(\w+)\\\\/';
 
@@ -17,12 +17,12 @@ final class RouteNamesFollowUseCases
     /**
      * @var array<string, string>
      */
-    private readonly array $declaredClasses;
+    private array $declaredClasses;
 
     /**
      * @param array<string, string> $classOfService
      */
-    public function __construct(private readonly array $classOfService)
+    public function __construct(private array $classOfService)
     {
         $declaredClasses = [];
 
