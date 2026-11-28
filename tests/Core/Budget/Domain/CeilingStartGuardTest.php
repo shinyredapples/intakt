@@ -12,6 +12,7 @@ use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
 use Intakt\Core\Budget\Contract\WindowUse;
+use Intakt\Core\Budget\Domain\AccountRoom;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -22,6 +23,7 @@ use Symfony\Component\Clock\MockClock;
 #[CoversClass(CeilingStartGuard::class)]
 #[CoversClass(StartDecision::class)]
 #[UsesClass(Account::class)]
+#[UsesClass(AccountRoom::class)]
 #[UsesClass(Usage::class)]
 #[UsesClass(UsageWindow::class)]
 #[UsesClass(WindowReading::class)]
@@ -182,6 +184,26 @@ final class CeilingStartGuardTest extends TestCase
 
         self::assertSame(StartDecision::Start, $this->decide(0));
         self::assertSame(StartDecision::Start, $this->decide(1));
+    }
+
+    public function testAShortWindowWithoutResetTimeHeldOnlyByTheWeeklyPaceIsFreeAtTheWeeklyReset(): void
+    {
+        $this->readWindow(UsageWindow::Weekly, 40.0, $this->weekResets);
+        $this->readWindow(UsageWindow::FiveHour, 50.0, null);
+
+        $room = $this->guard()->roomOf($this->account());
+
+        self::assertSame([UsageWindow::FiveHour, $this->weekResets->getTimestamp()], [$room->atCeiling, $room->resetsAt?->getTimestamp()]);
+    }
+
+    public function testAShortWindowWithoutResetTimeAtItsOwnCeilingIsFreeAtAnUnknownTime(): void
+    {
+        $this->readWindow(UsageWindow::Weekly, 40.0, $this->weekResets);
+        $this->readWindow(UsageWindow::FiveHour, 95.0, null);
+
+        $room = $this->guard()->roomOf($this->account());
+
+        self::assertSame([UsageWindow::FiveHour, null], [$room->atCeiling, $room->resetsAt]);
     }
 
     public function testOnlyAStartDecisionAdmits(): void

@@ -150,6 +150,33 @@ final class AccountFailoverPlatformRankingTest extends TestCase
         self::assertSame([600, 300], [$bothAtCeiling, $afterTheWeeklyReset]);
     }
 
+    public function testAShortWindowHeldOnlyByTheWeeklyPaceIsFreeAtTheWeeklyReset(): void
+    {
+        $account = new Account(Provider::ClaudeCode, Account::DEFAULT);
+        $ranking = $this->ranking();
+        $platform = new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->answering(Account::DEFAULT)], new NoCooldowns(), $this->clock, new NullLogger(), new NoPinnedProviderCooldowns(), $ranking);
+        $this->readings->record(new WindowReading($account, UsageWindow::Weekly, new Usage(95.0, $this->clock->now()->modify('+300 seconds'))));
+        $this->readings->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(89.0, $this->clock->now()->modify('+600 seconds'))));
+
+        $reported = $platform->secondsUntilFree('big');
+        $this->clock->sleep(300);
+        $afterTheWeeklyReset = $platform->secondsUntilFree('big');
+        $rankedAfter = count($ranking->rank([$account])->inOrder);
+
+        self::assertSame([300, 0, 1], [$reported, $afterTheWeeklyReset, $rankedAfter]);
+    }
+
+    public function testAShortWindowHeldByAWeekAheadOfItsPaceIsFreeAtItsOwnSoonerReset(): void
+    {
+        $this->both(Account::DEFAULT, $this->usage(75.0, 2), $this->usage(80.0, 60));
+        $platform = new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->answering(Account::DEFAULT)], new NoCooldowns(), $this->clock, new NullLogger(), new NoPinnedProviderCooldowns(), $this->ranking());
+
+        $heldByThePace = $platform->secondsUntilFree('big');
+        $this->clock->sleep(7200);
+
+        self::assertSame([7200, 0], [$heldByThePace, $platform->secondsUntilFree('big')]);
+    }
+
     public function testACooldownAndAHoldOnAnAccountAtBothCeilingsStillWaitForTheLaterReset(): void
     {
         $account = new Account(Provider::ClaudeCode, Account::DEFAULT);

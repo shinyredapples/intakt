@@ -49,9 +49,9 @@ final readonly class CeilingStartGuard
         $uses = $this->currentUsesOf($account);
         $fresh = array_filter($uses, static fn (WindowUse $use): bool => $use->ageInSeconds <= self::TRUSTED_FOR_SECONDS);
         $trusted = [] !== $uses && count($fresh) === count($uses);
-        $holding = $this->lastToResetAtCeiling($fresh);
+        $holding = $this->lastToStopHolding($fresh);
         if ($holding instanceof UsageWindow) {
-            return new AccountRoom($holding, $fresh[$holding->value]->usage->resetsAt, $trusted);
+            return new AccountRoom($holding, $this->holdsUntil($holding, $fresh), $trusted);
         }
 
         $known = array_filter(array_map(static fn (WindowUse $use): ?DateTimeImmutable => $use->usage->resetsAt, $uses), static fn (?DateTimeImmutable $resetsAt): bool => $resetsAt instanceof DateTimeImmutable);
@@ -76,16 +76,32 @@ final readonly class CeilingStartGuard
         return $uses;
     }
 
-    // With both windows at their ceiling the account is free only at the later reset, and a window without a reset time holds it longest, because when it frees up is unknown.
+    // With both windows at their ceiling the account is free only once the last of them stops holding it, and a window whose end is unknown holds it longest; the weekly window comes first, so it is the cause named when both end together.
     /**
      * @param array<string, WindowUse> $uses
      */
-    private function lastToResetAtCeiling(array $uses): ?UsageWindow
+    private function lastToStopHolding(array $uses): ?UsageWindow
     {
-        $atCeiling = array_filter(UsageWindow::cases(), fn (UsageWindow $window): bool => isset($uses[$window->value]) && $uses[$window->value]->usage->usedPercent >= $this->ceilingOf($window, $uses, 0.0));
-        usort($atCeiling, static fn (UsageWindow $one, UsageWindow $other): int => ($uses[$other->value]->usage->resetsAt?->getTimestamp() ?? PHP_INT_MAX) <=> ($uses[$one->value]->usage->resetsAt?->getTimestamp() ?? PHP_INT_MAX));
+        $atCeiling = array_filter([UsageWindow::Weekly, UsageWindow::FiveHour], fn (UsageWindow $window): bool => isset($uses[$window->value]) && $uses[$window->value]->usage->usedPercent >= $this->ceilingOf($window, $uses, 0.0));
+        usort($atCeiling, fn (UsageWindow $one, UsageWindow $other): int => ($this->holdsUntil($other, $uses)?->getTimestamp() ?? PHP_INT_MAX) <=> ($this->holdsUntil($one, $uses)?->getTimestamp() ?? PHP_INT_MAX));
 
         return array_first($atCeiling);
+    }
+
+    // A short window below its configured ceiling is held only by the weekly pace, and that pace ends with the week's reading: it frees at the weekly reset when that comes before its own.
+    /**
+     * @param array<string, WindowUse> $uses
+     */
+    private function holdsUntil(UsageWindow $window, array $uses): ?DateTimeImmutable
+    {
+        $use = $uses[$window->value];
+        $resetsAt = $use->usage->resetsAt;
+        $weekResetsAt = ($uses[UsageWindow::Weekly->value] ?? null)?->usage->resetsAt;
+        if (UsageWindow::Weekly === $window || $use->usage->usedPercent >= $this->ceilings[$window->value] || !$weekResetsAt instanceof DateTimeImmutable) {
+            return $resetsAt;
+        }
+
+        return $resetsAt instanceof DateTimeImmutable && $resetsAt < $weekResetsAt ? $resetsAt : $weekResetsAt;
     }
 
     // A reset window starts empty, so its reading says nothing any more; without a reset time, one window's length is when it reset at the latest.
