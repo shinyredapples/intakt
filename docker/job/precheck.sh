@@ -1,6 +1,6 @@
 #!/bin/sh
 # The builder's own check, mounted read-only into the build job: it repeats the refusals of the hand-back that plain git can decide in the clone, so the builder fixes them in the same session.
-# Usage: sh /input/precheck.sh, in the clone; build.sh exports INTAKT_BUILD_BRANCH and INTAKT_BUILD_BASE (the branch's commit before the session) for it.
+# Usage: sh /input/precheck.sh, in the clone itself (not a linked worktree, where PR.md is looked up elsewhere); build.sh exports INTAKT_BUILD_BRANCH and INTAKT_BUILD_BASE (the branch's commit before the session) for it.
 # Prints one line per refusal and exits with 1, or prints "precheck clean" and exits with 0; exits with 2 when it cannot check.
 # Every line is fixed text, the reason the orchestrator would give (PrecheckScriptTest pins each to its case), and nothing read from the clone, because the output goes back to the model.
 # Advice only: the orchestrator's hand-back check reads the bundle itself and decides, so nothing reads this script's result.
@@ -38,7 +38,9 @@ else
         refuse 'the bundle holds a merge commit, and no merge of main was asked'
     fi
     # Git refuses to bundle a commit whose objects it cannot traverse, so walk them as the bundle does.
-    if ! git rev-list --objects "$head" --not "$base" > /dev/null 2>&1; then
+    # The pack is written to nowhere: packing reads every blob, so a corrupt one fails here as it would in the bundle.
+    if ! objects="$(git rev-list --objects "$head" --not "$base" 2> /dev/null)" \
+        || ! printf '%s\n' "$objects" | git pack-objects --stdout > /dev/null 2>&1; then
         refuse 'the bundle holds a commit git would not write'
     fi
 fi

@@ -177,6 +177,22 @@ final class PrecheckScriptTest extends TestCase
         self::assertSame(HandBackRefusal::Malformed->reason()."\n", $run->getOutput());
     }
 
+    public function testACommitWithACorruptObjectIsReportedAsOneGitWouldNotWrite(): void
+    {
+        $this->history->commitFile('built.txt', "built\n", 'feat: build the task');
+        $this->givenThePullRequestText();
+        $object = trim(new Process(['git', 'rev-parse', 'HEAD:built.txt'], $this->history->work, $this->environment($this->base))->mustRun()->getOutput());
+        $gitDir = trim(new Process(['git', 'rev-parse', '--absolute-git-dir'], $this->history->work, $this->environment($this->base))->mustRun()->getOutput());
+        $path = $gitDir.'/objects/'.substr($object, 0, 2).'/'.substr($object, 2);
+        new Filesystem()->remove($path);
+        file_put_contents($path, "unreadable blob\n");
+
+        $run = $this->whenThePrecheckRuns();
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertSame(HandBackRefusal::Malformed->reason()."\n", $run->getOutput());
+    }
+
     protected function setUp(): void
     {
         $this->history = new BuildHistory();
