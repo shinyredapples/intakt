@@ -212,7 +212,7 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
 
     private function diff(CommitRange $commits): Diff
     {
-        // Fixed prefixes, because diff.noprefix or diff.mnemonicPrefix would change the headers the docs part of the diff is cut by.
+        // Fixed prefixes, because diff.noprefix, diff.srcPrefix or diff.dstPrefix would change the headers the docs part of the diff is cut by.
         $patch = $this->read([...self::QUOTED_NAMES, 'diff', '--full-index', '--src-prefix=a/', '--dst-prefix=b/', ...self::DIFF_OPTIONS, ...$this->range($commits)]);
 
         return new Diff($this->binaryFiles->named($patch, $this->blob(...)), $this->changedFiles($commits));
