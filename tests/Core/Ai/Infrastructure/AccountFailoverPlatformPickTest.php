@@ -99,22 +99,31 @@ final class AccountFailoverPlatformPickTest extends TestCase
         self::assertEquals([new LeftOutAccount(new Account(Provider::ClaudeCode, 'team'), LeftOutCause::CoolingDown, new DateTimeImmutable('2026-11-28T12:01:00+00:00'))], $this->picks->latestOf(Provider::ClaudeCode)?->leftOut);
     }
 
-    public function testACoolingAccountAlsoAtACeilingIsRecordedUntilTheLaterOfBothEnds(): void
+    public function testACoolingAccountBehindALaterWeeklyCeilingIsRecordedAtTheCeilingWithItsReset(): void
     {
-        $this->weekly('team', 95.0, '+5 hours');
+        $this->weekly('team', 95.0, '+3 hours');
 
         $this->platform($this->teamCoolingFor(60))->invoke('big', 'Review.');
 
-        self::assertEquals([new LeftOutAccount(new Account(Provider::ClaudeCode, 'team'), LeftOutCause::CoolingDown, new DateTimeImmutable('2026-11-28T17:00:00+00:00'))], $this->picks->latestOf(Provider::ClaudeCode)?->leftOut);
+        self::assertEquals([new LeftOutAccount(new Account(Provider::ClaudeCode, 'team'), LeftOutCause::AtWeeklyCeiling, new DateTimeImmutable('2026-11-28T15:00:00+00:00'))], $this->picks->latestOf(Provider::ClaudeCode)?->leftOut);
     }
 
-    public function testACoolingAccountAtACeilingWithNoNamedResetIsRecordedWithAnUnknownEnd(): void
+    public function testACoolingAccountAtACeilingWithNoNamedResetIsRecordedAtTheCeilingWithAnUnknownEnd(): void
     {
         $this->readings->record(new WindowReading(new Account(Provider::ClaudeCode, 'team'), UsageWindow::Weekly, new Usage(95.0, null)));
 
         $this->platform($this->teamCoolingFor(60))->invoke('big', 'Review.');
 
-        self::assertEquals([new LeftOutAccount(new Account(Provider::ClaudeCode, 'team'), LeftOutCause::CoolingDown, null)], $this->picks->latestOf(Provider::ClaudeCode)?->leftOut);
+        self::assertEquals([new LeftOutAccount(new Account(Provider::ClaudeCode, 'team'), LeftOutCause::AtWeeklyCeiling, null)], $this->picks->latestOf(Provider::ClaudeCode)?->leftOut);
+    }
+
+    public function testACooldownThatOutlastsTheCeilingStaysRecordedAsCoolingDown(): void
+    {
+        $this->weekly('team', 95.0, '+30 seconds');
+
+        $this->platform($this->teamCoolingFor(60))->invoke('big', 'Review.');
+
+        self::assertEquals([new LeftOutAccount(new Account(Provider::ClaudeCode, 'team'), LeftOutCause::CoolingDown, new DateTimeImmutable('2026-11-28T12:01:00+00:00'))], $this->picks->latestOf(Provider::ClaudeCode)?->leftOut);
     }
 
     public function testATierSelectionReadThatFindsAnAccountFreeRecordsNoPickBecauseTheCallRecordsIt(): void

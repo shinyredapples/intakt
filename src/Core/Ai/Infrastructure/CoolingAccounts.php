@@ -40,7 +40,7 @@ final readonly class CoolingAccounts
         $cooling = [];
         foreach ($waits as $name => $wait) {
             if (0 < $wait) {
-                $cooling[] = new LeftOutAccount(new Account($this->provider, $name), LeftOutCause::CoolingDown, $this->endWhileCooling($now->modify(sprintf('+%d seconds', $wait)), $held[$name] ?? null));
+                $cooling[] = $this->holdWhileCooling(new Account($this->provider, $name), $now->modify(sprintf('+%d seconds', $wait)), $held[$name] ?? null);
             }
         }
 
@@ -65,13 +65,13 @@ final readonly class CoolingAccounts
         return [] === $cooling ? [] : $this->ranking->rank($cooling)->leftOut;
     }
 
-    // The later of the cooldown's end and the end of what else holds the account, unknown when that hold names none, because the account starts again only once both have ended.
-    private function endWhileCooling(DateTimeImmutable $cooledUntil, ?LeftOutAccount $held): ?DateTimeImmutable
+    // The hold that ends last names the cause, an unknown end counting as last, because the account starts again only once both have ended and the owner must see the one that sets the reset.
+    private function holdWhileCooling(Account $account, DateTimeImmutable $cooledUntil, ?LeftOutAccount $held): LeftOutAccount
     {
-        if (!$held instanceof LeftOutAccount) {
-            return $cooledUntil;
+        if ($held instanceof LeftOutAccount && (!$held->resetsAt instanceof DateTimeImmutable || $held->resetsAt > $cooledUntil)) {
+            return $held;
         }
 
-        return $held->resetsAt instanceof DateTimeImmutable ? max($cooledUntil, $held->resetsAt) : null;
+        return new LeftOutAccount($account, LeftOutCause::CoolingDown, $cooledUntil);
     }
 }
