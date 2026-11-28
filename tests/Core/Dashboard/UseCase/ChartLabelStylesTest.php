@@ -17,7 +17,7 @@ final class ChartLabelStylesTest extends TestCase
         self::assertIsString($sheet);
         preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $sheet, $blocks);
 
-        self::assertMatchesRegularExpression('/\.c-axis, \.c-label \{ font-size: calc\(var\(--t15\) \+ 1px\); \}/', implode("\n", $blocks[1]));
+        self::assertMatchesRegularExpression('/\.c-axis, \.c-label \{ font-size: calc\(var\(--t15\) \* 1\.07\); \}/', implode("\n", $blocks[1]));
     }
 
     public function testOutsideAPhoneChartLabelsKeepTheirTokenSize(): void
