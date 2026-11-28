@@ -13,12 +13,17 @@ use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\BuildUsage;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\Domain\SessionLog;
+use Intakt\Core\Build\Domain\SessionUsage;
+use Intakt\Core\Build\Domain\UsageReading;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\IsolatedSessionLog;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobCommand;
@@ -78,6 +83,11 @@ use Symfony\Component\Process\Process;
 #[UsesClass(JobResult::class)]
 #[UsesClass(JobEnd::class)]
 #[UsesClass(JobOutput::class)]
+#[UsesClass(IsolatedSessionLog::class)]
+#[UsesClass(SessionLog::class)]
+#[UsesClass(SessionUsage::class)]
+#[UsesClass(BuildUsage::class)]
+#[UsesClass(UsageReading::class)]
 final class ScriptedQuestionTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/build.sh';
@@ -201,6 +211,6 @@ final class ScriptedQuestionTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->output), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, self::PRECHECK, $this->history->folder.'/prompts', new RecordedBuildStops(), new BuildLimits(1, 1, 1, 1));
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->output), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, self::PRECHECK, $this->history->folder.'/prompts', new RecordedBuildStops(), new BuildLimits(1, 1, 1, 1), new IsolatedSessionLog(__DIR__.'/../../../../../vendor/autoload.php'));
     }
 }

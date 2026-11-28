@@ -1,0 +1,64 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Build\Domain;
+
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+// The tokens a build's session reported, kept apart by kind because Anthropic counts cache reads and writes apart from input_tokens.
+#[Exclude]
+final readonly class BuildUsage
+{
+    public const array COUNTS = ['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'];
+
+    // Far above any session, so that the four counts can be added without leaving PHP's integers.
+    public const int MOST = 10 ** 15;
+
+    public function __construct(
+        public int $inputTokens,
+        public int $outputTokens,
+        public int $cacheReadTokens,
+        public int $cacheCreationTokens,
+    ) {
+    }
+
+    // Null unless every count is a whole number from zero to MOST, because the log is the builder's to write and a missing, negative or fractional count would settle the build as having spent less than it did.
+    /**
+     * @param array<mixed> $counts
+     */
+    public static function fromCounts(array $counts): ?self
+    {
+        [$input, $output, $cacheRead, $cacheCreation] = array_map(static fn (string $name): ?int => self::wholeCount($counts[$name] ?? null), self::COUNTS);
+
+        if (in_array(null, [$input, $output, $cacheRead, $cacheCreation], true)) {
+            return null;
+        }
+
+        return new self($input, $output, $cacheRead, $cacheCreation);
+    }
+
+    // Null past MOST, because a session's messages sum to far less and a larger total was written to overflow it.
+    public function plus(self $other): ?self
+    {
+        return self::fromCounts(array_combine(self::COUNTS, array_map(static fn (int $mine, int $theirs): int => $mine + $theirs, $this->counts(), $other->counts())));
+    }
+
+    public function total(): int
+    {
+        return $this->inputTokens + $this->outputTokens + $this->cacheReadTokens + $this->cacheCreationTokens;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    public function counts(): array
+    {
+        return array_combine(self::COUNTS, [$this->inputTokens, $this->outputTokens, $this->cacheReadTokens, $this->cacheCreationTokens]);
+    }
+
+    private static function wholeCount(mixed $count): ?int
+    {
+        return is_int($count) && $count >= 0 && $count <= self::MOST ? $count : null;
+    }
+}

@@ -75,7 +75,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         );
         self::assertSame(
             [
-                ['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"run-1","step":"build_job","outcome":"asked","failure":null,"stop_cause":null}'],
+                ['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"run-1","step":"build_job","outcome":"asked","failure":null,"stop_cause":null,"usage":null}'],
                 ['kind' => 'task_parked', 'payload' => '{"project":"sample","task":"42","run":"run-1"}'],
             ],
             $this->ledgerRows(),
@@ -136,7 +136,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         self::assertSame([['Which name?', self::NEWER_RUN]], $this->parkedQuestionsWithRuns());
         self::assertSame(
             [
-                ['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"'.self::OLDER_RUN.'","step":"build_job","outcome":"asked","failure":null,"stop_cause":null}'],
+                ['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"'.self::OLDER_RUN.'","step":"build_job","outcome":"asked","failure":null,"stop_cause":null,"usage":null}'],
                 ['kind' => 'task_parked', 'payload' => '{"project":"sample","task":"42","run":"'.self::OLDER_RUN.'"}'],
             ],
             array_slice($this->ledgerRows(), -2),
@@ -169,7 +169,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         self::assertFalse($this->connection()->isTransactionActive());
         self::assertSame(
             [
-                ['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"'.self::NEWER_RUN.'","step":"build_job","outcome":"asked","failure":null,"stop_cause":null}'],
+                ['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"'.self::NEWER_RUN.'","step":"build_job","outcome":"asked","failure":null,"stop_cause":null,"usage":null}'],
                 ['kind' => 'task_parked', 'payload' => '{"project":"sample","task":"42","run":"'.self::NEWER_RUN.'"}'],
             ],
             array_slice($this->ledgerRows(), -2),

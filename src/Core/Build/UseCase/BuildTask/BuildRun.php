@@ -33,6 +33,7 @@ final readonly class BuildRun
             'outcome' => $ended->outcome->value,
             'failure' => $ended->failure,
             'stop_cause' => $ended->stopCause?->value,
+            'usage' => $ended->usage?->payload(),
         ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 

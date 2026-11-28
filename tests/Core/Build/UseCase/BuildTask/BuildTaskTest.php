@@ -27,6 +27,7 @@ use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\BuildStopCause;
+use Intakt\Core\Build\Domain\BuildUsage;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\ModelRouting;
@@ -35,6 +36,9 @@ use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Build\Domain\ReadableLines;
 use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Build\Domain\RoutingRules;
+use Intakt\Core\Build\Domain\SessionLog;
+use Intakt\Core\Build\Domain\SessionUsage;
+use Intakt\Core\Build\Domain\UsageReading;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
 use Intakt\Core\Build\UseCase\BuildTask\AskedQuestion;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
@@ -59,6 +63,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobEndFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\IsolatedSessionLog;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Disk\Contract\DiskHold;
@@ -335,6 +340,11 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(JobResult::class)]
 #[UsesClass(JobEnd::class)]
 #[UsesClass(JobOutput::class)]
+#[UsesClass(IsolatedSessionLog::class)]
+#[UsesClass(SessionLog::class)]
+#[UsesClass(SessionUsage::class)]
+#[UsesClass(BuildUsage::class)]
+#[UsesClass(UsageReading::class)]
 final class BuildTaskTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/build.sh';
@@ -1850,7 +1860,7 @@ final class BuildTaskTest extends TestCase
     {
         $configured = self::createStub(ConfiguredRepositories::class);
         $configured->method('nameOf')->willReturn($this->configuredRepository);
-        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, self::PRECHECK, $this->mirrors.'-prompts', $this->stops, new BuildLimits(1, 1, 1, 1));
+        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, self::PRECHECK, $this->mirrors.'-prompts', $this->stops, new BuildLimits(1, 1, 1, 1), new IsolatedSessionLog(__DIR__.'/../../../../../vendor/autoload.php'));
         $git = new RepositoryGit(new HardenedGit());
         $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
         $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');

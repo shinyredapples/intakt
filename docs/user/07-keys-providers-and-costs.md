@@ -52,6 +52,14 @@ A build went past its allowance but keeps fixing tests. It may go on while it ma
 
 Planned: Intakt does not watch a running build for these limits yet, so today a build ends when its session's time runs out and keeps its commits the same way. You can already set the limits ([user manual](../reference/user-manual.md#the-build-limits)). Once the watch stops a build, the ledger line of its build job step names why: no progress, the runaway ceiling or the per-task total. It names why also when the job then fails at its end, for example because Docker failed, beside the same failure text as before.
 
+## What a build spent
+
+A build finished, and you want to know how many tokens it used. A Claude subscription does not tell Intakt, but the build hands back a small usage file, `usage.log`: the token counts of each of its messages and nothing else of the session.
+
+1. After each build, Intakt reads that file in a separate, locked-down process and writes the token counts into the build's ledger line.
+2. The file is the build's to write, so a file that is too big, or holds no counts or broken ones, gets a reason instead of a number, never a zero.
+3. To check a kept file yourself, run `intakt:build:usage <log>` ([details](../reference/user-manual.md#what-a-build-spent)).
+
 ## When a provider says "slow down"
 
 When a provider limits a call, the account that made it cools down until the reset time the provider sent, at most one day and at least one second (a reset of zero or already past waits one second). The reviewer moves on at once to the next account of the same provider, if you have one. A tier can also list substitutes from other providers, used only when its own provider cannot answer.

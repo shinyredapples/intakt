@@ -49,6 +49,9 @@ final readonly class RunBuildJob
 
     public const string LOG = 'build.log';
 
+    // Apart from the log, because the log is printed when a build fails and the session's stream holds its tool results: the build script hands back only the id and usage of each message.
+    public const string USAGE = 'usage.log';
+
     // An exit code, because a builder that can plant files in the output can plant any marker there too, but cannot set the script's exit code.
     public const int OUTPUT_NOT_CLEARED = 3;
 
@@ -91,6 +94,7 @@ final readonly class RunBuildJob
         private string $promptFolder,
         private RecordedBuildStops $stops,
         public BuildLimits $limits,
+        private IsolatedSessionLog $sessionLog,
     ) {
         // Checked as given, because the compiled container would turn a YAML true into a one-second limit before a typed parameter saw it.
         if (!is_int($toolTimeLimitSeconds)) {
@@ -225,7 +229,8 @@ final readonly class RunBuildJob
             return new BuildJobOutcome(BuildVerdict::NoResult, log: self::REFUSED_OUTPUT);
         }
 
-        return $this->outcomeOf($result);
+        // Read whatever the verdict, because a session cut, killed or ended without a bundle still spent its tokens.
+        return $this->outcomeOf($result)->withUsage($this->sessionLog->usageIn($result->output->contents(self::USAGE) ?? ''));
     }
 
     // A failed removal is dropped only here, because the job-end failure carries the stop cause the row must keep, and the prompt is a scratch file.

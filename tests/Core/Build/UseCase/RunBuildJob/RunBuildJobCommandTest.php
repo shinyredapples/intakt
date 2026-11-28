@@ -13,14 +13,19 @@ use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\BuildUsage;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\Domain\SessionLog;
+use Intakt\Core\Build\Domain\SessionUsage;
+use Intakt\Core\Build\Domain\UsageReading;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\IsolatedSessionLog;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobCommand;
@@ -83,6 +88,11 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(JobResult::class)]
 #[UsesClass(JobEnd::class)]
 #[UsesClass(JobOutput::class)]
+#[UsesClass(IsolatedSessionLog::class)]
+#[UsesClass(SessionLog::class)]
+#[UsesClass(SessionUsage::class)]
+#[UsesClass(BuildUsage::class)]
+#[UsesClass(UsageReading::class)]
 final class RunBuildJobCommandTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/build.sh';
@@ -311,6 +321,7 @@ final class RunBuildJobCommandTest extends TestCase
             $this->folder.'/prompts',
             new RecordedBuildStops(),
             new BuildLimits(1, 1, 1, 1),
+            new IsolatedSessionLog(__DIR__.'/../../../../../vendor/autoload.php'),
         ), new Filesystem()));
         $tester = new CommandTester($application->find('intakt:build:run'));
         $tester->execute([
