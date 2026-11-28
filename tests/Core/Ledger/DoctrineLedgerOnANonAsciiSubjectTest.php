@@ -20,7 +20,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\MockClock;
 
-// A latin1 subject column read over a utf8mb4 connection, because only MySQL and MariaDB let a column store another character set than the connection sends.
+// On MySQL and MariaDB the subject column stores latin1 while the connection sends utf8mb4, because only they let a column hold another character set; other engines run the same reads on their own column.
 #[Group('persistence')]
 #[CoversClass(DoctrineLedger::class)]
 #[UsesClass(EventRecord::class)]
@@ -28,7 +28,7 @@ use Symfony\Component\Clock\MockClock;
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(UtcDateTimeImmutableType::class)]
-final class DoctrineLedgerOnALatin1SubjectTest extends KernelTestCase
+final class DoctrineLedgerOnANonAsciiSubjectTest extends KernelTestCase
 {
     private DoctrineLedger $ledger;
 
@@ -53,15 +53,13 @@ final class DoctrineLedgerOnALatin1SubjectTest extends KernelTestCase
         self::assertInstanceOf(ManagerRegistry::class, $registry);
         $manager = $registry->getManager();
         self::assertInstanceOf(EntityManagerInterface::class, $manager);
-        $connection = $manager->getConnection();
-        if (!$connection->getDatabasePlatform() instanceof AbstractMySQLPlatform) {
-            self::markTestSkipped('Only MySQL and MariaDB store a column in another character set than the connection.');
-        }
-
         $tool = new SchemaTool($manager);
         $tool->dropDatabase();
         $tool->createSchema($manager->getMetadataFactory()->getAllMetadata());
-        $connection->executeStatement('ALTER TABLE ledger_event MODIFY subject VARCHAR(255) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL');
+        $connection = $manager->getConnection();
+        if ($connection->getDatabasePlatform() instanceof AbstractMySQLPlatform) {
+            $connection->executeStatement('ALTER TABLE ledger_event MODIFY subject VARCHAR(255) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL');
+        }
 
         $this->ledger = new DoctrineLedger($registry, new MockClock('2026-11-22 12:00:00'));
     }
