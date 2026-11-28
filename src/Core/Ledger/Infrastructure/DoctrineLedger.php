@@ -192,7 +192,7 @@ final readonly class DoctrineLedger implements Ledger
         return new RecordedEvents($events);
     }
 
-    // Each platform the install supports spells a byte comparison its own way, and none ignores case.
+    // Spelled per platform, because DQL has no collation and each database the install supports names its byte comparison differently; any other one throws, since a guessed comparison could ignore case.
     private function exactSubjectOn(AbstractPlatform $platform): string
     {
         return match (true) {
