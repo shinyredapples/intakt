@@ -1,7 +1,0 @@
-waiting light 1440: axe critical 0, serious 0, moderate 0, minor 0
-waiting light 1920: axe critical 0, serious 0, moderate 0, minor 0
-waiting light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-waiting dark 1440: axe critical 0, serious 0, moderate 0, minor 0
-waiting dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-waiting dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-Other pages of the same run (untouched by this change): 2 phone floor findings on the review page's reviewer table, HTTP 500 on /components and /trends in the test environment.

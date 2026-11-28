@@ -1,6 +1,0 @@
-# The install's project file for the captures of #1796 (copied to the git-ignored config/intakt.yaml): the list prices of config/intakt.example.yaml for the two seeded models, so the summary shows a cost.
-budget:
-    price_date: '2026-11-13'
-    prices:
-        claude-sonnet-5-5: { input: 3, output: 15, cache_read: 0.3, cache_write: 3.75 }
-        gpt-6.1-terra: { input: 1, output: 5 }
