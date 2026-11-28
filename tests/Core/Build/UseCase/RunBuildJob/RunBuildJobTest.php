@@ -660,6 +660,11 @@ final class RunBuildJobTest extends TestCase
         return $this->useCase($runner, $model ?? new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
     }
 
+    private function jobEndFailure(string $kind): DockerEngineFailed|JobEventNotRecorded
+    {
+        return 'ledger' === $kind ? JobEventNotRecorded::for('job_ended', 'the database is locked') : DockerEngineFailed::notStoppedAfterKill('intakt-job-demo', 10);
+    }
+
     private function runnerThatStopsAndFails(?BuildStopCause $cause, DockerEngineFailed|JobEventNotRecorded $failure): JobRunner
     {
         $runner = self::createStub(JobRunner::class);
@@ -672,11 +677,6 @@ final class RunBuildJobTest extends TestCase
         });
 
         return $runner;
-    }
-
-    private function jobEndFailure(string $kind): DockerEngineFailed|JobEventNotRecorded
-    {
-        return 'ledger' === $kind ? JobEventNotRecorded::for('job_ended', 'the database is locked') : DockerEngineFailed::notStoppedAfterKill('intakt-job-demo', 10);
     }
 
     private function job(Tier $tier = Tier::Standard): BuildJob
