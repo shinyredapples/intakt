@@ -6,6 +6,7 @@ namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Modifiers;
 use PhpParser\Node;
+use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\Node\Stmt\TraitUseAdaptation\Alias;
@@ -33,7 +34,7 @@ final readonly class TraitAliasTestMethodCollector implements Collector
         $class = $scope->getClassReflection();
 
         // PHPUnit runs only the methods of a named TestCase subclass, as for the methods a class declares
-        if (null === $class || $class->isAnonymous() || !in_array(TestCase::class, $class->getParentClassesNames(), true)) {
+        if (!$class instanceof ClassReflection || $class->isAnonymous() || !in_array(TestCase::class, $class->getParentClassesNames(), true)) {
             return null;
         }
 
@@ -55,7 +56,7 @@ final readonly class TraitAliasTestMethodCollector implements Collector
      */
     private function renamingAliases(TraitUse $use): array
     {
-        return array_values(array_filter($use->adaptations, static fn (Node $adaptation): bool => $adaptation instanceof Alias && null !== $adaptation->newName));
+        return array_values(array_filter($use->adaptations, static fn (Node $adaptation): bool => $adaptation instanceof Alias && $adaptation->newName instanceof Identifier));
     }
 
     /**
@@ -76,13 +77,13 @@ final readonly class TraitAliasTestMethodCollector implements Collector
         $trait = $method->getBetterReflection()->getDeclaringClass()->getName();
         $sameName = null === $aliasName ? 0 === strcasecmp($method->getName(), $alias->method->toString()) : 0 === strcasecmp($aliasName, (string) $alias->newName);
 
-        return $sameName && array_any($use->traits, static fn (Name $used): bool => 0 === strcasecmp($used->toString(), $trait)) && (null === $alias->trait || 0 === strcasecmp($alias->trait->toString(), $trait));
+        return $sameName && array_any($use->traits, static fn (Name $used): bool => 0 === strcasecmp($used->toString(), $trait)) && (!$alias->trait instanceof Name || 0 === strcasecmp($alias->trait->toString(), $trait));
     }
 
     // because BetterReflection keeps the original name public when the class also renames it, while PHP hides it (upstream/phpstan-trait-alias-hidden-original-visibility/)
     private function isHidden(ReflectionMethod $method, TraitUse $use): bool
     {
-        return null === $method->getBetterReflection()->getAliasName() && array_any($use->adaptations, static fn (Node $adaptation): bool => $adaptation instanceof Alias && null === $adaptation->newName && 0 !== ($adaptation->newModifier & Modifiers::VISIBILITY_MASK) && 0 === ($adaptation->newModifier & Modifiers::PUBLIC) && 0 === strcasecmp($adaptation->method->toString(), $method->getName()));
+        return null === $method->getBetterReflection()->getAliasName() && array_any($use->adaptations, static fn (Node $adaptation): bool => $adaptation instanceof Alias && !$adaptation->newName instanceof Identifier && 0 !== ($adaptation->newModifier & Modifiers::VISIBILITY_MASK) && 0 === ($adaptation->newModifier & Modifiers::PUBLIC) && 0 === strcasecmp($adaptation->method->toString(), $method->getName()));
     }
 
     private function mayBeProvider(ClassReflection $class, ReflectionMethod $method): bool
