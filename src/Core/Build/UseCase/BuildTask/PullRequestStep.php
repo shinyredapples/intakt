@@ -9,8 +9,7 @@ use Intakt\Core\Git\Contract\BranchPush;
 use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
-use Intakt\Core\HandBack\Contract\AcceptedHandBack;
-use Intakt\Plugin\Forge\Contract\ChangeText;
+use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Plugin\Forge\Contract\ChangeTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 
@@ -23,10 +22,10 @@ final readonly class PullRequestStep
     ) {
     }
 
-    public function failureOf(BuildTaskRequest $request, AcceptedHandBack $accepted, ChangeText $text): ?string
+    public function failureOf(BuildTaskRequest $request, AcceptedChange $change, PushedBranch $pushed): ?string
     {
         try {
-            $this->branches->openChange($this->pushOf($request, $accepted, $text));
+            $this->branches->openChange($this->pushOf($request, $change), $pushed);
         } catch (BuildCheckoutFailed|BranchNotPushed|ChangeTextHoldsSecret|ForgeWriteFailed $failure) {
             return $failure->getMessage();
         }
@@ -34,9 +33,9 @@ final readonly class PullRequestStep
         return null;
     }
 
-    // The same request as the push step's, because the Git module signs it again to find the head it pushed.
-    private function pushOf(BuildTaskRequest $request, AcceptedHandBack $accepted, ChangeText $text): BranchPushRequest
+    // The same request as the push step's, because the pull request carries its text and the Git module checks its head under the same branch lock.
+    private function pushOf(BuildTaskRequest $request, AcceptedChange $change): BranchPushRequest
     {
-        return new BranchPushRequest($request->project, $this->checkout->mirrorOf($request->project), $request->remote, $request->branch, $accepted, $text);
+        return new BranchPushRequest($request->project, $this->checkout->mirrorOf($request->project), $request->remote, $request->branch, $change->accepted, $change->text);
     }
 }

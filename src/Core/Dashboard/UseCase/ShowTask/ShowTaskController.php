@@ -42,16 +42,15 @@ final readonly class ShowTaskController
             'task' => $task,
             'steps' => array_map($this->redacted(...), $steps),
             'unreached' => $this->unreachedAfter($steps),
-            'final' => array_last(BuildStep::cases())->value,
             'question' => $this->parkedQuestionOf($steps, $project, $task),
         ]));
     }
 
     // Redacted because a step's failure quotes a git or forge error, which can carry a credential, as the status report does.
     /**
-     * @param array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string} $step
+     * @param array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool} $step
      *
-     * @return array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}
+     * @return array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}
      */
     private function redacted(array $step): array
     {
@@ -60,14 +59,15 @@ final readonly class ShowTaskController
 
     // Steps after the last recorded one are listed as not reached, so the page shows where the run stopped among all of them.
     /**
-     * @param non-empty-list<array{step: string}> $steps
+     * @param non-empty-list<array{step: string, final: bool}> $steps
      *
      * @return list<string>
      */
     private function unreachedAfter(array $steps): array
     {
         $cases = array_map(static fn (BuildStep $step): string => $step->value, BuildStep::cases());
-        $last = array_search(array_last($steps)['step'], $cases, true);
+        $lastRow = array_last($steps);
+        $last = $lastRow['final'] ? count($cases) - 1 : array_search($lastRow['step'], $cases, true);
 
         return array_slice($cases, false === $last ? count($cases) : $last + 1);
     }

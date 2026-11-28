@@ -45,9 +45,9 @@ final readonly class PushBranch implements BranchPush
 
     // The same lock as the push, so no push of the branch runs between the read of the remote branch and the pull request write.
     #[Override]
-    public function openChange(BranchPushRequest $request): ChangeId
+    public function openChange(BranchPushRequest $request, PushedBranch $pushed): ChangeId
     {
-        return $this->locked($request, $this->changeOfPushed(...));
+        return $this->locked($request, fn (BranchPushRequest $request): ChangeId => $this->changeOfPushed($request, $pushed));
     }
 
     private function pushed(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush
@@ -57,7 +57,7 @@ final readonly class PushBranch implements BranchPush
         $head = $this->signed->of($request->repository, $request->accepted, $main);
         $this->signed->verify($request->repository, $head, $main);
 
-        return $this->notLanded($request, $head, $main) ?? new PushedBranch($head);
+        return $this->notLanded($request, $head, $main) ?? new PushedBranch($head, $this->records->changeRecordsOf($request));
     }
 
     /**
@@ -101,12 +101,11 @@ final readonly class PushBranch implements BranchPush
         return $acquired ? $lock : throw BranchNotPushed::because('another push of this branch is running');
     }
 
-    // Signed again rather than taken from the caller, because the signature is deterministic and only a head this use case pushed may get a pull request.
-    private function changeOfPushed(BranchPushRequest $request): ChangeId
+    // The head the push returned, never signed again: a main that gained one of the accepted commits since signs to another commit, while the remote still holds the pushed one.
+    private function changeOfPushed(BranchPushRequest $request, PushedBranch $pushed): ChangeId
     {
         $this->refuseRewrittenRemote($request);
-        $main = $this->mainOf($request->repository);
-        $head = $this->signed->of($request->repository, $request->accepted, $main);
+        $head = $pushed->head;
 
         if (!$this->records->hasPushed($request, $head)) {
             throw BranchNotPushed::because(sprintf('this head of %s is not pushed yet, so no pull request is opened', $request->branch));
@@ -114,7 +113,12 @@ final readonly class PushBranch implements BranchPush
 
         $this->refuseAMovedBranch($request, $head, $this->remoteTip($request));
 
-        return $this->openedChange($request, $head, $main);
+        // Refused when another run wrote the branch's pull request after this push returned, because that run came later and its text is the newer one, also for the same head.
+        if ($this->records->changeRecordsOf($request) !== $pushed->changeRecords) {
+            throw BranchNotPushed::because(sprintf('a later run wrote the pull request of %s since this head was pushed', $request->branch));
+        }
+
+        return $this->openedChange($request, $head, $this->mainOf($request->repository));
     }
 
     // The failure of the push is what its caller needs, and a lock left held expires with its time to live.

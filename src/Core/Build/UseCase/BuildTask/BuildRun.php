@@ -34,6 +34,8 @@ final readonly class BuildRun
             'step' => $step->value,
             'outcome' => $outcome->value,
             'failure' => $failure,
+            // Only on the push, because runs recorded before the pull request step ended at a passed push, and readers tell such a finished run from one still going by this field.
+            ...(BuildStep::Push === $step ? ['next' => BuildStep::PullRequest->value] : []),
         ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 

@@ -122,9 +122,9 @@ final class PushToAStubbedGitHubTest extends TestCase
 
         $push = $this->scenario->pushThrough($this->github->opener());
         $pushed = $push->push($this->scenario->request());
-        $change = $push->openChange($this->scenario->request());
-
         self::assertInstanceOf(PushedBranch::class, $pushed);
+        $change = $push->openChange($this->scenario->request(), $pushed);
+
         self::assertSame($pushed->head, $this->scenario->remoteTip());
         self::assertSame('https://github.com/acme/widgets/pull/7', $change->value);
         self::assertSame(['PATCH https://api.github.com/repos/acme/widgets/pulls/7'], array_column($this->github->writes, 0));

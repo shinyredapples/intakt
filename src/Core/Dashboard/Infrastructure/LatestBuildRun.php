@@ -11,9 +11,9 @@ use Intakt\Core\Build\Contract\BuildStepOutcome;
 final readonly class LatestBuildRun
 {
     /**
-     * @param list<array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}}> $rows
+     * @param list<array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}}> $rows
      *
-     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>
+     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}>
      */
     public static function of(array $rows): array
     {
@@ -41,9 +41,9 @@ final readonly class LatestBuildRun
     }
 
     /**
-     * @param list<array<string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>> $runs
+     * @param list<array<string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}>> $runs
      *
-     * @param-out list<array<string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>> $runs
+     * @param-out list<array<string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}>> $runs
      */
     private static function started(array &$runs): int
     {
@@ -54,10 +54,10 @@ final readonly class LatestBuildRun
 
     // A second row of a step in the same run is left out, because one run ends each step once, so it is not one the build writes.
     /**
-     * @param array<string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}> $run
-     * @param ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}               $step
+     * @param array<string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}> $run
+     * @param ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}               $step
      *
-     * @param-out array<string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}> $run
+     * @param-out array<string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}> $run
      */
     private static function addFirst(array &$run, ?array $step): void
     {

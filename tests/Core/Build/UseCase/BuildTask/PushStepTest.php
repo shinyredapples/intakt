@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
+use Intakt\Core\Build\UseCase\BuildTask\AcceptedChange;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Git\Contract\BranchNotPushed;
@@ -78,16 +79,17 @@ final class PushStepTest extends TestCase
 
     public function testABranchTheLocalGitForgeAcceptsIsPushedAndGivesNoFailure(): void
     {
-        $failure = $this->stepOf($this->scenario->push())->failureOf($this->request(), $this->accepted(), $this->text());
+        $outcome = $this->stepOf($this->scenario->push())->outcomeOf($this->request(), new AcceptedChange($this->accepted(), $this->text()));
 
-        self::assertNull($failure);
+        self::assertInstanceOf(PushedBranch::class, $outcome);
+        self::assertSame($outcome->head, $this->scenario->remoteTip($this->forge));
         self::assertNotNull($this->scenario->remoteTip($this->forge));
         self::assertSame(['G', 'G'], array_map(static fn (string $line): string => explode(' ', $line)[0], explode("\n", $this->scenario->signatureMarks($this->forge))));
     }
 
     public function testThePushOpensNoPullRequest(): void
     {
-        $this->stepOf($this->scenario->push())->failureOf($this->request(), $this->accepted(), $this->text());
+        $this->stepOf($this->scenario->push())->outcomeOf($this->request(), new AcceptedChange($this->accepted(), $this->text()));
 
         self::assertSame(0, $this->scenario->changes->calls);
     }
@@ -96,7 +98,7 @@ final class PushStepTest extends TestCase
     {
         $this->scenario->checkOutTheBranchIn($this->forge);
 
-        $failure = $this->stepOf($this->scenario->push())->failureOf($this->request(), $this->accepted(), $this->text());
+        $failure = $this->stepOf($this->scenario->push())->outcomeOf($this->request(), new AcceptedChange($this->accepted(), $this->text()));
 
         self::assertSame('the remote refused the push of task (git push exited with 1)', $failure);
         self::assertNull($this->scenario->remoteTip($this->forge));
@@ -106,29 +108,29 @@ final class PushStepTest extends TestCase
     {
         $this->scenario->ledger->accepts = 0;
 
-        $failure = $this->stepOf($this->scenario->push())->failureOf($this->request(), $this->accepted(), $this->text());
+        $failure = $this->stepOf($this->scenario->push())->outcomeOf($this->request(), new AcceptedChange($this->accepted(), $this->text()));
 
-        self::assertStringStartsWith('The branch was not pushed: the ledger did not record "push_intended"', (string) $failure);
+        self::assertStringStartsWith('The branch was not pushed: the ledger did not record "push_intended"', $this->stringOf($failure));
         self::assertNull($this->scenario->remoteTip($this->forge));
     }
 
     public function testABranchThatConflictsWithMainGivesTheCountOfPathsAndNoneOfTheirNames(): void
     {
-        $failure = $this->stepOf($this->pushReturning(new MainConflicts(new Paths('src/<builder chosen>.php', 'b.txt'))))->failureOf($this->request(), $this->accepted(), $this->text());
+        $failure = $this->stepOf($this->pushReturning(new MainConflicts(new Paths('src/<builder chosen>.php', 'b.txt'))))->outcomeOf($this->request(), new AcceptedChange($this->accepted(), $this->text()));
 
         self::assertSame('the branch conflicts with main, so nothing was pushed (conflicting paths: 2)', $failure);
     }
 
     public function testAnUnsignedCommitGivesTheRefusalAsTheFailure(): void
     {
-        $failure = $this->stepOf($this->pushThrowing(UnsignedCommitRefused::commit('abc', 'it has no signature')))->failureOf($this->request(), $this->accepted(), $this->text());
+        $failure = $this->stepOf($this->pushThrowing(UnsignedCommitRefused::commit('abc', 'it has no signature')))->outcomeOf($this->request(), new AcceptedChange($this->accepted(), $this->text()));
 
         self::assertSame('The commit abc is not signed by the orchestrator\'s key (it has no signature), so nothing is pushed.', $failure);
     }
 
     public function testAForgeThatRefusesTheBranchBeforeThePushGivesItsMessageAsTheFailure(): void
     {
-        $failure = $this->stepOf($this->pushThrowing(new ForgeWriteFailed('the branch has an open pull request another account opened')))->failureOf($this->request(), $this->accepted(), $this->text());
+        $failure = $this->stepOf($this->pushThrowing(new ForgeWriteFailed('the branch has an open pull request another account opened')))->outcomeOf($this->request(), new AcceptedChange($this->accepted(), $this->text()));
 
         self::assertSame('the branch has an open pull request another account opened', $failure);
     }
@@ -138,7 +140,7 @@ final class PushStepTest extends TestCase
         $checkout = self::createStub(BuildCheckout::class);
         $checkout->method('mirrorOf')->willThrowException(BuildCheckoutFailed::because(new RuntimeException('the project name is no folder name')));
 
-        $failure = new PushStep($this->scenario->push(), $checkout)->failureOf($this->request(), $this->accepted(), $this->text());
+        $failure = new PushStep($this->scenario->push(), $checkout)->outcomeOf($this->request(), new AcceptedChange($this->accepted(), $this->text()));
 
         self::assertSame('the project name is no folder name', $failure);
         self::assertSame([], $this->scenario->ledger->kinds());
@@ -149,9 +151,9 @@ final class PushStepTest extends TestCase
         $store = self::createStub(PersistingStoreInterface::class);
         $store->method('save')->willThrowException(new LockStorageException('the lock database is down'));
 
-        $failure = $this->stepOf($this->scenario->pushWithLockStore($store))->failureOf($this->request(), $this->accepted(), $this->text());
+        $failure = $this->stepOf($this->scenario->pushWithLockStore($store))->outcomeOf($this->request(), new AcceptedChange($this->accepted(), $this->text()));
 
-        self::assertStringStartsWith('The branch was not pushed: the lock store failed: ', (string) $failure);
+        self::assertStringStartsWith('The branch was not pushed: the lock store failed: ', $this->stringOf($failure));
         self::assertNull($this->scenario->remoteTip($this->forge));
     }
 
@@ -164,6 +166,13 @@ final class PushStepTest extends TestCase
     protected function tearDown(): void
     {
         $this->scenario->remove();
+    }
+
+    private function stringOf(PushedBranch|string $outcome): string
+    {
+        self::assertIsString($outcome);
+
+        return $outcome;
     }
 
     private function stepOf(BranchPush $branches): PushStep

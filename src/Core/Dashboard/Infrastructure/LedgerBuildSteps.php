@@ -16,7 +16,7 @@ use Symfony\Component\Uid\Uuid;
 final readonly class LedgerBuildSteps
 {
     /**
-     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>
+     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}>
      */
     public function in(RecordedEvents $events): array
     {
@@ -32,7 +32,7 @@ final readonly class LedgerBuildSteps
     }
 
     /**
-     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>
+     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}>
      */
     public function latestRunOf(RecordedEvents $events, string $project, string $task): array
     {
@@ -40,7 +40,7 @@ final readonly class LedgerBuildSteps
     }
 
     /**
-     * @return list<array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}}>
+     * @return list<array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}}>
      */
     private function rowsOf(RecordedEvents $events, string $project, string $task): array
     {
@@ -59,7 +59,7 @@ final readonly class LedgerBuildSteps
 
     // A row of the task with its run and step; without its step for a malformed row of a named run or a malformed task row of an unnamed run, because that row is left out but still marks where its run began.
     /**
-     * @return array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}}|null
+     * @return array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}}|null
      */
     private function rowOf(RecordedEvent $recorded, string $project, string $task): ?array
     {
@@ -99,7 +99,7 @@ final readonly class LedgerBuildSteps
 
     // A row whose step, outcome or failure is not one the build writes is left out, so a malformed row cannot reach the status as it was stored.
     /**
-     * @return array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}|null
+     * @return array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}|null
      */
     private function stepOf(RecordedEvent $recorded): ?array
     {
@@ -122,7 +122,7 @@ final readonly class LedgerBuildSteps
             return null;
         }
 
-        return ['project' => $project, 'task' => $task, 'step' => $step->value, 'outcome' => $outcome->value, 'failure' => $failure, 'ended_at' => $recorded->recordedAt->format(DATE_ATOM), 'run' => $this->namedRunOf($recorded)];
+        return ['project' => $project, 'task' => $task, 'step' => $step->value, 'outcome' => $outcome->value, 'failure' => $failure, 'ended_at' => $recorded->recordedAt->format(DATE_ATOM), 'run' => $this->namedRunOf($recorded), 'final' => FinalBuildStep::is($step, $outcome, $payload)];
     }
 
     private function isRowOf(RecordedEvent $recorded, string $project, string $task): bool
@@ -152,7 +152,7 @@ final readonly class LedgerBuildSteps
 
     // Keyed by project, then task, so no name either side sends can make two keys meet.
     /**
-     * @return array<array-key, array<array-key, list<array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}}>>>
+     * @return array<array-key, array<array-key, list<array{?string, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}}>>>
      */
     private function rowsByTask(RecordedEvents $events): array
     {
@@ -178,13 +178,13 @@ final readonly class LedgerBuildSteps
 
     // By where each shown step stands in the ledger, because a step an older run wrote later does not move the task.
     /**
-     * @param array<array-key, array<array-key, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>> $latest
+     * @param array<array-key, array<array-key, ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}>> $latest
      *
-     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>
+     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}>
      */
     private function newestFirst(array $latest, RecordedEvents $events): array
     {
-        /** @var array<array-key, array<array-key, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string}>> $ordered */
+        /** @var array<array-key, array<array-key, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string, run: ?string, final: bool}>> $ordered */
         $ordered = [];
 
         foreach ($events as $recorded) {

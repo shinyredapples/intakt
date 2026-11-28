@@ -55,6 +55,22 @@ final readonly class PushRecords
         return $known && is_string($change) && ($record[self::TEXT_DIGEST] ?? null) === $this->digestOf($request->text) ? $change : null;
     }
 
+    // Of the branch and not of one head, because a later run can write the pull request for the same head or another one; a count, because the ledger only ever appends, so a write after a push raises it.
+    public function changeRecordsOf(BranchPushRequest $request): int
+    {
+        $count = 0;
+
+        foreach ($this->changeRecords() as $recorded) {
+            $payload = $this->decoded($recorded->event->payload);
+
+            if (($payload['project'] ?? null) === $request->project && ($payload['branch'] ?? null) === $request->branch) {
+                ++$count;
+            }
+        }
+
+        return $count;
+    }
+
     /**
      * @throws BranchNotPushed
      */

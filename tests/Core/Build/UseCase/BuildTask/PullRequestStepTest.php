@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
+use Intakt\Core\Build\UseCase\BuildTask\AcceptedChange;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
 use Intakt\Core\Build\UseCase\BuildTask\PullRequestStep;
 use Intakt\Core\Git\Contract\BranchNotPushed;
@@ -72,9 +73,10 @@ final class PullRequestStepTest extends TestCase
     public function testAPushedBranchGetsItsPullRequestWithTheTextAndNoFailure(): void
     {
         $push = $this->scenario->push();
-        (void) $push->push($this->scenario->request());
+        $pushed = $push->push($this->scenario->request());
+        self::assertInstanceOf(PushedBranch::class, $pushed);
 
-        $failure = $this->stepOf($push)->failureOf($this->request(), $this->accepted(), $this->text());
+        $failure = $this->stepOf($push)->failureOf($this->request(), new AcceptedChange($this->accepted(), $this->text()), $pushed);
 
         self::assertNull($failure);
         self::assertSame(1, $this->scenario->changes->opened);
@@ -84,7 +86,7 @@ final class PullRequestStepTest extends TestCase
 
     public function testABranchThatIsNotPushedGetsNoPullRequestAndGivesTheReasonAsTheFailure(): void
     {
-        $failure = $this->stepOf($this->scenario->push())->failureOf($this->request(), $this->accepted(), $this->text());
+        $failure = $this->stepOf($this->scenario->push())->failureOf($this->request(), new AcceptedChange($this->accepted(), $this->text()), new PushedBranch(str_repeat('a', 40)));
 
         self::assertSame('The branch was not pushed: this head of task is not pushed yet, so no pull request is opened', $failure);
         self::assertSame(0, $this->scenario->changes->calls);
@@ -92,14 +94,14 @@ final class PullRequestStepTest extends TestCase
 
     public function testAForgeWriteThatFailsGivesItsMessageAsTheFailure(): void
     {
-        $failure = $this->stepOf($this->openingThrowing(new ForgeWriteFailed('the forge refused the pull request')))->failureOf($this->request(), $this->accepted(), $this->text());
+        $failure = $this->stepOf($this->openingThrowing(new ForgeWriteFailed('the forge refused the pull request')))->failureOf($this->request(), new AcceptedChange($this->accepted(), $this->text()), new PushedBranch(str_repeat('a', 40)));
 
         self::assertSame('the forge refused the pull request', $failure);
     }
 
     public function testAChangeTextHoldingASecretGivesTheRefusalAsTheFailure(): void
     {
-        $failure = $this->stepOf($this->openingThrowing(ChangeTextHoldsSecret::inTheText()))->failureOf($this->request(), $this->accepted(), $this->text());
+        $failure = $this->stepOf($this->openingThrowing(ChangeTextHoldsSecret::inTheText()))->failureOf($this->request(), new AcceptedChange($this->accepted(), $this->text()), new PushedBranch(str_repeat('a', 40)));
 
         self::assertSame('The pull request text trips the secret scan, so no pull request is opened or updated.', $failure);
     }
@@ -109,7 +111,7 @@ final class PullRequestStepTest extends TestCase
         $checkout = self::createStub(BuildCheckout::class);
         $checkout->method('mirrorOf')->willThrowException(BuildCheckoutFailed::because(new RuntimeException('the project name is no folder name')));
 
-        $failure = new PullRequestStep($this->scenario->push(), $checkout)->failureOf($this->request(), $this->accepted(), $this->text());
+        $failure = new PullRequestStep($this->scenario->push(), $checkout)->failureOf($this->request(), new AcceptedChange($this->accepted(), $this->text()), new PushedBranch(str_repeat('a', 40)));
 
         self::assertSame('the project name is no folder name', $failure);
         self::assertSame(0, $this->scenario->changes->calls);

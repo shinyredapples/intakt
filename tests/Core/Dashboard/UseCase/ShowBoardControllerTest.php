@@ -219,6 +219,22 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('Running smoothly · 1 build running', trim($this->browser->request('GET', '/')->filter('a.status-line')->text()));
     }
 
+    public function testARunRecordedBeforeThePullRequestStepThatPassedItsPushIsNoBuildRunning(): void
+    {
+        foreach (['task', 'mirror', 'clone', 'build_job', 'hand_back_check', 'pre_push_check', 'push'] as $step) {
+            $this->ledger->passBuildStep('alpha', 'task-7', $step);
+        }
+
+        self::assertStringNotContainsString('build running', $this->browser->request('GET', '/')->filter('a.status-line')->text());
+    }
+
+    public function testARunWhosePushNamesThePullRequestStepAsNextIsStillABuildRunning(): void
+    {
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => 'task-7', 'step' => 'push', 'outcome' => 'passed', 'failure' => null, 'next' => 'pull_request']);
+
+        self::assertSame('Running smoothly · 1 build running', trim($this->browser->request('GET', '/')->filter('a.status-line')->text()));
+    }
+
     public function testATaskWhoseLatestStepFailedWithNoCardShowsTheAsleepOctopus(): void
     {
         $this->ledger->passBuildStep('alpha', 'task-7', 'task');

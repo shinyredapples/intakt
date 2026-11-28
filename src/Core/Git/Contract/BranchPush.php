@@ -24,5 +24,5 @@ interface BranchPush
      * @throws ChangeTextHoldsSecret
      * @throws ForgeWriteFailed
      */
-    public function openChange(BranchPushRequest $request): ChangeId;
+    public function openChange(BranchPushRequest $request, PushedBranch $pushed): ChangeId;
 }

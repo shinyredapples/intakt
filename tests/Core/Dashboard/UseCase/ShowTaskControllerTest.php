@@ -75,6 +75,28 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         self::assertCount(0, $page->filter('.step-failure'));
     }
 
+    public function testARunRecordedBeforeThePullRequestStepThatPassedItsPushSaysEveryStepPassed(): void
+    {
+        $this->passStepsBeforeThePush();
+        $this->ledger->passBuildStep('alpha', '42', 'push');
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame('Every step passed.', $page->filter('#task-where')->text());
+        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Passed', 'Build job Passed', 'Hand back check Passed', 'Pre push check Passed', 'Push Passed'], $this->stepHeads($page));
+    }
+
+    public function testARunWhosePushNamesThePullRequestStepAsNextSaysThePushIsTheLastRecordedStep(): void
+    {
+        $this->passStepsBeforeThePush();
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'step' => 'push', 'outcome' => 'passed', 'failure' => null, 'next' => 'pull_request']);
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame('Last recorded step: push passed.', $page->filter('#task-where')->text());
+        self::assertSame('Pull request Not reached', array_last($this->stepHeads($page)));
+    }
+
     public function testATaskThatStoppedAtThePullRequestShowsThePullRequestStepFailedWithItsReason(): void
     {
         $this->passStepsBeforeThePush();
