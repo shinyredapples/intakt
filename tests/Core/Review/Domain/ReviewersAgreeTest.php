@@ -266,6 +266,38 @@ final class ReviewersAgreeTest extends TestCase
         ], self::LITERALS));
     }
 
+    public function testFindingsThatDifferOnlyInWhiteSpaceInsideACodeSpanHoldingOneCrlfLineBreakAreNotShared(): void
+    {
+        self::assertFalse($this->agree([
+            $this->changes($this->finding("The literal `z\r\n\"A B\"` is wrong.")),
+            $this->changes($this->finding("The literal `z\r\n\"A  B\"` is wrong.")),
+        ], self::LITERALS));
+    }
+
+    public function testFindingsThatShareACodeSpanHoldingOneCrlfLineBreakAreShared(): void
+    {
+        self::assertTrue($this->agree([
+            $this->changes($this->finding("The literal `z\r\n\"A B\"` is wrong.")),
+            $this->changes($this->finding("The  literal `z\r\n\"A B\"` is wrong.")),
+        ], self::LITERALS));
+    }
+
+    public function testFindingsThatDifferOnlyInWhiteSpaceInsideACodeSpanHoldingOneCarriageReturnAreNotShared(): void
+    {
+        self::assertFalse($this->agree([
+            $this->changes($this->finding("The literal `z\r\"A B\"` is wrong.")),
+            $this->changes($this->finding("The literal `z\r\"A  B\"` is wrong.")),
+        ], self::LITERALS));
+    }
+
+    public function testFindingsThatDifferOnlyInWhiteSpaceInsideACodeSpanAfterALoneBacktickAndACrlfBlankLineAreNotShared(): void
+    {
+        self::assertFalse($this->agree([
+            $this->changes($this->finding("A lone ` marker.\r\n\r\nThe literal `\"A B\"` is wrong.")),
+            $this->changes($this->finding("A lone ` marker.\r\n\r\nThe literal `\"A  B\"` is wrong.")),
+        ], self::LITERALS));
+    }
+
     public function testFindingsThatDifferOnlyInWhiteSpaceInsideACodeSpanWhoseLineEndsInACyrillicLetterAreNotShared(): void
     {
         self::assertFalse($this->agree([

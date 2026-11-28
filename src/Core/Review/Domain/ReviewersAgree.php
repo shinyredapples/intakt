@@ -16,8 +16,8 @@ final readonly class ReviewersAgree
     // A backslash escape first because an escaped backtick opens no span while the backtick after an escaped backslash does (CommonMark), a whole backtick run because a span never opens inside one, Unicode mode because a nonbreaking space is prose white space too.
     private const string BACKSLASH_ESCAPE_OR_BACKTICK_RUN_OR_WHITE_SPACE = '/\\\\[\\\\`]|`+|\s+/u';
 
-    // The CommonMark line endings only (LF, CR, CRLF), because a CRLF finding would otherwise let a span cross the paragraph again, and \R would also read the byte 0x85 that ends letters like Cyrillic "х" as a line ending and split inside the letter.
-    private const string BLANK_LINE = '/(?:\r\n?|\n)[ \t]*(?:\r\n?|\n)/u';
+    // The CommonMark line endings only (LF, CR, CRLF), because a CRLF finding would otherwise let a span cross the paragraph again, and \R would also read the byte 0x85 that ends letters like Cyrillic "х" as a line ending and split inside the letter. Atomic groups because a CRLF is one line ending: with backtracking its CR and LF would match as two and split a span that holds a single line break.
+    private const string BLANK_LINE = '/(?>\r\n|\r|\n)[ \t]*(?>\r\n|\r|\n)/u';
 
     /**
      * @param list<Verdict> $verdicts
