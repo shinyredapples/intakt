@@ -14,6 +14,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Psr\Log\NullLogger;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -42,6 +43,14 @@ final class ScriptedIssueTracker
     /** @var array<string, mixed> */
     public array $storedOtherwise = [];
 
+    // Kept across runs, because a later run reads what an earlier run's create kept there.
+    public InMemoryLedger $ledger;
+
+    public function __construct()
+    {
+        $this->ledger = new InMemoryLedger();
+    }
+
     public function byPerson(string $body, bool $pullRequest = false): void
     {
         $issue = ['number' => count($this->issues) + 1, 'title' => 'By hand', 'body' => $body, 'user' => ['login' => 'stranger', 'type' => 'User'], 'performed_via_github_app' => null];
@@ -67,7 +76,7 @@ final class ScriptedIssueTracker
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
         $calls = new GitHubCalls(new MockHttpClient($this->answer(...), 'https://api.github.com'), $readings, $tokens);
 
-        return new GitHubTaskParts($calls, new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories([self::PROJECT => ['github' => 'acme/widget']]), self::APP_ID);
+        return new GitHubTaskParts($calls, new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories([self::PROJECT => ['github' => 'acme/widget']]), self::APP_ID, $this->ledger);
     }
 
     /**
@@ -79,6 +88,12 @@ final class ScriptedIssueTracker
 
         if (null !== $this->refusal) {
             return new MockResponse('{"message":"Refused"}', ['http_code' => $this->refusal]);
+        }
+
+        $one = preg_match('~/issues/(\d+)$~', (string) parse_url($url, PHP_URL_PATH), $matches) ? (int) $matches[1] - 1 : null;
+
+        if (null !== $one) {
+            return $this->answerAbout($one, $method, $options);
         }
 
         if ('GET' === $method) {
@@ -100,5 +115,23 @@ final class ScriptedIssueTracker
         }
 
         return new MockResponse(json_encode($stored, JSON_THROW_ON_ERROR), ['http_code' => 201]);
+    }
+
+    // An edit keeps what GitHub would store otherwise too, so a test can make GitHub drop the marker on every write.
+    /**
+     * @param array<mixed> $options
+     */
+    private function answerAbout(int $index, string $method, array $options): ResponseInterface
+    {
+        if (!array_key_exists($index, $this->issues)) {
+            return new MockResponse('{"message":"Not Found"}', ['http_code' => 404]);
+        }
+
+        if ('PATCH' === $method) {
+            $body = $options['body'] ?? '';
+            $this->issues[$index] = [...$this->issues[$index], ...(array) json_decode(is_string($body) ? $body : '', true, flags: JSON_THROW_ON_ERROR), ...$this->storedOtherwise];
+        }
+
+        return new MockResponse(json_encode($this->issues[$index], JSON_THROW_ON_ERROR), ['http_code' => 200]);
     }
 }

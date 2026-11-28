@@ -11,7 +11,7 @@ use NoDiscard;
 
 interface TaskParts
 {
-    // Once per marker, because a forge can create an issue and still answer as failed, and the split's retry must not file the part twice: the issues filed since the plan are read first, and one of this App whose body carries the marker stands for the create. A failed read files nothing.
+    // Once per marker, because a forge can create an issue and still answer as failed, and the split's retry must not file the part twice: an issue number an earlier create returned is kept in the ledger and checked first (its marker written into it when missing), else the issues filed since the plan are read, and one of this App whose body carries the marker stands for the create. A failed read files nothing.
     /**
      * @throws ForgeReadFailed
      * @throws ForgeWriteFailed

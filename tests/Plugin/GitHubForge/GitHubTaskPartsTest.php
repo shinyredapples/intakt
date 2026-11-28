@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use DateTimeImmutable;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\PartIssue;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubTaskParts;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -74,6 +76,7 @@ final class GitHubTaskPartsTest extends TestCase
         $tracker = new ScriptedIssueTracker();
         $this->fileOnce($tracker);
         $tracker->issues[0]['pull_request'] = ['url' => 'https://api.github.com/x'];
+        $tracker->ledger = new InMemoryLedger();
 
         self::assertSame(2, $this->fileOnce($tracker));
     }
@@ -119,13 +122,135 @@ final class GitHubTaskPartsTest extends TestCase
         $tracker = new ScriptedIssueTracker();
         $tracker->storedOtherwise = ['body' => 'Part 1 of 2 of #7.'];
 
-        $this->expectExceptionObject(new ForgeWriteFailed('GitHub stored the part without this App\'s mark or its marker, so no retry would find it.'));
+        $this->expectExceptionObject(new ForgeWriteFailed('GitHub answered the create of part #1 without this App\'s mark or its marker, so the next run checks that issue.'));
 
         $this->fileOnce($tracker);
     }
 
-    private function fileOnce(ScriptedIssueTracker $tracker): int
+    public function testTwoFileOnceCallsWhoseFirstCreateIsUnconfirmedFileExactlyOneIssue(): void
     {
-        return $tracker->parts()->fileOnce(ScriptedIssueTracker::PROJECT, new PartIssue('Read the cart', 'Part 1 of 2 of #7.', self::MARKER, new IssueLabels('ready', 'priority:high'), new DateTimeImmutable('2026-11-28T12:00:00Z')));
+        $tracker = new ScriptedIssueTracker();
+        $tracker->storedOtherwise = ['body' => 'Part 1 of 2 of #7.'];
+        $this->unconfirmed($tracker);
+        $tracker->storedOtherwise = [];
+
+        $again = $this->fileOnce($tracker);
+
+        self::assertSame([1, 1], [$again, count($tracker->filed())]);
+    }
+
+    public function testTheNumberOfACreateIsKeptBeforeItsAnswerIsCheckedForTheMarker(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->storedOtherwise = ['body' => 'Part 1 of 2 of #7.'];
+
+        $this->unconfirmed($tracker);
+
+        self::assertSame([LedgerEventKind::PartIssueCreated], $tracker->ledger->kinds());
+        self::assertSame([['project' => 'widget', 'issue' => 1, 'marker' => self::MARKER]], $tracker->ledger->payloads());
+    }
+
+    public function testAnUnconfirmedPartWithoutTheMarkerGetsTheMarkerWrittenIntoIt(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->storedOtherwise = ['body' => 'Part 1 of 2 of #7.'];
+        $this->unconfirmed($tracker);
+        $tracker->storedOtherwise = [];
+
+        $this->fileOnce($tracker);
+
+        self::assertSame("Part 1 of 2 of #7.\n\n".self::MARKER, $tracker->issues[0]['body']);
+        self::assertSame(['GET https://api.github.com/repos/acme/widget/issues/1', 'PATCH https://api.github.com/repos/acme/widget/issues/1'], array_slice($tracker->requests, -2));
+    }
+
+    public function testAnUnconfirmedPartStoredWithoutABodyGetsTheWholeBodyWithTheMarker(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->storedOtherwise = ['body' => null];
+        $this->unconfirmed($tracker);
+        $tracker->storedOtherwise = [];
+
+        $this->fileOnce($tracker);
+
+        self::assertSame("Part 1 of 2 of #7.\n\n".self::MARKER, $tracker->issues[0]['body']);
+    }
+
+    public function testAKeptPartThatCarriesTheMarkerIsReturnedWithoutAWriteOrASearch(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $this->fileOnce($tracker);
+        $before = count($tracker->requests);
+
+        self::assertSame(1, $this->fileOnce($tracker));
+        self::assertSame(['GET https://api.github.com/repos/acme/widget/issues/1'], array_slice($tracker->requests, $before));
+    }
+
+    public function testAMarkerGitHubWillNotKeepFailsTheRunAndFilesNoSecondIssue(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->storedOtherwise = ['body' => 'Part 1 of 2 of #7.'];
+        $this->unconfirmed($tracker);
+
+        try {
+            $this->fileOnce($tracker);
+            self::fail('A part whose marker GitHub dropped was reported as filed.');
+        } catch (ForgeWriteFailed $failed) {
+            self::assertSame('GitHub did not keep the marker written into part #1.', $failed->getMessage());
+        }
+
+        self::assertCount(1, $tracker->filed());
+    }
+
+    public function testAKeptPartThatCannotBeReadFilesNothing(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->storedOtherwise = ['body' => 'Part 1 of 2 of #7.'];
+        $this->unconfirmed($tracker);
+        $tracker->refusal = 404;
+
+        try {
+            $this->fileOnce($tracker);
+            self::fail('A kept part that could not be read was reported as filed.');
+        } catch (ForgeReadFailed $failed) {
+            self::assertSame('GitHub answered 404 to a read of the issues.', $failed->getMessage());
+        }
+
+        self::assertSame('GET https://api.github.com/repos/acme/widget/issues/1', array_last($tracker->requests));
+        self::assertCount(1, $tracker->filed());
+    }
+
+    public function testAKeptNumberOfAnotherPartDoesNotStandForThisPart(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->storedOtherwise = ['body' => 'Part 1 of 2 of #7.'];
+        $this->unconfirmed($tracker);
+        $tracker->storedOtherwise = [];
+
+        self::assertSame(2, $this->fileOnce($tracker, '<!-- intakt:part task-sizing-abc 2 -->'));
+    }
+
+    public function testACreateWhoseNumberTheLedgerDoesNotKeepFails(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->ledger = new InMemoryLedger(0);
+
+        $this->expectExceptionObject(new ForgeWriteFailed('GitHub filed part #1, but the ledger did not keep its number: the ledger is down'));
+
+        $this->fileOnce($tracker);
+    }
+
+    private function unconfirmed(ScriptedIssueTracker $tracker): void
+    {
+        try {
+            $this->fileOnce($tracker);
+            self::fail('A create whose answer lacks the marker was reported as filed.');
+        } catch (ForgeWriteFailed) {
+            self::assertCount(1, $tracker->filed());
+        }
+    }
+
+    private function fileOnce(ScriptedIssueTracker $tracker, string $marker = self::MARKER): int
+    {
+        return $tracker->parts()->fileOnce(ScriptedIssueTracker::PROJECT, new PartIssue('Read the cart', 'Part 1 of 2 of #7.', $marker, new IssueLabels('ready', 'priority:high'), new DateTimeImmutable('2026-11-28T12:00:00Z')));
     }
 }

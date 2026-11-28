@@ -50,6 +50,6 @@ The `started` row of the call carries the project and the task number (`UsageSta
 
 ## Not built here
 
-The split of an oversize task (plan record, parts, part marker, labels, resume, never split twice, `Waits for` lines, the lower split tier of a small pool), the check of Evidence items and the validity check against main. A verdict of tier `split` is only recorded.
+The split of an oversize task (plan record, parts, labels, resume, never split twice, `Waits for` lines, the lower split tier of a small pool), the check of Evidence items and the validity check against main. A verdict of tier `split` is only recorded. The forge already files one part once by its marker ([Filing split parts](forge-contract.md#filing-split-parts)), but nothing calls it yet.
 
 Tests: `SizeTaskTest` (overlap forced by a re-entrant run inside the vendor call, failed park and comment, a comment stored but answered with 502 and its retry, an edit that makes the task ready, repeat sizing), `SizingRetryTest` (a retry after a comment stored but answered with 502 asks no second model call, whatever that call would answer), `EligibleTasksTest`, `SizeTaskCommandTest`, `SizingASampleTaskTest` (the whole path over a scripted platform), `SizingAgentTest`, `SymfonyAiSizingVendorTest`, `GitHubTaskCommentsTest`.

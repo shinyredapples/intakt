@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
 use DateTimeZone;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
@@ -35,6 +39,7 @@ final readonly class GitHubTaskParts implements TaskParts
         private WatchedRepositories $repositories,
         #[Autowire(env: 'GITHUB_APP_ID')]
         private string $appId,
+        private Ledger $ledger,
     ) {
     }
 
@@ -42,8 +47,77 @@ final readonly class GitHubTaskParts implements TaskParts
     public function fileOnce(string $project, PartIssue $part): int
     {
         $path = $this->repositories->addressOf($project)->path().'/issues';
+        $subject = self::subjectOf($project, $part);
+        $kept = $this->keptNumber($subject);
 
-        return $this->filedBefore($path, $part) ?? $this->filed($path, $part);
+        return null === $kept
+            ? $this->filedBefore($path, $part) ?? $this->filed($path, $part, $project, $subject)
+            : $this->reconciled($path, $kept, $part);
+    }
+
+    // Length-prefixed, because a project name may end in text that looks like the start of a marker.
+    private static function subjectOf(string $project, PartIssue $part): string
+    {
+        return 'part-issue-'.hash('sha256', strlen($project).':'.$project.$part->marker);
+    }
+
+    /**
+     * @throws ForgeReadFailed
+     */
+    private function keptNumber(string $subject): ?int
+    {
+        $kept = array_last([...$this->ledger->readOfKindAbout(LedgerEventKind::PartIssueCreated, $subject)]);
+
+        if (null === $kept) {
+            return null;
+        }
+
+        $number = PayloadFields::of($kept)->number('issue');
+
+        return null !== $number && $number > 0 ? $number : throw new ForgeReadFailed('The ledger kept a created part without its issue number.');
+    }
+
+    // Without this App's mark, because the number is the answer to this App's own create, and the mark may be what that answer lacked; written only when the marker is missing, because the create may have stored it and only the answer lost it.
+    /**
+     * @throws ForgeReadFailed
+     * @throws ForgeWriteFailed
+     */
+    private function reconciled(string $path, int $kept, PartIssue $part): int
+    {
+        $issue = $this->issueIn($this->read($path.'/'.$kept, []));
+
+        if ($this->numberOf($issue) !== $kept || array_key_exists('pull_request', $issue)) {
+            throw new ForgeReadFailed(sprintf('GitHub answered the read of part #%d with another issue.', $kept));
+        }
+
+        $body = $issue['body'] ?? null;
+        $stored = is_string($body) ? $body : '';
+
+        if (str_contains($stored, $part->marker)) {
+            return $kept;
+        }
+
+        $marked = ('' === trim($stored) ? $part->body : $stored)."\n\n".$part->marker;
+        $answer = $this->written('PATCH', $path.'/'.$kept, ['body' => $marked]);
+        $written = $answer['body'] ?? null;
+
+        return is_string($written) && str_contains($written, $part->marker) ? $kept : throw new ForgeWriteFailed(sprintf('GitHub did not keep the marker written into part #%d.', $kept));
+    }
+
+    /**
+     * @return array<mixed>
+     *
+     * @throws ForgeReadFailed
+     */
+    private function issueIn(string $body): array
+    {
+        try {
+            $issue = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $invalid) {
+            throw new ForgeReadFailed('GitHub answered the read of an issue with something other than JSON.', $invalid->getCode(), previous: $invalid);
+        }
+
+        return is_array($issue) && str_starts_with(ltrim($body), '{') ? $issue : throw new ForgeReadFailed('GitHub answered the read of an issue with something other than an issue.');
     }
 
     // By this App's mark and the marker, never by the title, because anyone can write the marker into an issue of their own, and two parts may share a title.
@@ -55,7 +129,7 @@ final readonly class GitHubTaskParts implements TaskParts
         $since = $part->plannedAt->modify(self::CLOCK_MARGIN)->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
 
         for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
-            $listed = $this->page($path, ['state' => 'all', 'since' => $since, 'sort' => 'created', 'direction' => 'asc', 'per_page' => self::PAGE_SIZE, 'page' => $page]);
+            $listed = $this->listIn($this->read($path, ['state' => 'all', 'since' => $since, 'sort' => 'created', 'direction' => 'asc', 'per_page' => self::PAGE_SIZE, 'page' => $page]));
             $found = array_find($listed, fn (array $issue): bool => $this->isThisAppsPart($issue, $part->marker));
 
             if (null !== $found) {
@@ -73,11 +147,9 @@ final readonly class GitHubTaskParts implements TaskParts
     /**
      * @param array<string, int|string> $query
      *
-     * @return list<array<mixed>>
-     *
      * @throws ForgeReadFailed
      */
-    private function page(string $path, array $query): array
+    private function read(string $path, array $query): string
     {
         $options = ['auth_bearer' => $this->bearer(), 'query' => $query, 'headers' => ['Accept' => 'application/vnd.github+json']];
 
@@ -93,7 +165,7 @@ final readonly class GitHubTaskParts implements TaskParts
             throw new ForgeReadFailed(sprintf('GitHub answered %d to a read of the issues.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
         }
 
-        return $this->listIn($body);
+        return $body;
     }
 
     /**
@@ -167,16 +239,37 @@ final readonly class GitHubTaskParts implements TaskParts
         return is_int($number) && $number > 0 ? $number : null;
     }
 
+    // Kept before the answer is checked for the marker, because GitHub may have stored a part whose answer lacks it, and the next run must check that issue instead of filing the part again.
     /**
      * @throws ForgeWriteFailed
      */
-    private function filed(string $path, PartIssue $part): int
+    private function filed(string $path, PartIssue $part, string $project, string $subject): int
+    {
+        $issue = $this->written('POST', $path, ['title' => $part->title, 'body' => $part->body."\n\n".$part->marker, 'labels' => [...$part->labels]]);
+        $number = $this->numberOf($issue) ?? throw new ForgeWriteFailed('GitHub answered the create without the number of the issue.');
+        $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::PartIssueCreated, json_encode(['project' => $project, 'issue' => $number, 'marker' => $part->marker], JSON_THROW_ON_ERROR), $subject));
+
+        if (!$appended->succeeded()) {
+            throw new ForgeWriteFailed(sprintf('GitHub filed part #%d, but the ledger did not keep its number: %s', $number, (string) $appended->failure));
+        }
+
+        return $this->isThisAppsPart($issue, $part->marker) ? $number : throw new ForgeWriteFailed(sprintf('GitHub answered the create of part #%d without this App\'s mark or its marker, so the next run checks that issue.', $number));
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     *
+     * @return array<mixed>
+     *
+     * @throws ForgeWriteFailed
+     */
+    private function written(string $method, string $path, array $payload): array
     {
         // Never retried, because GitHub can create an issue and still answer 502, and a retry would file it twice.
-        $options = ['auth_bearer' => $this->writeBearer(), 'json' => ['title' => $part->title, 'body' => $part->body."\n\n".$part->marker, 'labels' => [...$part->labels]], 'headers' => ['Accept' => 'application/vnd.github+json'], 'max_retries' => 0];
+        $options = ['auth_bearer' => $this->writeBearer(), 'json' => $payload, 'headers' => ['Accept' => 'application/vnd.github+json'], 'max_retries' => 0];
 
         try {
-            $response = $this->calls->asInstallation('POST', $path, $options);
+            $response = $this->calls->asInstallation($method, $path, $options);
             $status = $response->getStatusCode();
             $stored = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
@@ -187,7 +280,7 @@ final readonly class GitHubTaskParts implements TaskParts
             throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
         }
 
-        return $this->confirmedNumber($stored, $part->marker);
+        return $this->answeredIssue($stored);
     }
 
     /**
@@ -208,24 +301,19 @@ final readonly class GitHubTaskParts implements TaskParts
         return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
     }
 
-    // Checked on every create, because a later run finds the part only by this App's mark and the marker in its body, and a part it cannot find would be filed again.
     /**
+     * @return array<mixed>
+     *
      * @throws ForgeWriteFailed
      */
-    private function confirmedNumber(string $answer, string $marker): int
+    private function answeredIssue(string $answer): array
     {
         try {
             $issue = json_decode($answer, true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $invalid) {
-            throw new ForgeWriteFailed('GitHub answered the create with something other than JSON.', $invalid->getCode(), previous: $invalid);
+            throw new ForgeWriteFailed('GitHub answered the write with something other than JSON.', $invalid->getCode(), previous: $invalid);
         }
 
-        $number = is_array($issue) ? $this->numberOf($issue) : null;
-
-        if (!is_array($issue) || null === $number) {
-            throw new ForgeWriteFailed('GitHub answered the create without the number of the issue.');
-        }
-
-        return $this->isThisAppsPart($issue, $marker) ? $number : throw new ForgeWriteFailed('GitHub stored the part without this App\'s mark or its marker, so no retry would find it.');
+        return is_array($issue) && str_starts_with(ltrim($answer), '{') ? $issue : throw new ForgeWriteFailed('GitHub answered the write with something other than an issue.');
     }
 }
