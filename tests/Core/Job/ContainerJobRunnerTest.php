@@ -16,6 +16,7 @@ use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobKeptFolder;
 use Intakt\Core\Job\Contract\JobLimits;
+use Intakt\Core\Job\Contract\JobFollowedFile;
 use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobOutputFile;
 use Intakt\Core\Job\Contract\JobOutputRefused;
@@ -293,7 +294,12 @@ final class ContainerJobRunnerTest extends TestCase
                 return 5;
             }
 
-            public function endsSession(JobOutput $live): bool
+            public function followedFile(): string
+            {
+                return 'build.log';
+            }
+
+            public function endsSession(JobFollowedFile $file): bool
             {
                 return 2 <= ++$this->asked;
             }
@@ -315,7 +321,12 @@ final class ContainerJobRunnerTest extends TestCase
                 return 20;
             }
 
-            public function endsSession(JobOutput $live): bool
+            public function followedFile(): string
+            {
+                return 'build.log';
+            }
+
+            public function endsSession(JobFollowedFile $file): bool
             {
                 return false;
             }
@@ -327,11 +338,12 @@ final class ContainerJobRunnerTest extends TestCase
         self::assertEquals(new JobEnd(JobCause::TimedOut, 137), $result->end);
     }
 
-    public function testAWatchSeesWhatTheRunningJobHasWrittenToItsOutputAndNothingThatIsNoPlainFile(): void
+    public function testAWatchReadsPiecesOfTheFileItFollowsWhileTheJobRuns(): void
     {
         $this->engine->hang('build-1');
         $watch = new class($this->root) implements JobWatch {
-            public ?string $seen = null;
+            /** @var list<string> */
+            public array $seen = [];
 
             public function __construct(private readonly string $root)
             {
@@ -342,16 +354,15 @@ final class ContainerJobRunnerTest extends TestCase
                 return 5;
             }
 
-            public function endsSession(JobOutput $live): bool
+            public function followedFile(): string
             {
-                $directory = $this->root.'/build-1';
-                file_put_contents($directory.'/build.log', 'line');
-                symlink('/etc/hostname', $directory.'/linked');
-                mkdir($directory.'/folder');
-                $this->seen = implode(',', array_map(static fn (JobOutputFile $file): string => $file->name.'='.$file->contents, new JobOutputDirectories($this->root)->peek($directory)->files()));
-                // Removed again, because the end of the job refuses an output that holds either.
-                unlink($directory.'/linked');
-                rmdir($directory.'/folder');
+                return 'session.log';
+            }
+
+            public function endsSession(JobFollowedFile $file): bool
+            {
+                file_put_contents($this->root.'/build-1/session.log', 'line one');
+                $this->seen = [$file->read(0, 4)?->bytes ?? 'none', $file->read(5, 100)?->bytes ?? 'none'];
 
                 return true;
             }
@@ -359,7 +370,39 @@ final class ContainerJobRunnerTest extends TestCase
 
         $this->whenJobRuns($this->spec('build-1'), watch: $watch);
 
-        self::assertSame('build.log=line', $watch->seen);
+        self::assertSame(['line', 'one'], $watch->seen);
+    }
+
+    public function testTheFileAWatchFollowsIsHandedBackByItsTailWhenItGrewPastTheOutputsBound(): void
+    {
+        $this->engine->hang('build-1');
+        $watch = new class($this->root) implements JobWatch {
+            public function __construct(private readonly string $root)
+            {
+            }
+
+            public function intervalSeconds(): int
+            {
+                return 5;
+            }
+
+            public function followedFile(): string
+            {
+                return 'build.log';
+            }
+
+            public function endsSession(JobFollowedFile $file): bool
+            {
+                file_put_contents($this->root.'/build-1/build.log', str_repeat('x', JobOutputDirectories::MAX_BYTES)."the end\n");
+
+                return true;
+            }
+        };
+
+        $log = $this->whenJobRuns($this->spec('build-1'), watch: $watch)->output->contents('build.log') ?? '';
+
+        self::assertSame(JobOutputDirectories::TAIL_BYTES, strlen($log));
+        self::assertStringEndsWith("the end\n", $log);
     }
 
     public function testAMemoryKillJustBeforeTheRunTimeEndsIsRecordedAsTheJobsCause(): void

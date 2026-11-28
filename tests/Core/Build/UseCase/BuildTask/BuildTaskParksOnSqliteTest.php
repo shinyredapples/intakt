@@ -83,7 +83,7 @@ use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Core\Build\UseCase\RunBuildJob\BuildLogLines;
-use Intakt\Tests\Core\Job\OutputFiles;
+use Intakt\Tests\Core\Job\FollowedText;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -291,7 +291,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
             self::assertInstanceOf(JobWatch::class, $watch);
             foreach ($logs as $log) {
                 $this->clock->sleep($watch->intervalSeconds());
-                if ($watch->endsSession(OutputFiles::of([RunBuildJob::LOG => $log]))) {
+                if ($watch->endsSession(new FollowedText($log))) {
                     break;
                 }
             }
@@ -313,7 +313,9 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
     public static function stopsOfTheWatch(): iterable
     {
         yield 'no progress' => [BuildStopCause::NoProgress, new BuildLimits(100, 60, 1000, 1000), [BuildLogLines::usage('m1', 150), BuildLogLines::usage('m1', 150)]];
-        yield 'runaway ceiling' => [BuildStopCause::RunawayCeiling, new BuildLimits(100, 60, 500, 10000), [BuildLogLines::usage('m1', 150).BuildLogLines::edit('c1', 'a', 'b'), BuildLogLines::usage('m1', 150).BuildLogLines::usage('m2', 450).BuildLogLines::edit('c1', 'a', 'b')]];
+        $working = BuildLogLines::usage('m1', 150).BuildLogLines::edit('c1', 'a', 'b');
+
+        yield 'runaway ceiling' => [BuildStopCause::RunawayCeiling, new BuildLimits(100, 60, 500, 10000), [$working, $working.BuildLogLines::usage('m2', 450)]];
         yield 'per-task total' => [BuildStopCause::PerTaskTotal, new BuildLimits(100, 60, 500, 300), [BuildLogLines::usage('m1', 350).BuildLogLines::edit('c1', 'a', 'b')]];
     }
 

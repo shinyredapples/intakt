@@ -30,7 +30,7 @@ final class BuildLogLines
     /**
      * @param array<string, mixed> $input
      */
-    private static function tool(string $callId, string $name, array $input): string
+    public static function tool(string $callId, string $name, array $input): string
     {
         return self::line(['type' => 'assistant', 'message' => ['id' => 'm-'.$callId, 'content' => [['type' => 'tool_use', 'id' => $callId, 'name' => $name, 'input' => $input]]]]);
     }

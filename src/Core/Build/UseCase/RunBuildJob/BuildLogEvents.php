@@ -54,10 +54,16 @@ final readonly class BuildLogEvents
 
         foreach (self::USAGE_COUNTS as $name) {
             $count = is_array($usage) ? ($usage[$name] ?? 0) : 0;
-            $tokens += is_int($count) && $count > 0 ? $count : 0;
+            $tokens = self::plus($tokens, is_int($count) ? $count : 0);
         }
 
         return $tokens;
+    }
+
+    // Held at the largest integer instead of turning into a float, because the builder can write counts that add up past it.
+    public static function plus(int $tokens, int $more): int
+    {
+        return $more <= 0 ? $tokens : ($more > PHP_INT_MAX - $tokens ? PHP_INT_MAX : $tokens + $more);
     }
 
     public static function runsTests(string $tool, string $command): bool
@@ -65,17 +71,48 @@ final readonly class BuildLogEvents
         return 'Bash' === $tool && 1 === preg_match(self::TEST_RUN, $command);
     }
 
+    // A commit attempt only, because one that changes nothing fails; the commit counts once its result names the commit it made.
+    public static function triesToCommit(string $tool, string $command): bool
+    {
+        return 'Bash' === $tool && 1 === preg_match('~\bgit\s+commit\b~', $command) && !str_contains($command, '--allow-empty');
+    }
+
+    // The hash git prints in the first line of a commit it made, such as "[main 1a2b3c4] subject"; empty when the result shows none.
+    public static function commitIn(string $text): string
+    {
+        return 1 === preg_match('~^\[[^\]\n]+ ([0-9a-f]{7,64})\] ~m', $text, $found) ? $found[1] : '';
+    }
+
+    // The id of the shell a test run went on in, when its result says so; null when it did not go to the background, and empty when it did but names no id.
+    public static function backgroundShellIn(string $text): ?string
+    {
+        return 1 === preg_match('~running in (?:the )?background(?: with ID: ([\w-]+))?~i', $text, $found) ? ($found[1] ?? '') : null;
+    }
+
+    public static function showsEnded(string $text): bool
+    {
+        return 1 === preg_match('~<status>(?:completed|failed|killed)</status>~', $text);
+    }
+
+    /**
+     * @param array<mixed> $input
+     */
+    public static function shellLookedAt(array $input): string
+    {
+        foreach (['bash_id', 'shell_id', 'task_id'] as $key) {
+            if ('' !== self::textAt($input, $key)) {
+                return self::textAt($input, $key);
+            }
+        }
+
+        return '';
+    }
+
     /**
      * @param array<mixed> $input
      */
     public static function changeBy(string $tool, array $input): string
     {
-        $command = self::textAt($input, 'command');
-
-        if ('Bash' === $tool) {
-            return 1 === preg_match('~\bgit\s+commit\b~', $command) && !str_contains($command, '--allow-empty') ? 'commit:'.self::withoutWhitespace($command) : '';
-        }
-
         $before = self::withoutWhitespace(self::textAt($input, 'old_string'));
         // Read from the list a MultiEdit carries, because its changes are not in the fields of a single edit.
         $edits = self::arrayAt($input, 'edits');

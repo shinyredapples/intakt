@@ -38,6 +38,7 @@ use Intakt\Core\Job\Contract\JobWatch;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
+use Intakt\Tests\Core\Job\FollowedText;
 use Intakt\Tests\Core\Job\OutputFiles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -96,11 +97,9 @@ final class WatchedBuildJobTest extends TestCase
 
     public function testABuildReachingTheRunawayCeilingWhileMakingProgressIsStoppedAndKeepsItsCommits(): void
     {
-        $outcome = $this->runWatched(new BuildLimits(100, 60, 500, 10000), [
-            BuildLogLines::usage('m1', 150).BuildLogLines::edit('c1', 'a', 'b'),
-            BuildLogLines::usage('m1', 150).BuildLogLines::edit('c1', 'a', 'b').BuildLogLines::usage('m2', 450).BuildLogLines::edit('c2', 'b', 'c'),
-            BuildLogLines::usage('m3', 1),
-        ]);
+        $first = BuildLogLines::usage('m1', 150).BuildLogLines::edit('c1', 'a', 'b');
+        $second = $first.BuildLogLines::usage('m2', 450).BuildLogLines::edit('c2', 'b', 'c');
+        $outcome = $this->runWatched(new BuildLimits(100, 60, 500, 10000), [$first, $second, $second.BuildLogLines::usage('m3', 1)]);
 
         self::assertSame([false, true], $this->answers);
         self::assertSame([BuildVerdict::Built, 'BUNDLE', BuildStopCause::RunawayCeiling], [$outcome->verdict, $outcome->bundle, $outcome->stopCause]);
@@ -108,11 +107,9 @@ final class WatchedBuildJobTest extends TestCase
 
     public function testABuildWhoseTaskReachedThePerTaskTotalIsStoppedAndKeepsItsCommits(): void
     {
-        $outcome = $this->runWatched(new BuildLimits(100, 60, 500, 300), [
-            BuildLogLines::usage('m1', 50),
-            BuildLogLines::usage('m1', 350).BuildLogLines::edit('c1', 'a', 'b'),
-            BuildLogLines::usage('m3', 1),
-        ]);
+        $first = BuildLogLines::usage('m1', 50);
+        $second = $first.BuildLogLines::usage('m2', 300).BuildLogLines::edit('c1', 'a', 'b');
+        $outcome = $this->runWatched(new BuildLimits(100, 60, 500, 300), [$first, $second, $second.BuildLogLines::usage('m3', 1)]);
 
         self::assertSame([false, true], $this->answers);
         self::assertSame([BuildVerdict::Built, 'BUNDLE', BuildStopCause::PerTaskTotal], [$outcome->verdict, $outcome->bundle, $outcome->stopCause]);
@@ -135,11 +132,9 @@ final class WatchedBuildJobTest extends TestCase
 
     public function testALowerTokenFigureInTheLogNeverLowersWhatTheWatchSaw(): void
     {
-        $outcome = $this->runWatched(new BuildLimits(100, 60, 1000, 10000), [
-            BuildLogLines::usage('m1', 900).BuildLogLines::edit('c1', 'a', 'b'),
-            BuildLogLines::usage('m1', 20).BuildLogLines::edit('c1', 'a', 'b'),
-            BuildLogLines::usage('m1', 20).BuildLogLines::edit('c1', 'a', 'b'),
-        ]);
+        $first = BuildLogLines::usage('m1', 900).BuildLogLines::edit('c1', 'a', 'b');
+        $second = $first.BuildLogLines::usage('m1', 20);
+        $outcome = $this->runWatched(new BuildLimits(100, 60, 1000, 10000), [$first, $second, $second.BuildLogLines::usage('m1', 20)]);
 
         self::assertSame([false, false, true], $this->answers);
         self::assertSame(BuildStopCause::NoProgress, $outcome->stopCause);
@@ -194,7 +189,7 @@ final class WatchedBuildJobTest extends TestCase
             self::assertInstanceOf(JobWatch::class, $watch);
             foreach ($logs as $log) {
                 $this->clock->sleep($watch->intervalSeconds());
-                $this->answers[] = $watch->endsSession(OutputFiles::of(['build.log' => $log]));
+                $this->answers[] = $watch->endsSession(new FollowedText($log));
                 if (end($this->answers)) {
                     break;
                 }

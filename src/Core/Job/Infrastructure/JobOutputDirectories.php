@@ -8,8 +8,11 @@ use DirectoryIterator;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobOutputFile;
+use Intakt\Core\Job\Contract\JobOutputPiece;
 use Intakt\Core\Job\Contract\JobOutputRefused;
+use RuntimeException;
 use SplFileInfo;
+use SplFileObject;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
@@ -21,6 +24,9 @@ final readonly class JobOutputDirectories
     // Bounded before anything is read, because a job's memory limit does not cover what it writes to the host and the orchestrator holds the output in memory.
     public const int MAX_BYTES = 16 * 1024 * 1024;
     public const int MAX_FILES = 1000;
+    public const int TAIL_BYTES = 1024 * 1024;
+    private const int FILE_TYPE = 0o170000;
+    private const int PLAIN_FILE = 0o100000;
 
     public function __construct(
         #[Autowire('%kernel.project_dir%/var/jobs')]
@@ -40,7 +46,8 @@ final readonly class JobOutputDirectories
         return $directory;
     }
 
-    public function read(string $directory): JobOutput
+    // A followed file is handed back by its tail alone, because a watch read it in pieces while the job ran and it may have grown past the bound.
+    public function read(string $directory, ?string $followed = null): JobOutput
     {
         try {
             $entries = new DirectoryIterator($directory);
@@ -60,13 +67,15 @@ final readonly class JobOutputDirectories
                 throw JobOutputRefused::tooMany(self::MAX_FILES);
             }
 
-            $bytes += $this->sizeOf($entry);
+            $size = $this->sizeOf($entry);
+            $skipped = $followed === $entry->getFilename() ? max(0, $size - self::TAIL_BYTES) : 0;
+            $bytes += $size - $skipped;
 
             if ($bytes > self::MAX_BYTES) {
                 throw JobOutputRefused::tooLarge($entry->getFilename(), self::MAX_BYTES);
             }
 
-            $files[$entry->getFilename()] = $this->contentsOf($entry);
+            $files[$entry->getFilename()] = $this->contentsOf($entry, $skipped);
         }
 
         ksort($files, SORT_STRING);
@@ -75,24 +84,28 @@ final readonly class JobOutputDirectories
         return new JobOutput(...array_map(static fn (string $name, string $contents): JobOutputFile => new JobOutputFile($name, $contents), array_map(strval(...), array_keys($files)), $files));
     }
 
-    // What a running job has written, read within the same bounds as the end; an entry that is no plain file or does not fit is left out, never refused, because the end of the job reads the output again.
-    public function peek(string $directory): JobOutput
+    // A piece of a file the running job writes. Opened for reading and writing, because opening for reading alone a pipe the job put in the file's place waits for a writer; then checked to be the plain file that was listed, because the job can swap the entry between the look and the open; never more than the asked bytes, because the file can grow while it is read.
+    public function piece(string $directory, string $name, int $from, int $maxBytes): ?JobOutputPiece
     {
-        $files = [];
-        $bytes = 0;
+        $path = $directory.'/'.$name;
+        clearstatcache(true, $path);
+        $listed = is_link($path) || !is_file($path) ? false : lstat($path);
 
-        foreach ($this->readablePlainFiles($directory) as $entry) {
-            $bytes += $entry->getSize();
-
-            if (self::MAX_FILES === count($files) || $bytes > self::MAX_BYTES) {
-                break;
-            }
-
-            $contents = file_get_contents($entry->getPathname());
-            $files = false === $contents ? $files : [...$files, new JobOutputFile($entry->getFilename(), $contents)];
+        try {
+            $file = false === $listed ? null : new SplFileObject($path, 'r+b');
+        } catch (RuntimeException) {
+            return null;
         }
 
-        return new JobOutput(...$files);
+        $opened = $file?->fstat();
+
+        if (!$file instanceof SplFileObject || false === $listed || !is_array($opened) || self::PLAIN_FILE !== ($opened['mode'] & self::FILE_TYPE) || [$opened['dev'], $opened['ino']] !== [$listed['dev'], $listed['ino']]) {
+            return null;
+        }
+
+        $bytes = $from < $opened['size'] && 0 === $file->fseek($from) ? $file->fread(min($maxBytes, $opened['size'] - $from)) : '';
+
+        return new JobOutputPiece($opened['dev'].':'.$opened['ino'], $opened['size'], false === $bytes ? '' : $bytes);
     }
 
     public function remove(JobId $job): void
@@ -120,24 +133,6 @@ final readonly class JobOutputDirectories
         return $this->root.'/'.$job->value;
     }
 
-    /**
-     * @return iterable<DirectoryIterator>
-     */
-    private function readablePlainFiles(string $directory): iterable
-    {
-        try {
-            $entries = new DirectoryIterator($directory);
-        } catch (UnexpectedValueException) {
-            return;
-        }
-
-        foreach ($entries as $entry) {
-            if (!$entry->isDot() && !$entry->isLink() && $entry->isFile() && $entry->isReadable()) {
-                yield $entry;
-            }
-        }
-    }
-
     private function isNoOutput(DirectoryIterator $entry): bool
     {
         return $entry->isDot();
@@ -153,9 +148,9 @@ final readonly class JobOutputDirectories
         return $entry->getSize();
     }
 
-    private function contentsOf(SplFileInfo $entry): string
+    private function contentsOf(SplFileInfo $entry, int $skipped): string
     {
-        $contents = file_get_contents($entry->getPathname());
+        $contents = file_get_contents($entry->getPathname(), false, null, $skipped);
 
         return false === $contents ? throw JobOutputRefused::unreadable($entry->getFilename()) : $contents;
     }

@@ -52,7 +52,7 @@ final readonly class ContainerJobRunner implements JobRunner
             $this->recordStartCheck($spec, $ended);
             $this->ledger->jobEnded($spec->id, $ended->end);
 
-            return new JobResult($ended->end, $this->outputs->read($directory));
+            return new JobResult($ended->end, $this->outputs->read($directory, $watch?->followedFile()));
         } finally {
             $this->outputs->remove($spec->id);
         }
