@@ -227,6 +227,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   font: 400 var(--t13)/1.4 var(--f-body); pointer-events: none;
 }
 .term:hover .term-tip, .term:focus .term-tip { display: block; }
+/* After the one above, equal in weight, so Escape (assets/term-dismiss.js) closes a tip the focus or the pointer opened. */
+.term[data-dismissed] .term-tip { display: none; }
 /* No dotted underline and the text's own size, because the "?" already marks the word as explained and the UI check counts text under 15 px at 390 wide. */
 .term-ask { text-decoration: none; }
 .term-ask .term-q { margin-left: var(--s4); padding: 0 .35em; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font-weight: 600; }
@@ -313,8 +315,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .seg { display: flex; }
   .seg button { flex: 1; height: var(--tab-h); }
   .input, .select { height: 48px; }
-  /* overflow-x: auto clips on every side, so the padding keeps the 2px focus ring and its 2px offset inside the box; the negative inline margin keeps the chips lined up with the page. */
-  .filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-block: var(--s4); padding-inline: var(--s4); margin-inline: calc(-1 * var(--s4)); }
+  /* overflow-x: auto clips on every side, so the padding keeps the 2px focus ring and its 2px offset inside the box; the negative inline margin keeps the chips lined up with the page; the scroll padding stops a focused control, scrolled into view, flush against the edge, where the ring would be cut. */
+  .filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-block: var(--s4); padding-inline: var(--s4); margin-inline: calc(-1 * var(--s4)); scroll-padding-inline: var(--s8); }
   .filters .input { flex: none; min-width: 200px; height: 48px; }
   .filters #history-project { display: block; flex: none; width: auto; max-width: 60%; height: 48px; }
   /* The mock stacks a History row's cells on a phone. The headers are clipped like .sr-only rather than removed, so a screen reader still names a stacked cell, also one that reads only "None". A row the project filter or a chip hides keeps display: none, which the row rule would otherwise beat. */

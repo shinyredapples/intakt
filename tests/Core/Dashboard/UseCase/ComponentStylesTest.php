@@ -242,6 +242,21 @@ final class ComponentStylesTest extends WebTestCase
         self::assertMatchesRegularExpression('/margin-inline:\s*calc\(-1 \* var\(--s4\)\)/', $rules['.filters'] ?? '');
     }
 
+    public function testOnPhonesTheFiltersBarKeepsAFocusedControlTheRingsWidthPlusOffsetAndPaddingFromItsScrollEdge(): void
+    {
+        $rules = $this->rulesOf($this->phoneBlock());
+
+        self::assertMatchesRegularExpression('/scroll-padding-inline:\s*var\(--s8\)/', $rules['.filters'] ?? '');
+    }
+
+    public function testADismissedTermHidesItsTipAfterTheRuleThatShowsItOnFocusAndHover(): void
+    {
+        $sheet = $this->componentSheet();
+
+        self::assertMatchesRegularExpression('/\.term\[data-dismissed\] \.term-tip\s*\{\s*display:\s*none/', $sheet);
+        self::assertGreaterThan(strpos($sheet, '.term:focus .term-tip'), strpos($sheet, '.term[data-dismissed] .term-tip'));
+    }
+
     public function testNoPaddingMarginOrGapHoldsARawLengthOf4PxOrMore(): void
     {
         preg_match_all('/(?:padding|margin|gap)(?:-[a-z]+)?:\s*([^;}]+)/', (string) preg_replace('~/\*.*?\*/~s', '', $this->componentSheet()), $declarations);

@@ -1,5 +1,7 @@
 # History and Trends against the mock (part 1 of #3836)
 
+The keyboard-only walk-through of the same pages (part 3) is `keyboard-walkthrough.md` in this folder.
+
 Files: `<page>-<theme>-<width>-build.png` beside `<page>-<theme>-<width>-mock.png`, for page history and trends, theme light and dark, width 1440, 1920 and 390 (24 images, committed with `git add -f` because `.evidence/` is git-ignored).
 
 Capture rules, the same as `docs/design/mocks/tools/screenshots.js` uses for its mock images: viewport 1440x900 full page, 1920x1080 full page (the generator has no History entry at 1920, so the mock was shot with the same call at the generator's 1920 entry size), 390x844 viewport only (not full page). The build side uses the same viewports and the same `colorScheme`.
