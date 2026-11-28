@@ -332,7 +332,7 @@ final class IgnoredFilesGateTest extends SandboxTestCase
 
         $result = $sandbox->gateResult(new IgnoredFilesGate());
 
-        self::assertSame([self::differsFromIndex('.gitignore')], $result->findings);
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
     }
 
     public function testDeletingATrackedNestedGitignoreFromTheWorkingTreeFailsTheGateWithItsPath(): void
@@ -344,7 +344,7 @@ final class IgnoredFilesGateTest extends SandboxTestCase
 
         $result = $sandbox->gateResult(new IgnoredFilesGate());
 
-        self::assertSame([self::differsFromIndex('docs/.gitignore')], $result->findings);
+        self::assertSame([$this->differsFromIndex('docs/.gitignore')], $result->findings);
     }
 
     public function testAStagedRuleEditWithNothingIgnoredTrackedPasses(): void
@@ -373,7 +373,7 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         $result = $sandbox->gateResult(new IgnoredFilesGate());
 
         self::assertSame('', $sandbox->git('diff', '--name-only')->output, 'git diff trusts the stat data in this scenario');
-        self::assertSame([self::differsFromIndex('.gitignore')], $result->findings);
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
     }
 
     public function testATrackedGitignoreReplacedByASymlinkInTheWorkingTreeFailsTheGate(): void
@@ -385,7 +385,7 @@ final class IgnoredFilesGateTest extends SandboxTestCase
 
         $result = $sandbox->gateResult(new IgnoredFilesGate());
 
-        self::assertSame([self::differsFromIndex('.gitignore')], $result->findings);
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
     }
 
     public function testAnUntrackedSymlinkedGitignoreBesideATrackedFilePasses(): void
@@ -437,7 +437,7 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertSame([], $result->findings);
     }
 
-    private static function differsFromIndex(string $path): string
+    private function differsFromIndex(string $path): string
     {
         return $path.': working-tree .gitignore differs from the index; stage or revert it so the gate judges the rules that will be committed';
     }
