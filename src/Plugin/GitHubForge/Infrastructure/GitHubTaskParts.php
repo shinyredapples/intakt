@@ -47,7 +47,7 @@ final readonly class GitHubTaskParts implements TaskParts
     public function fileOnce(string $project, PartIssue $part): int
     {
         $path = $this->repositories->addressOf($project)->path().'/issues';
-        $subject = self::subjectOf($project, $part);
+        $subject = $this->subjectOf($project, $part);
         $kept = $this->keptNumber($subject);
 
         return null === $kept
@@ -56,7 +56,7 @@ final readonly class GitHubTaskParts implements TaskParts
     }
 
     // Length-prefixed, because a project name may end in text that looks like the start of a marker.
-    private static function subjectOf(string $project, PartIssue $part): string
+    private function subjectOf(string $project, PartIssue $part): string
     {
         return 'part-issue-'.hash('sha256', strlen($project).':'.$project.$part->marker);
     }
