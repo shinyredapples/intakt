@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Closure;
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
@@ -52,6 +53,7 @@ final class AccountFailoverPlatformRankingTest extends TestCase
 {
     private MockClock $clock;
     private ReadingsInMemory $readings;
+    private HoldsInMemory $holds;
     /** @var list<string> */
     private array $called = [];
 
@@ -103,6 +105,51 @@ final class AccountFailoverPlatformRankingTest extends TestCase
         self::assertSame([], $this->called);
     }
 
+    public function testWithOneAccountCoolingDownAndTheOtherAtItsCeilingTheWaitIsTheCooldownThatEndsSooner(): void
+    {
+        $this->both(Account::DEFAULT, $this->usage(10.0, 5), $this->usage(95.0, 2));
+
+        self::assertSame(60, $this->waitOf($this->platform($this->teamCoolingFor(60))));
+        self::assertSame([], $this->called);
+    }
+
+    public function testAHoldWithAnHourLeftMakesTheCallWaitAnHourNotADay(): void
+    {
+        $this->holds->coolDown(new Account(Provider::ClaudeCode, Account::DEFAULT), $this->clock->now()->modify('+1 hour'));
+        $this->both('team', $this->usage(10.0, 5), $this->usage(95.0, 60));
+
+        self::assertSame(3600, $this->waitOf($this->platform()));
+    }
+
+    public function testAfterTheOnlyRankedAccountIsLimitedTheWaitSkipsAnAccountStillAtItsCeiling(): void
+    {
+        $this->both(Account::DEFAULT, $this->usage(10.0, 5), $this->usage(95.0, 2));
+        $limited = false;
+        $cooldowns = $this->createStub(AccountCooldowns::class);
+        $cooldowns->method('secondsUntilFree')->willReturnCallback(static function (Account $account) use (&$limited): int {
+            return 'team' === $account->name && $limited ? 120 : 0;
+        });
+        $refusing = MockPlatformFactory::createPlatform(function () use (&$limited): never {
+            $this->called[] = 'team';
+            $limited = true;
+
+            throw new RateLimitExceededException(120);
+        });
+        $platform = new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->answering(Account::DEFAULT), 'team' => $refusing], $cooldowns, $this->clock, new NullLogger(), new NoPinnedProviderCooldowns(), $this->ranking());
+
+        self::assertSame(120, $this->waitOf($platform));
+        self::assertSame(['team'], $this->called);
+    }
+
+    public function testTierSelectionSeesAProviderWhoseEveryFreeAccountIsAtItsCeilingAsWaiting(): void
+    {
+        $this->both(Account::DEFAULT, $this->usage(10.0, 5), $this->usage(95.0, 2));
+        $this->both('team', $this->usage(10.0, 5), $this->usage(20.0, 60));
+
+        self::assertSame(60, $this->platform($this->teamCoolingFor(60))->secondsUntilFree('big'));
+        self::assertSame(0, $this->platform()->secondsUntilFree('big'));
+    }
+
     public function testACallRefusedMidWayOnTheTopRankedAccountStillFailsOverToTheNext(): void
     {
         $this->both(Account::DEFAULT, $this->usage(10.0, 5), $this->usage(20.0, 60));
@@ -116,7 +163,27 @@ final class AccountFailoverPlatformRankingTest extends TestCase
     {
         $this->clock = new MockClock('2026-03-02 10:00:00 UTC');
         $this->readings = new ReadingsInMemory($this->clock);
+        $this->holds = new HoldsInMemory($this->clock);
         $this->called = [];
+    }
+
+    private function teamCoolingFor(int $seconds): AccountCooldowns
+    {
+        $cooldowns = $this->createStub(AccountCooldowns::class);
+        $cooldowns->method('secondsUntilFree')->willReturnCallback(static fn (Account $account): int => 'team' === $account->name ? $seconds : 0);
+
+        return $cooldowns;
+    }
+
+    private function waitOf(AccountFailoverPlatform $platform): int
+    {
+        try {
+            $platform->invoke('big', 'Review.');
+        } catch (EveryAccountCoolingDown $out) {
+            return $out->secondsUntilAnAccountIsFree;
+        }
+
+        self::fail('The call was answered though no account can take it.');
     }
 
     private function usage(float $percent, int $resetsInHours): Usage
@@ -131,9 +198,9 @@ final class AccountFailoverPlatformRankingTest extends TestCase
         $this->readings->record(new WindowReading($account, UsageWindow::Weekly, $weekly));
     }
 
-    private function platform(): AccountFailoverPlatform
+    private function platform(?AccountCooldowns $cooldowns = null): AccountFailoverPlatform
     {
-        return new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->answering(Account::DEFAULT), 'team' => $this->answering('team')], new NoCooldowns(), $this->clock, new NullLogger(), new NoPinnedProviderCooldowns(), $this->ranking());
+        return new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->answering(Account::DEFAULT), 'team' => $this->answering('team')], $cooldowns ?? new NoCooldowns(), $this->clock, new NullLogger(), new NoPinnedProviderCooldowns(), $this->ranking());
     }
 
     private function answering(string|Closure $answer): PlatformInterface
@@ -149,6 +216,6 @@ final class AccountFailoverPlatformRankingTest extends TestCase
 
     private function ranking(): MeasuredRoomRanking
     {
-        return new MeasuredRoomRanking(new HoldsInMemory($this->clock), new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]));
+        return new MeasuredRoomRanking($this->holds, new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]));
     }
 }

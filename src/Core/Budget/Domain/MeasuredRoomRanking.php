@@ -36,8 +36,10 @@ final readonly class MeasuredRoomRanking implements AccountRanking
 
     private function leftOutOf(Account $account, AccountRoom $room): ?LeftOutAccount
     {
+        $coolingUntil = $this->holds->coolingDownUntil($account);
+
         return match (true) {
-            $this->holds->isCoolingDown($account) => new LeftOutAccount($account, LeftOutCause::CoolingDown, null),
+            $coolingUntil instanceof DateTimeImmutable => new LeftOutAccount($account, LeftOutCause::CoolingDown, $coolingUntil),
             UsageWindow::Weekly === $room->atCeiling => new LeftOutAccount($account, LeftOutCause::AtWeeklyCeiling, $room->resetsAt),
             UsageWindow::FiveHour === $room->atCeiling => new LeftOutAccount($account, LeftOutCause::AtShortWindowCeiling, $room->resetsAt),
             default => null,

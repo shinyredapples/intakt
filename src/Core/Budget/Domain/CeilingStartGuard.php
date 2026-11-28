@@ -43,12 +43,13 @@ final readonly class CeilingStartGuard
         };
     }
 
-    // A reading older than the probe interval counts as unknown, and so does an account without a current reading.
+    // A reading older than the probe interval counts as unknown, and so does an account without a current reading; unlike decide(), an old reading at the ceiling leaves no account out, because an unknown account must stay eligible when no trusted one has room.
     public function roomOf(Account $account): AccountRoom
     {
         $uses = $this->currentUsesOf($account);
-        $atCeiling = $this->windowAtCeiling($uses, 0.0);
-        $trusted = [] !== $uses && array_all($uses, static fn (WindowUse $use): bool => $use->ageInSeconds <= self::TRUSTED_FOR_SECONDS);
+        $fresh = array_filter($uses, static fn (WindowUse $use): bool => $use->ageInSeconds <= self::TRUSTED_FOR_SECONDS);
+        $atCeiling = $this->windowAtCeiling($fresh, 0.0);
+        $trusted = [] !== $uses && count($fresh) === count($uses);
         $resets = $atCeiling instanceof UsageWindow ? [$uses[$atCeiling->value]->usage->resetsAt] : array_map(static fn (WindowUse $use): ?DateTimeImmutable => $use->usage->resetsAt, $uses);
         $known = array_filter($resets, static fn (?DateTimeImmutable $resetsAt): bool => $resetsAt instanceof DateTimeImmutable);
         usort($known, static fn (DateTimeImmutable $one, DateTimeImmutable $other): int => $one <=> $other);

@@ -63,7 +63,7 @@ final class MeasuredRoomRankingTest extends TestCase
         self::assertEquals($this->clock->now()->modify('+2 hours'), $ranked->leftOut[0]->resetsAt);
     }
 
-    public function testAnAccountCoolingDownIsLeftOutWithoutAReset(): void
+    public function testAnAccountCoolingDownIsLeftOutUntilItsHoldEnds(): void
     {
         $this->both('first', $this->usage(10.0, 5), $this->usage(20.0, 60));
         $this->holds->coolDown(new Account(Provider::ClaudeCode, 'first'), $this->clock->now()->modify('+1 hour'));
@@ -72,7 +72,35 @@ final class MeasuredRoomRankingTest extends TestCase
 
         self::assertSame(['second'], $this->names($ranked));
         self::assertSame(LeftOutCause::CoolingDown, $ranked->leftOut[0]->cause);
-        self::assertNull($ranked->leftOut[0]->resetsAt);
+        self::assertEquals($this->clock->now()->modify('+1 hour'), $ranked->leftOut[0]->resetsAt);
+    }
+
+    public function testAnAccountWhoseCeilingReadingIsOlderThanTheProbeIntervalIsStillRankedWhenItIsTheOnlyOne(): void
+    {
+        $this->both('first', $this->usage(10.0, 5), $this->usage(95.0, 48));
+        $this->clock->modify('+'.(CeilingStartGuard::TRUSTED_FOR_SECONDS + 1).' seconds');
+
+        $ranked = $this->rank('first');
+
+        self::assertSame(['first'], $this->names($ranked));
+        self::assertSame([], $ranked->leftOut);
+    }
+
+    public function testAnAccountWhoseCeilingReadingIsOlderThanTheProbeIntervalRanksAfterATrustedOneWithRoom(): void
+    {
+        $this->both('first', $this->usage(10.0, 1), $this->usage(95.0, 48));
+        $this->clock->modify('+'.(CeilingStartGuard::TRUSTED_FOR_SECONDS + 1).' seconds');
+        $this->both('second', $this->usage(10.0, 5), $this->usage(20.0, 60));
+
+        self::assertSame(['second', 'first'], $this->names($this->rank('first', 'second')));
+    }
+
+    public function testACeilingReadingRightAtTheProbeIntervalStillLeavesTheAccountOut(): void
+    {
+        $this->both('first', $this->usage(10.0, 5), $this->usage(95.0, 48));
+        $this->clock->modify('+'.CeilingStartGuard::TRUSTED_FOR_SECONDS.' seconds');
+
+        self::assertSame([], $this->names($this->rank('first')));
     }
 
     public function testOfTwoAccountsWithRoomTheOneWhoseWindowResetsSoonerRanksFirst(): void

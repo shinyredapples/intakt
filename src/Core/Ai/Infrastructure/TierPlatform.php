@@ -38,7 +38,7 @@ final readonly class TierPlatform implements TierInvoker
     ) {
     }
 
-    // Decided by the configuration and the cooldowns alone (the account windows and a model's pinned router provider), never by a failed call, because a request that fails on purpose would otherwise let its sender pick the reviewer.
+    // Decided by the configuration, the cooldowns (the account windows and a model's pinned router provider) and the accounts' measured room alone, never by a failed call,because a request that fails on purpose would otherwise let its sender pick the reviewer.
     #[Override]
     public function answering(string $project, Tier $tier): ResolvedModel
     {
@@ -120,12 +120,12 @@ final readonly class TierPlatform implements TierInvoker
         return 0 < $wait ? ProviderOutage::coolingDown($provider, $wait) : null;
     }
 
-    // The provider's own platform reads each account's window together with the model's pinned router provider (AccountFailoverPlatform) in one read, so a pin that outlasts its account window still keeps the model out, and a window that ends while the platform is built is not kept by an earlier provider-wide read; the account windows alone decide for a platform that cannot tell.
+    // The provider's own platform reads each account's window together with the model's pinned router provider and ranks the free accounts by measured room (AccountFailoverPlatform) in one read, so a pin that outlasts its account window or a provider whose every account is at its ceiling still keeps the model out, and a window that ends while the platform is built is not kept by an earlier provider-wide read; the account windows alone decide for a platform that cannot tell.
     private function secondsUntilFree(ResolvedModel $model): int
     {
         $platform = $this->platforms->has($model->provider->value) ? $this->platforms->get($model->provider->value) : null;
 
-        return $platform instanceof AccountFailoverPlatform ? $platform->modelWaits()->secondsUntilFree($model->model) : $this->cooldowns->secondsUntilAnAccountIsFree($model->provider);
+        return $platform instanceof AccountFailoverPlatform ? $platform->secondsUntilFree($model->model) : $this->cooldowns->secondsUntilAnAccountIsFree($model->provider);
     }
 
     private function recordSwitch(ResolvedModel $own, ResolvedModel $answering): void

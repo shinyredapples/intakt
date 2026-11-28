@@ -34,7 +34,7 @@ use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 use Throwable;
 
-// The accounts of one provider in the owner's order; excluded from the container because config/packages/ai.php defines one per provider with its accounts.
+// The accounts of one provider, listed in the owner's order and ranked by measured room at every call; excluded from the container because config/packages/ai.php defines one per provider with its accounts and the ranking.
 #[Exclude]
 final readonly class AccountFailoverPlatform implements PlatformInterface
 {
@@ -61,10 +61,10 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         $failures = new SendFailures();
         $routerProvider = $this->modelWaits->routerProviderOf($model);
         $waits = $this->waits($routerProvider);
-        $ranked = $this->rankedFreeAccounts($waits);
+        $ranked = $this->startable($waits);
         $free = $this->freeAccounts($ranked->inOrder, $failures, $routerProvider);
         if ([] === $free) {
-            throw [] === $ranked->leftOut ? $this->outOfAccounts($waits, $failures) : $this->outOfRoom($ranked);
+            throw $this->outOfAccounts($ranked, $waits, $failures);
         }
 
         $this->recordSwitch($free);
@@ -78,10 +78,13 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return $this->typedWhenRead($answer, fn (): Throwable => $this->rejectedWhenRead($answer, $failures, $routerProvider), $options);
     }
 
-    // The same read invoke() decides by, so tier selection never picks a model whose every account waits for its pin (issue #2860).
-    public function modelWaits(): ModelWaits
+    // 0 while an account can take the model, else the wait invoke() would report, by the same reads of the cooldowns, the pins and the ranking, so tier selection never picks a model whose every account waits for its pin (issue #2860) or is left out by measured room.
+    public function secondsUntilFree(string|Model $model): int
     {
-        return $this->modelWaits;
+        $waits = $this->waits($this->modelWaits->routerProviderOf($model));
+        $ranked = $this->startable($waits);
+
+        return [] === $ranked->inOrder ? $this->secondsUntilStartable($ranked, $waits) : 0;
     }
 
     #[Override]
@@ -103,7 +106,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
     /**
      * @param array<string, int> $waits
      */
-    private function rankedFreeAccounts(array $waits): RankedAccounts
+    private function startable(array $waits): RankedAccounts
     {
         $accounts = [];
         foreach (array_keys($this->platforms) as $name) {
@@ -137,26 +140,30 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return null === $routerProvider ? null : new PinnedProvider($account, $routerProvider);
     }
 
-    // When every account of the provider rejected its key, in this call or in an earlier one it still cools down from, there is nothing to wait for, so a rejection is thrown; never the provider's own, because its message can echo a key and the judging's failure listener logs what it gets. The wait is the shortest of the waits that just found no account free, never a second read, so it is at least a second (see waits()); the longest window is listed too, so min() always has a value.
+    // When every account of the provider rejected its key, in this call or in an earlier one it still cools down from, there is nothing to wait for, so a rejection is thrown; never the provider's own, because its message can echo a key and the judging's failure listener logs what it gets.
     /**
      * @param array<string, int> $waits
      */
-    private function outOfAccounts(array $waits, SendFailures $failures): Throwable
+    private function outOfAccounts(RankedAccounts $ranked, array $waits, SendFailures $failures): Throwable
     {
         if ($this->isEveryKeyRejected($failures)) {
             return new EveryKeyRejected($this->provider);
         }
 
-        return new EveryAccountCoolingDown($this->provider, min([AccountCooldowns::LONGEST_SECONDS, ...$waits]));
+        return new EveryAccountCoolingDown($this->provider, $this->secondsUntilStartable($ranked, $waits));
     }
 
-    // Every account without a cooldown is left out of the ranking, so nothing is sent; the wait is the soonest reset of those, a second at least and a day at most.
-    private function outOfRoom(RankedAccounts $ranked): Throwable
+    // The soonest moment any account can start again: a cooldown's wait from the read that found no account free, never a second read, or a left-out account's end. Each is at least a second (see waits()), so a refused call never waits 0 s; an end the ranking cannot name counts as the longest window, which is listed too, so min() always has a value.
+    /**
+     * @param array<string, int> $waits
+     */
+    private function secondsUntilStartable(RankedAccounts $ranked, array $waits): int
     {
         $now = $this->clock->now()->getTimestamp();
-        $waits = array_map(static fn (LeftOutAccount $left): int => $left->resetsAt instanceof DateTimeImmutable ? max(1, $left->resetsAt->getTimestamp() - $now) : AccountCooldowns::LONGEST_SECONDS, $ranked->leftOut);
+        $cooling = array_values(array_filter($waits, static fn (int $wait): bool => 0 < $wait));
+        $leftOut = array_map(static fn (LeftOutAccount $left): int => $left->resetsAt instanceof DateTimeImmutable ? max(1, $left->resetsAt->getTimestamp() - $now) : AccountCooldowns::LONGEST_SECONDS, $ranked->leftOut);
 
-        return new EveryAccountCoolingDown($this->provider, min(AccountCooldowns::LONGEST_SECONDS, ...$waits));
+        return min([AccountCooldowns::LONGEST_SECONDS, ...$cooling, ...$leftOut]);
     }
 
     /**
@@ -170,7 +177,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             return;
         }
 
-        $this->logger->info('Account {next} of {provider} ranks before account {first} by measured room, so the call goes to it.', ['provider' => $this->provider->value, 'first' => $first, 'next' => $next]);
+        $this->logger->info('Account {first} of {provider} is cooling down or ranks lower by measured room, so the call goes to account {next}.',['provider' => $this->provider->value, 'first' => $first, 'next' => $next]);
     }
 
     // Judged across calls through the shared cooldowns, because two accounts whose rejections land a moment apart would otherwise each be free in turn and the call would wait forever (one worker's rejection beside another's).
@@ -206,16 +213,17 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         }
 
         $waits = $this->waits($routerProvider);
-        if (!in_array(0, $waits, true)) {
-            return $this->outOfAccounts($waits, $failures);
+        $ranked = $this->startable($waits);
+        if ([] === $ranked->inOrder) {
+            return $this->outOfAccounts($ranked, $waits, $failures);
         }
 
         if (!$failures->isEveryTriedLimited()) {
             return $everyAccountFailed;
         }
 
-        // A wait of a second instead of the failover's error, because the vendor counts that error as a failure while an account that freed up during the call and was never sent to can take the retry (issue #2860).
-        if ($this->freedUntried($waits, $failures)) {
+        // A wait of a second instead of the failover's error, because the vendor counts that error as a failure while an account that freed up during the call and was never sent to can take the retry (issue #2860); only an account the ranking still lets start counts, so one at its measured ceiling never asks for a retry it cannot take.
+        if ($this->freedUntried($ranked, $failures)) {
             return new EveryAccountCoolingDown($this->provider, 1);
         }
 
@@ -225,12 +233,9 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return null === $named ? $everyAccountFailed : new EveryAccountCoolingDown($this->provider, $named);
     }
 
-    /**
-     * @param array<string, int> $waits
-     */
-    private function freedUntried(array $waits, SendFailures $failures): bool
+    private function freedUntried(RankedAccounts $ranked, SendFailures $failures): bool
     {
-        return array_any($waits, fn ($wait, $name) => 0 === $wait && !$failures->wasTried(new Account($this->provider, $name)));
+        return array_any($ranked->inOrder, static fn (Account $account): bool => !$failures->wasTried($account));
     }
 
     // Per limited account the longer of what its limit still has to run and the window now stored for it, because another worker can have extended a window that this call's own limit names shorter. An account the call never sent to counts with its stored wait above zero, as in outOfAccounts(), so the wait does not depend on whether a limited account's window was saved. Null when no account of the call recorded a limit.
@@ -259,11 +264,12 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
     private function rejectedWhenRead(DeferredResult $answer, SendFailures $failures, ?string $routerProvider): Throwable
     {
         $waits = $this->waits($routerProvider);
-        if (in_array(0, $waits, true)) {
+        $ranked = $this->startable($waits);
+        if ([] !== $ranked->inOrder) {
             return new KeyRejected($this->accountThatAnswered($answer));
         }
 
-        return $this->outOfAccounts($waits, $failures);
+        return $this->outOfAccounts($ranked, $waits, $failures);
     }
 
     // A key rejected when the answer is read follows the same rule as one rejected as the call is sent, because an account cooling down from a limit beside it is free again after its wait.
