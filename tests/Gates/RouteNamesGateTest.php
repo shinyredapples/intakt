@@ -92,7 +92,7 @@ final class RouteNamesGateTest extends SandboxTestCase
     private function kernelNamingTheRouteInItsContainer(string $name): string
     {
         $kernel = (string) file_get_contents(__DIR__.'/Fixtures/'.self::FIXTURE.'/src/Kernel.php.fixture');
-        $kernel =str_replace("'http_method_override' => false]);", "'http_method_override' => false]);\n        \$container->parameters()->set('fixture.route_name', ".$name.');', $kernel);
+        $kernel = str_replace("'http_method_override' => false]);", "'http_method_override' => false]);\n        \$container->parameters()->set('fixture.route_name', ".$name.');', $kernel);
 
         return str_replace("\$routes->add('dashboard_show_demo'", "\$routes->add(\$this->getContainer()->getParameter('fixture.route_name')", $kernel);
     }
