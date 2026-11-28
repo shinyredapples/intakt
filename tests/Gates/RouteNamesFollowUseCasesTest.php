@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Dashboard\UseCase\ShowReviewRecord\ShowReviewRecordController;
 use Intakt\Gates\Routing\RouteNamesFollowUseCases;
@@ -86,14 +87,14 @@ final class RouteNamesFollowUseCasesTest extends TestCase
 
     public function testAControllerWrittenWithALeadingBackslashIsAcceptedUnderItsUseCaseName(): void
     {
-        $routes = $this->routes(['dashboard_play_demo' => '\Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController']);
+        $routes = $this->routes(['dashboard_play_demo' => '\\'.PlayDemoController::class]);
 
         self::assertSame([], new RouteNamesFollowUseCases()->findingsIn($routes));
     }
 
     public function testAControllerGivenAsClassAndMethodListIsRejectedWithTheExpectedName(): void
     {
-        $routes = $this->routes(['dashboard_show_demo' => ['Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController', '__invoke']]);
+        $routes = $this->routes(['dashboard_show_demo' => [PlayDemoController::class, '__invoke']]);
 
         self::assertSame(
             ['Route "dashboard_show_demo" is served by Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController, so it must be named "dashboard_play_demo" (<module>_<use_case>): rename the route, or move the controller into the UseCase/<Name>/ folder the name says.'],
@@ -103,7 +104,7 @@ final class RouteNamesFollowUseCasesTest extends TestCase
 
     public function testAControllerListWithALeadingBackslashIsAcceptedUnderItsUseCaseName(): void
     {
-        $routes = $this->routes(['dashboard_play_demo' => ['\Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController', '__invoke']]);
+        $routes = $this->routes(['dashboard_play_demo' => ['\\'.PlayDemoController::class, '__invoke']]);
 
         self::assertSame([], new RouteNamesFollowUseCases()->findingsIn($routes));
     }
