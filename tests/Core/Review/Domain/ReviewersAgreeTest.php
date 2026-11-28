@@ -200,6 +200,22 @@ final class ReviewersAgreeTest extends TestCase
         ], self::LITERALS));
     }
 
+    public function testFindingsThatDifferOnlyInProseWhiteSpaceAfterABacktickRunWithoutACloserAreShared(): void
+    {
+        self::assertTrue($this->agree([
+            $this->changes($this->finding('The ``` fence and the ` mark are wrong.')),
+            $this->changes($this->finding('The ``` fence  and the `  mark are wrong.')),
+        ], "+    // A fence and \"A B\" here\n"));
+    }
+
+    public function testFindingsThatDifferOnlyInWhiteSpaceInsideACodeSpanAfterABacktickRunWithoutACloserAreNotShared(): void
+    {
+        self::assertFalse($this->agree([
+            $this->changes($this->finding('The ``` fence and `"A B"` are wrong.')),
+            $this->changes($this->finding('The ``` fence and `"A  B"` are wrong.')),
+        ], self::LITERALS));
+    }
+
     public function testFindingsThatDifferOnlyInANonbreakingSpaceOfTheProseAreShared(): void
     {
         self::assertTrue($this->agree([

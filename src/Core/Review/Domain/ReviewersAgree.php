@@ -13,8 +13,8 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class ReviewersAgree
 {
-    // Spans are consumed whole because "A B" and "A  B" name different literals, a backslash escape first because an escaped backtick opens no span while the backtick after an escaped backslash does (CommonMark), Unicode mode because a nonbreaking space is prose white space too.
-    private const string BACKSLASH_ESCAPE_OR_CODE_SPAN_OR_WHITE_SPACE = '/\\\\[\\\\`]|(`+)(?!`).*?(?<!`)\1(?!`)|\s+/su';
+    // A backslash escape first because an escaped backtick opens no span while the backtick after an escaped backslash does (CommonMark), a whole backtick run because a span never opens inside one, Unicode mode because a nonbreaking space is prose white space too.
+    private const string BACKSLASH_ESCAPE_OR_BACKTICK_RUN_OR_WHITE_SPACE = '/\\\\[\\\\`]|`+|\s+/u';
 
     /**
      * @param list<Verdict> $verdicts
@@ -90,12 +90,53 @@ final readonly class ReviewersAgree
     // Never lower-cased, because case counts in code; text that is not valid UTF-8 stays byte for byte, so two different broken texts never collapse into one.
     private function words(string $text): string
     {
-        $words = preg_replace_callback(
-            self::BACKSLASH_ESCAPE_OR_CODE_SPAN_OR_WHITE_SPACE,
-            static fn (array $match): string => str_contains('\\`', $match[0][0]) ? $match[0] : ' ',
-            $text,
-        );
+        if (!mb_check_encoding($text, 'UTF-8')) {
+            return $text;
+        }
 
-        return null === $words ? $text : trim($words);
+        // Every closer is looked up once, ahead of the cursor, because the text is model output of any length and a rescan per opener would take quadratic time.
+        $closers = $this->backtickRunsByLength($text);
+        $next = [];
+        $words = '';
+        $cursor = 0;
+        while (1 === preg_match(self::BACKSLASH_ESCAPE_OR_BACKTICK_RUN_OR_WHITE_SPACE, $text, $match, PREG_OFFSET_CAPTURE, $cursor)) {
+            [$token, $offset] = $match[0];
+            $length = strlen($token);
+            $words .= substr($text, $cursor, $offset - $cursor);
+            $cursor = $offset + $length;
+            if ('`' !== $token[0]) {
+                $words .= '\\' === $token[0] ? $token : ' ';
+
+                continue;
+            }
+
+            // Spans are kept byte for byte because "A B" and "A  B" name different literals.
+            $next[$length] ??= 0;
+            while (isset($closers[$length][$next[$length]]) && $closers[$length][$next[$length]] < $cursor) {
+                ++$next[$length];
+            }
+            $closer = $closers[$length][$next[$length]] ?? null;
+            if (null !== $closer) {
+                $cursor = $closer + $length;
+                $token = substr($text, $offset, $cursor - $offset);
+            }
+            $words .= $token;
+        }
+
+        return trim($words.substr($text, $cursor));
+    }
+
+    /**
+     * @return array<int, list<int>>
+     */
+    private function backtickRunsByLength(string $text): array
+    {
+        preg_match_all('/`+/', $text, $runs, PREG_OFFSET_CAPTURE);
+        $byLength = [];
+        foreach ($runs[0] as [$run, $offset]) {
+            $byLength[strlen($run)][] = $offset;
+        }
+
+        return $byLength;
     }
 }
