@@ -416,28 +416,24 @@ final class RunBuildJobTest extends TestCase
     public function testAJobWhoseRunnerFailsAfterTheStopHandsTheCauseAndTheOriginalFailureOnAndTheNextBuildCarriesNone(): void
     {
         $original = DockerEngineFailed::noSocket('/run/docker.sock');
-        $failing = true;
-        $runner = self::createStub(JobRunner::class);
-        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use (&$failing, $original): JobResult {
-            if (!$failing) {
-                return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([]));
-            }
+        $failing = self::createStub(JobRunner::class);
+        $failing->method('run')->willReturnCallback(function (JobSpec $spec) use ($original): never {
             $this->stops->record($this->job(), BuildStopCause::NoProgress);
 
             throw $original;
         });
-        $builds = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
+        $next = self::createStub(JobRunner::class);
+        $next->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([])));
+        $model = new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5');
 
         try {
-            (void) $builds->run($this->job());
+            (void) $this->useCase($failing, $model)->run($this->job());
             self::fail('the failure was not passed on');
         } catch (BuildJobFailed $failure) {
             self::assertSame([$original->getMessage(), $original, BuildStopCause::NoProgress], [$failure->getMessage(), $failure->getPrevious(), $failure->stopCause]);
         }
 
-        $failing = false;
-
-        self::assertNull($builds->run($this->job())->stopCause);
+        self::assertNull($this->useCase($next, $model)->run($this->job())->stopCause);
     }
 
     public function testARefusedJobLeavesTheCauseOfTheBuildThatHoldsTheBranch(): void

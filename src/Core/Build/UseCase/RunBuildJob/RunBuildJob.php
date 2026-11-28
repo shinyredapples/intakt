@@ -117,7 +117,6 @@ final readonly class RunBuildJob
 
         $cause = null;
         $reachedRunner = false;
-        $failed = null;
 
         try {
             // Written and turned into the spec inside the try, because once the prompt file exists every failure must remove it, a failed write and a refused input included.
@@ -132,7 +131,7 @@ final readonly class RunBuildJob
 
             throw $failure;
         } catch (DockerEngineFailed|JobEventNotRecorded $failure) {
-            $failed = $failure;
+            $outcome = $failure;
         } finally {
             // Read only for a job the runner was called with and did not refuse, also when that job failed, so its cause never reaches the branch's next build; read before the prompt is removed, so a failed removal cannot keep it.
             if ($reachedRunner) {
@@ -141,8 +140,8 @@ final readonly class RunBuildJob
             $this->filesystem->remove($prompt);
         }
 
-        if (null !== $failed) {
-            throw new BuildJobFailed($failed, $cause);
+        if (!$outcome instanceof BuildJobOutcome) {
+            throw new BuildJobFailed($outcome, $cause);
         }
 
         return $outcome->stoppedFor($cause);

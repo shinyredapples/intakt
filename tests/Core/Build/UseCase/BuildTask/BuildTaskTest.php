@@ -53,12 +53,10 @@ use Intakt\Core\Build\UseCase\BuildTask\PushRemoteRefused;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
-use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
-use Intakt\Core\Job\Contract\DockerEngineFailed;
-use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Disk\Contract\DiskHold;
 use Intakt\Core\Disk\Contract\DiskSpace;
@@ -134,9 +132,11 @@ use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
+use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
+use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
@@ -1746,7 +1746,7 @@ final class BuildTaskTest extends TestCase
     {
         $runner = self::createStub(JobRunner::class);
         $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($cause, $failure): never {
-            if (null !== $cause) {
+            if ($cause instanceof BuildStopCause) {
                 $this->stops->record($this->stoppedJob(), $cause);
             }
 

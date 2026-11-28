@@ -6,9 +6,9 @@ namespace Intakt\Core\Build\UseCase\BuildTask;
 
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\BuildStopCause;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\RegressionRuns;
-use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 
 // The question a build ends with and the cause its session was stopped for, if any, because the parked or refused row of the build job names both.
 final readonly class AskedQuestion
