@@ -105,7 +105,7 @@ final readonly class ReviewWithReviewerHandler
             return;
         }
 
-        $verdict = $this->ownerRoutingKept($lane, $this->goalposts->applyToVerdict($round->number(), $this->proposalsLowered($lane, $review->verdict->asRecorded()), $brief->open), $brief->open);
+        $verdict = $this->ownerRoutingKept($this->goalposts->applyToVerdict($round->number(), $this->proposalsLowered($lane, $review->verdict->asRecorded()), $brief->open), $brief->open);
         if ($this->leases->recordVerdict($reviewer, $verdict, $review->substitute)) {
             $this->progress->publishStopOf($reviewer);
         }
@@ -136,7 +136,7 @@ final readonly class ReviewWithReviewerHandler
 
         $this->ids->checkedAgainst($brief, $verdict);
         $this->refuseFindingsOffThePages($verdict);
-        $this->refuseRepeatedProposals($verdict);
+        $this->refuseRepeatedProposals($verdict, $brief->open);
     }
 
     // Refused like a foreign id, because the writer never saw the code: a new finding there would block the head, and a repeat there would move an open finding onto code. Key-safe, because the reason names no text of the model.
@@ -149,11 +149,15 @@ final readonly class ReviewWithReviewerHandler
         }
     }
 
-    // Refused, because the goalpost rule gives a repeat the open finding's severity and would undo the owner's P3 a proposal is lowered to.
-    private function refuseRepeatedProposals(Verdict $verdict): void
+    // Refused, because the goalpost rule gives a repeat the open finding's severity and would undo the owner's P3 a proposal is lowered to; not for a repeat of an open proposal, because the writer is asked to repeat what is still there and the owner routing below keeps it a proposal.
+    /**
+     * @param list<Finding> $open
+     */
+    private function refuseRepeatedProposals(Verdict $verdict, array $open): void
     {
+        $proposals = self::openProposals($open);
         foreach ($verdict->findings as $finding) {
-            if ($finding->repeat && $finding->namesProposal()) {
+            if ($finding->repeat && $finding->namesProposal() && !isset($proposals[$finding->id])) {
                 throw VerdictUnreadable::becauseKeySafe('the Technical writer repeated an open finding as a proposal.');
             }
         }
@@ -165,21 +169,34 @@ final readonly class ReviewWithReviewerHandler
         return ReviewLane::Docs === $lane ? $this->proposals->applyToVerdict($verdict) : $verdict;
     }
 
-    // After the goalpost rule, because it carries over only the severity: a repeat that drops the proposal marker or names the builder must not put an owner's proposal on the act list.
+    // After the goalpost rule, because it carries over only the severity: a repeat that drops the proposal marker or names the builder must not put an owner's proposal on the act list. On every lane, because Code reviewers are shown the writer's open proposals too.
     /**
      * @param list<Finding> $open
      */
-    private function ownerRoutingKept(ReviewLane $lane, Verdict $verdict, array $open): Verdict
+    private function ownerRoutingKept(Verdict $verdict, array $open): Verdict
     {
-        if (ReviewLane::Docs !== $lane) {
-            return $verdict;
-        }
-
-        $proposals = array_column(array_map(static fn (Finding $finding): array => [$finding->id, $finding], array_filter($open, static fn (Finding $finding): bool => $finding->proposesToOwner())), 1, 0);
+        $proposals = self::openProposals($open);
 
         return $verdict->withFindings(array_map(
             static fn (Finding $finding): Finding => $finding->repeat && isset($proposals[$finding->id]) ? $finding->withRoutingOf($proposals[$finding->id]) : $finding,
             $verdict->findings,
         ));
+    }
+
+    /**
+     * @param list<Finding> $open
+     *
+     * @return array<string, Finding>
+     */
+    private static function openProposals(array $open): array
+    {
+        $proposals = [];
+        foreach ($open as $finding) {
+            if ($finding->proposesToOwner()) {
+                $proposals[$finding->id] = $finding;
+            }
+        }
+
+        return $proposals;
     }
 }

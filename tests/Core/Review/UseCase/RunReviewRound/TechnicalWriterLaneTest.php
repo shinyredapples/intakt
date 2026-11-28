@@ -136,6 +136,8 @@ final class TechnicalWriterLaneTest extends KernelTestCase
         yield 'no proposal marker, builder' => ['SOLID', FixableBy::Builder];
         yield 'no proposal marker, owner' => ['SOLID', FixableBy::Owner];
         yield 'no requirement, builder' => [null, FixableBy::Builder];
+        yield 'proposal marker kept, owner' => ['Proposal: user guide structure', FixableBy::Owner];
+        yield 'proposal marker kept, builder' => ['Proposal: user guide structure', FixableBy::Builder];
     }
 
     #[DataProvider('repeatsThatDropTheOwnerRouting')]
@@ -150,6 +152,16 @@ final class TechnicalWriterLaneTest extends KernelTestCase
         self::assertSame([[Severity::P3, FixableBy::Owner, true]], array_map(static fn (TrackedFinding $tracked): array => [$tracked->latest->severity, $tracked->latest->fixable_by, $tracked->latest->proposesToOwner()], $this->fixture->storedFindings(RoundFixture::CHANGE)));
     }
 
+    public function testARepeatOfACodeReviewerKeepsTheOwnerRoutingOfAnOpenProposal(): void
+    {
+        $this->deliverAll(new Verdict(Decision::Changes, [new Finding('X', Severity::P1, 'docs/user/cart.md', 1, null, 'Split the chapter.', FixableBy::Builder, false, 'Proposal: user guide structure', null)], [], []));
+        $this->startRound();
+
+        $this->deliverAll(new Verdict(Decision::Approve, [], [], []), new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'docs/user/cart.md', 1, null, 'Split it now.', FixableBy::Builder, true, 'SOLID', null)], [], []));
+
+        self::assertSame([[Severity::P3, FixableBy::Owner, true]], array_map(static fn (TrackedFinding $tracked): array => [$tracked->latest->severity, $tracked->latest->fixable_by, $tracked->latest->proposesToOwner()], $this->fixture->storedFindings(RoundFixture::CHANGE)));
+    }
+
     public function testAFindingOfTheTechnicalWriterOnAPageIsStored(): void
     {
         $this->deliverAll(new Verdict(Decision::Changes, [$this->blockingAt('docs/user/cart.md')], [], []));
@@ -158,7 +170,7 @@ final class TechnicalWriterLaneTest extends KernelTestCase
         self::assertNull($this->writersFailure());
     }
 
-    public function testAProposalOfTheTechnicalWriterThatRepeatsAnOpenFindingIsRefusedAsUnreadable(): void
+    public function testAProposalOfTheTechnicalWriterThatRepeatsAnOpenFindingThatIsNoProposalIsRefusedAsUnreadable(): void
     {
         $this->deliverAll(new Verdict(Decision::Approve, [], [], []), new Verdict(Decision::Changes, [$this->blockingAt('docs/user/cart.md')], [], []));
         $this->startRound();

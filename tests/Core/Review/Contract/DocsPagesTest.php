@@ -35,6 +35,7 @@ final class DocsPagesTest extends TestCase
         yield 'an empty segment' => ['docs//user/a.md'];
         yield 'a leading slash' => ['/docs/user/a.md'];
         yield 'a backslash' => ['docs\user\a.md'];
+        yield 'a backslash that leaves the docs' => ['docs/user\..\..\CONTRIBUTING.md'];
         yield 'an empty path' => [''];
     }
 

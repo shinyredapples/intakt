@@ -71,9 +71,7 @@ final readonly class ReviewerPrompt
         You also own the user guide's structure and the limits of the docs gate, but the owner decides on them. When either should change, do not ask for it as a change of this pull request: report it as a finding with severity P3, "fixable_by" set to "owner" and a requirement that starts with "Proposal:", for example "Proposal: user guide structure" or "Proposal: docs gate limits". It never sends the change back.
 
         From the second round on you are given the open findings of earlier rounds, each under a persistent id. List the id of every one that is fixed under "resolved". A finding that is still there goes in "findings" with its id and "repeat" set to true. A new problem gets a new id and "repeat" false. From the second round on, a new P1 or P2 must cite a requirement or set "regression" to true; otherwise it is lowered to P3. Under "resolved" and in a finding with "repeat" true, use only ids you were given.
-
-        Every finding names the page and line where you saw the problem and the rule it breaks. Answer "approve" only when you found nothing in the docs that must change.
-        TEXT;
+        TEXT."\n\n".'Every finding names the page and line where you saw the problem and the rule it breaks. Give every finding a "title" of 3 to 6 plain words that names the problem (for example "'.Finding::TITLE_EXAMPLE.'") and a "kind": "security", "logic", "missing test", "tidy-up" or "other". Answer "approve" only when you found nothing in the docs that must change.';
 
     // Every field a finding needs, so a model that left "findings" empty sees the shape it must fill.
     public const string EXAMPLE_FINDING = '{"id":"F1","severity":"P2","file":"src/Cart.php","line":12,"symbol":"Cart::total","text":"The total adds the discount instead of subtracting it.","fixable_by":"builder","repeat":false,"requirement":"Storytelling","evidence":null,"regression":false,"gate_gap":false,"title":"The discount raises the total","kind":"logic"}';

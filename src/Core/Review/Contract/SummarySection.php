@@ -11,7 +11,12 @@ final readonly class SummarySection
 
     private const string SUMMARY = 'in short';
 
-    private const string FENCE_OPENS = '/^ {0,3}(`{3,}|~{3,})/';
+    private const string FENCE_OPENS = '/^ {0,3}(`{3,}|~{3,})(.*)$/';
+
+    // A list item, a block quote or a line indented as code, because such a line is no paragraph text a setext underline could turn into a heading.
+    private const string NO_PARAGRAPH = '/^(?: {0,3}(?:[-+*]|\d{1,9}[.)])(?:[ \t]|$)| {0,3}>| {4}|\t)/';
+
+    private const string INDENTED = '/^(?: {4}|\t)/';
 
     private const string FENCE_CLOSES = '/^ {0,3}(`{3,}|~{3,})[ \t]*$/';
 
@@ -52,7 +57,7 @@ final readonly class SummarySection
             $before = $fence;
             $fence = $this->fenceAfter($fence, $line);
             // A heading inside a code block is code, so it never opens or closes the section.
-            $lines[] = null === $before && null === $fence ? $this->lineOf($line) : [$line, 0, '', false];
+            $lines[] = null === $before && null === $fence ? $this->lineOf($line, true === (array_last($lines)[3] ?? false)) : [$line, 0, '', false];
         }
 
         return $this->withSetextHeadings($lines);
@@ -65,7 +70,13 @@ final readonly class SummarySection
             return $this->closes($fence, $line) ? null : $fence;
         }
 
-        return 1 === preg_match(self::FENCE_OPENS, $line, $opening) ? $opening[1] : null;
+        return 1 === preg_match(self::FENCE_OPENS, $line, $opening) && !$this->backtickInInfo($opening[1], $opening[2]) ? $opening[1] : null;
+    }
+
+    // Because CommonMark reads a backtick line whose info string holds a backtick as inline code, not as a fence.
+    private function backtickInInfo(string $fence, string $info): bool
+    {
+        return '`' === $fence[0] && str_contains($info, '`');
     }
 
     // Because a shorter fence inside a longer one is code, as in CommonMark (https://spec.commonmark.org/0.31.2/#fenced-code-blocks).
@@ -74,15 +85,16 @@ final readonly class SummarySection
         return 1 === preg_match(self::FENCE_CLOSES, $line, $closing) && $closing[1][0] === $fence[0] && strlen($closing[1]) >= strlen($fence);
     }
 
-    // Paragraph text is marked, because only such a line becomes a heading when a setext underline follows it.
+    // Paragraph text is marked, because only such a line becomes a heading when a setext underline follows it; an indented line continues a paragraph but never starts one.
     /**
      * @return array{string, int, string, bool}
      */
-    private function lineOf(string $line): array
+    private function lineOf(string $line, bool $continuesParagraph): array
     {
         [$level, $title] = $this->headingOf($line);
+        $paragraph = 0 === $level && '' !== trim($line) && (1 !== preg_match(self::NO_PARAGRAPH, $line) || ($continuesParagraph && 1 === preg_match(self::INDENTED, $line)));
 
-        return [$line, $level, $title, 0 === $level && '' !== trim($line)];
+        return [$line, $level, $title, $paragraph];
     }
 
     /**

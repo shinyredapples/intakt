@@ -174,18 +174,19 @@ final class LocalGitForgeTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string}>
+     * @return iterable<string, array{string, string}>
      */
     public static function prefixSettings(): iterable
     {
-        yield 'no prefix' => ['diff.noprefix'];
-        yield 'mnemonic prefix' => ['diff.mnemonicPrefix'];
+        yield 'no prefix' => ['diff.noprefix', 'true'];
+        yield 'source prefix' => ['diff.srcPrefix', 'old/'];
+        yield 'destination prefix' => ['diff.dstPrefix', 'new/'];
     }
 
     #[DataProvider('prefixSettings')]
-    public function testAChangedPageStillReachesTheWritersDiffWhateverPrefixTheRepositoryConfigures(string $setting): void
+    public function testAChangedPageStillReachesTheWritersDiffWhateverPrefixTheRepositoryConfigures(string $setting, string $value): void
     {
-        $this->repository->configure($setting, 'true');
+        $this->repository->configure($setting, $value);
         $this->repository->checkoutNewBranch('feature');
         $this->repository->commitFile('docs/user/cart.md', "The cart keeps a discount.\n");
 

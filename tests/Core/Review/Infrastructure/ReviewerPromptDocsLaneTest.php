@@ -12,6 +12,7 @@ use Intakt\Core\Memory\Contract\RelevantMemory;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\FencedText;
+use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\ReviewBrief;
@@ -94,6 +95,11 @@ final class ReviewerPromptDocsLaneTest extends TestCase
     {
         self::assertStringContainsString('a requirement that starts with "Proposal:"', ReviewerPrompt::TECHNICAL_WRITER_INSTRUCTIONS);
         self::assertStringContainsString('do not judge whether the docs are true to the code', ReviewerPrompt::TECHNICAL_WRITER_INSTRUCTIONS);
+    }
+
+    public function testTheTechnicalWriterIsAskedForTheTitleAndKindEveryFindingNeeds(): void
+    {
+        self::assertStringContainsString('Give every finding a "title" of 3 to 6 plain words that names the problem (for example "'.Finding::TITLE_EXAMPLE.'") and a "kind"', ReviewerPrompt::TECHNICAL_WRITER_INSTRUCTIONS);
     }
 
     /**

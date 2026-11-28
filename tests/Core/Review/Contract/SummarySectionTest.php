@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\Contract;
 
 use Intakt\Core\Review\Contract\SummarySection;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(SummarySection::class)]
@@ -115,6 +116,40 @@ final class SummarySectionTest extends TestCase
         $before = "In short\n========\n\nOld.\n\n# Details\n\nRows.\n";
 
         self::assertTrue($this->changed($before, str_replace('Old.', 'New.', $before)));
+        self::assertFalse($this->changed($before, str_replace('Rows.', 'Lines.', $before)));
+    }
+
+    public function testABacktickLineWhoseInfoStringHoldsABacktickOpensNoFence(): void
+    {
+        $before = "## In short\n\nOld.\n\n``` a`b\n## Details\n\nRows.\n";
+
+        self::assertFalse($this->changed($before, str_replace('Rows.', 'Lines.', $before)));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function linesThatAreNoParagraph(): iterable
+    {
+        yield 'a list item' => ['- item'];
+        yield 'a block quote' => ['> quote'];
+        yield 'an indented code line' => ['    code'];
+    }
+
+    #[DataProvider('linesThatAreNoParagraph')]
+    public function testAnUnderlineAfterALineThatIsNoParagraphMakesNoSetextHeading(string $line): void
+    {
+        foreach (['---', '==='] as $underline) {
+            $before = "## In short\n\nOld.\n\n".$line."\n".$underline."\n\nRows.\n";
+
+            self::assertTrue($this->changed($before, str_replace('Rows.', 'Lines.', $before)), $underline);
+        }
+    }
+
+    public function testAnIndentedLineThatContinuesAParagraphIsPartOfItsSetextHeading(): void
+    {
+        $before = "## In short\n\nOld.\n\nDetails\n    more\n---\n\nRows.\n";
+
         self::assertFalse($this->changed($before, str_replace('Rows.', 'Lines.', $before)));
     }
 
