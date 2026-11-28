@@ -6,6 +6,7 @@ namespace Intakt\Core\Budget\UseCase\ReplayDay;
 
 use Closure;
 use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Budget\Contract\AccountPicks;
 use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
@@ -36,6 +37,7 @@ final readonly class RolledBackReplay
         #[Autowire(param: BudgetServices::CEILINGS)]
         private array $ceilings,
         private Halts $halts,
+        private AccountPicks $picks,
     ) {
     }
 
@@ -74,7 +76,8 @@ final readonly class RolledBackReplay
         $ceilings = new CeilingStartGuard($measured, $clock, $this->ceilings);
         $guard = new BudgetGuard($holds, $ceilings, new OutageWatch($measured, $clock, $events), $this->halts);
 
-        return new DayReplay($measured, $holds, $guard, new MeasuredRoomRanking($holds, $ceilings));
+        // The install's picks, because a rank step only ranks and never records, so nothing reaches them.
+        return new DayReplay($measured, $holds, $guard, new MeasuredRoomRanking($holds, $ceilings, $this->picks));
     }
 
     // The clock never steps back, so a reading's age and every reset are what the day would have shown.

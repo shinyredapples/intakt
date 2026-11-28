@@ -23,6 +23,7 @@ use Intakt\Core\Budget\Domain\AccountRoom;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\MeasuredRoomRanking;
 use Intakt\Tests\Core\Budget\HoldsInMemory;
+use Intakt\Tests\Core\Budget\PicksInMemory;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -331,6 +332,6 @@ final class AccountFailoverPlatformRankingTest extends TestCase
 
     private function ranking(): MeasuredRoomRanking
     {
-        return new MeasuredRoomRanking($this->holds, new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]));
+        return new MeasuredRoomRanking($this->holds, new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]), new PicksInMemory());
     }
 }

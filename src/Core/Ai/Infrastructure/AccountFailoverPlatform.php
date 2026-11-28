@@ -39,6 +39,7 @@ use Throwable;
 final readonly class AccountFailoverPlatform implements PlatformInterface
 {
     private ModelWaits $modelWaits;
+    private CoolingAccounts $cooling;
 
     /**
      * @param non-empty-array<string, PlatformInterface> $platforms
@@ -53,6 +54,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         private AccountRanking $ranking,
     ) {
         $this->modelWaits = new ModelWaits($provider, array_keys($platforms), $cooldowns, $pinnedCooldowns);
+        $this->cooling = new CoolingAccounts($provider, $ranking, $clock);
     }
 
     #[Override]
@@ -62,6 +64,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         $routerProvider = $this->modelWaits->routerProviderOf($model);
         $waits = $this->waits($routerProvider);
         $ranked = $this->startable($waits);
+        $this->ranking->record($this->provider, $this->cooling->pickOf($ranked, $waits));
         $free = $this->freeAccounts($ranked->inOrder, $failures, $routerProvider);
         if ([] === $free) {
             throw $this->outOfAccounts($ranked, $waits, $failures);
@@ -78,13 +81,18 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return $this->typedWhenRead($answer, fn (): Throwable => $this->rejectedWhenRead($answer, $failures, $routerProvider), $options);
     }
 
-    // 0 while an account can take the model, else the wait invoke() would report, by the same reads of the cooldowns, the pins and the ranking, so tier selection never picks a model whose every account waits for its pin (issue #2860) or is left out by measured room.
+    // 0 while an account can take the model, else the wait invoke() would report, by the same reads of the cooldowns, the pins and the ranking, so tier selection never picks a model whose every account waits for its pin (issue #2860) or is left out by measured room. Tier selection reads this only right before a start, and a start it refuses never reaches invoke(), so the refused start is recorded here; a free one is recorded by invoke().
     public function secondsUntilFree(string|Model $model): int
     {
         $waits = $this->waits($this->modelWaits->routerProviderOf($model));
         $ranked = $this->startable($waits);
+        if ([] !== $ranked->inOrder) {
+            return 0;
+        }
 
-        return [] === $ranked->inOrder ? $this->secondsUntilStartable($ranked, $waits) : 0;
+        $this->ranking->record($this->provider, $this->cooling->pickOf($ranked, $waits));
+
+        return $this->secondsUntilStartable($ranked, $waits);
     }
 
     #[Override]
@@ -159,31 +167,13 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
      */
     private function secondsUntilStartable(RankedAccounts $ranked, array $waits): int
     {
-        $leftOut = $this->leftOutWaits([...$ranked->leftOut, ...$this->leftOutWhileCooling($waits)]);
+        $leftOut = $this->leftOutWaits([...$ranked->leftOut, ...$this->cooling->leftOut($waits)]);
         $perAccount = [];
         foreach ($waits as $name => $wait) {
             $perAccount[] = max($wait, $leftOut[$name] ?? 0);
         }
 
         return max(1, min([AccountCooldowns::LONGEST_SECONDS, ...$perAccount]));
-    }
-
-    // The cooling accounts are ranked for the wait only, never for the send order, because startable() leaves them out before it ranks, so a ceiling that outlasts a cooldown would otherwise never reach the wait.
-    /**
-     * @param array<string, int> $waits
-     *
-     * @return list<LeftOutAccount>
-     */
-    private function leftOutWhileCooling(array $waits): array
-    {
-        $cooling = [];
-        foreach (array_keys($this->platforms) as $name) {
-            if (0 < $waits[$name]) {
-                $cooling[] = new Account($this->provider, $name);
-            }
-        }
-
-        return [] === $cooling ? [] : $this->ranking->rank($cooling)->leftOut;
     }
 
     /**
