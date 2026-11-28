@@ -1,0 +1,21 @@
+# The first account in the owner's order is at its weekly ceiling, so the second is picked.
+2026-11-02T08:00 read claude_code.main five-hour 10 2026-11-02T13:00
+2026-11-02T08:00 read claude_code.main weekly 95 2026-11-04T08:00
+2026-11-02T08:00 read claude_code.team five-hour 10 2026-11-02T11:00
+2026-11-02T08:00 read claude_code.team weekly 5 2026-11-08T08:00
+2026-11-02T08:00 rank claude_code.main claude_code.team
+# A paid API key ranks after a subscription with room, whatever its place.
+2026-11-02T08:00 rank anthropic.key claude_code.team
+# Both with room: the account whose window resets sooner is picked.
+2026-11-02T08:00 read claude_code.spare five-hour 10 2026-11-02T12:00
+2026-11-02T08:00 read claude_code.spare weekly 5 2026-11-08T08:00
+2026-11-02T08:00 rank claude_code.spare claude_code.team
+# The picked account crosses its short-window ceiling between two starts, so the next start picks the other.
+2026-11-02T08:10 read claude_code.team five-hour 92 2026-11-02T11:00
+2026-11-02T08:10 rank claude_code.spare claude_code.team
+# Every account at a ceiling: none is picked, and each names its cause and its end.
+2026-11-02T08:20 read claude_code.spare five-hour 95 2026-11-02T12:00
+2026-11-02T08:20 rank claude_code.main claude_code.team claude_code.spare
+# Readings older than the probe interval count as unknown, so the accounts are tried again; a cooldown still leaves its account out.
+2026-11-02T09:00 limit claude_code.team 2026-11-02T10:00
+2026-11-02T09:00 rank claude_code.main claude_code.team claude_code.spare

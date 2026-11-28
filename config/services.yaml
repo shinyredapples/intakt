@@ -60,6 +60,7 @@ services:
 
     # Wired here, because a Domain class carries no container attributes; its ceiling guard is wired in config/packages/ai.php.
     Intakt\Core\Budget\Contract\StartGuard: '@Intakt\Core\Budget\Domain\BudgetGuard'
+    Intakt\Core\Budget\Contract\AccountRanking: '@Intakt\Core\Budget\Domain\MeasuredRoomRanking'
 
     # Semaphores over file locks, because every worker runs on this host; Symfony's other semaphore store needs Redis.
     Symfony\Component\Lock\Store\FlockStore:

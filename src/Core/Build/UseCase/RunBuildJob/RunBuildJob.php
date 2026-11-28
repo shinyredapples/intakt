@@ -32,6 +32,7 @@ use InvalidArgumentException;
 use NoDiscard;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Exception\IOException;
+use Symfony\Component\Filesystem\Exception\IOExceptionInterface;
 use Symfony\Component\Filesystem\Filesystem;
 
 final readonly class RunBuildJob
@@ -108,8 +109,7 @@ final readonly class RunBuildJob
      * @throws TierResolutionFailure
      * @throws BuilderNotOnClaudeCode
      * @throws JobRefused
-     * @throws DockerEngineFailed
-     * @throws JobEventNotRecorded
+     * @throws BuildJobEndFailed
      */
     #[NoDiscard]
     public function run(BuildJob $job): BuildJobOutcome
@@ -123,6 +123,7 @@ final readonly class RunBuildJob
 
         $cause = null;
         $reachedRunner = false;
+        $promptRemoved = false;
 
         try {
             // Written and turned into the spec inside the try, because once the prompt file exists every failure must remove it, a failed write and a refused input included.
@@ -136,12 +137,26 @@ final readonly class RunBuildJob
             $reachedRunner = false;
 
             throw $failure;
+        } catch (DockerEngineFailed|JobEventNotRecorded $failure) {
+            // Passed on unchanged and without reading the cause, because the gate's registry lookup fails before the runner is called, so the cause is another build's.
+            if (!$reachedRunner) {
+                throw $failure;
+            }
+            // Read here and cleared for the finally, so the cause is still read once and reaches the failed build_job row with the failure.
+            $reachedRunner = false;
+            $end = BuildJobEndFailed::after($failure, $this->stops->causeFor($job));
+            $this->removeQuietly($prompt);
+            $promptRemoved = true;
+
+            throw $end;
         } finally {
             // Read only for a job the runner was called with and did not refuse, also when that job failed, so its cause never reaches the branch's next build; read before the prompt is removed, so a failed removal cannot keep it.
             if ($reachedRunner) {
                 $cause = $this->stops->causeFor($job);
             }
-            $this->filesystem->remove($prompt);
+            if (!$promptRemoved) {
+                $this->filesystem->remove($prompt);
+            }
         }
 
         return $outcome->stoppedFor($cause);
@@ -211,6 +226,15 @@ final readonly class RunBuildJob
         }
 
         return $this->outcomeOf($result);
+    }
+
+    // A failed removal is dropped only here, because the job-end failure carries the stop cause the row must keep, and the prompt is a scratch file.
+    private function removeQuietly(string $prompt): void
+    {
+        try {
+            $this->filesystem->remove($prompt);
+        } catch (IOExceptionInterface) {
+        }
     }
 
     private function outcomeOf(JobResult $result): BuildJobOutcome

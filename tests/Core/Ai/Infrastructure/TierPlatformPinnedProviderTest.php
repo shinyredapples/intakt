@@ -142,7 +142,7 @@ final class TierPlatformPinnedProviderTest extends TestCase
 
     private function router(PlatformInterface $account): AccountFailoverPlatform
     {
-        return new AccountFailoverPlatform(self::ROUTER, [Account::DEFAULT => $account], $this->accounts, $this->clock, new NullLogger(), $this->pins);
+        return new AccountFailoverPlatform(self::ROUTER, [Account::DEFAULT => $account], $this->accounts, $this->clock, new NullLogger(), $this->pins, new OwnersOrderRanking());
     }
 
     /**
