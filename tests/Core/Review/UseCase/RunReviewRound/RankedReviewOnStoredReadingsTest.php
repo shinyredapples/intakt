@@ -164,6 +164,10 @@ final class RankedReviewOnStoredReadingsTest extends KernelTestCase
         $pick = $this->picks()->latestOf(Provider::ClaudeCode);
         self::assertNotNull($pick);
         self::assertNull($pick->picked);
+        self::assertEquals([
+            new LeftOutAccount(new Account(Provider::ClaudeCode, Account::DEFAULT), LeftOutCause::AtWeeklyCeiling, $this->fixture->clock->now()->modify('+2 days')),
+            new LeftOutAccount(new Account(Provider::ClaudeCode, 'team'), LeftOutCause::AtWeeklyCeiling, $this->fixture->clock->now()->modify('+3 hours')),
+        ], $pick->leftOut);
         self::assertEquals($this->fixture->clock->now()->modify('+3 hours'), $pick->earliestReset());
     }
 
