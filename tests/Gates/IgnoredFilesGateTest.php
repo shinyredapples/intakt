@@ -128,6 +128,42 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertTrue($run->passed('ignored'), $run->output());
     }
 
+    public function testANegatedRuleWithUnescapedBracketsReIncludesTheGlobMatchAndLeavesTheLiteralNameFailing(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.tmp\n!build[1].tmp\n");
+        $sandbox->write('build[1].tmp', "data\n");
+        $sandbox->write('build1.tmp', "data\n");
+        $sandbox->git('add', '--force', '--', 'build[1].tmp', 'build1.tmp');
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame(['build[1].tmp: tracked, but .gitignore excludes it'], $result->findings);
+    }
+
+    public function testANegatedRuleWithEscapedBracketsReIncludesOnlyTheLiteralName(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.tmp\n!/build\\[1\\].tmp\n");
+        $sandbox->write('build[1].tmp', "data\n");
+        $sandbox->write('build1.tmp', "data\n");
+        $sandbox->git('add', '--force', '--', 'build[1].tmp', 'build1.tmp');
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame(['build1.tmp: tracked, but .gitignore excludes it'], $result->findings);
+    }
+
+    public function testAQuotedPathTypedBetweenDollarQuotesUntracksTheFileItNames(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.tmp\n");
+        $sandbox->write("report-\xFF.tmp", "data\n");
+        $sandbox->git('add', '--force', "report-\xFF.tmp");
+        $quoted = strstr($this->fullFindingsOf($sandbox->gateResult(new IgnoredFilesGate()))[0], ': tracked', true);
+
+        $sandbox->runScript("git --literal-pathspecs rm --cached -- $'".substr((string) $quoted, 1, -1)."'");
+
+        self::assertTrue($sandbox->runGate(new IgnoredFilesGate())->passed('ignored'));
+    }
+
     public function testAPathWithThreeIndexStagesGivesExactlyOneFinding(): void
     {
         $sandbox = $this->repositoryIgnoring("*.log\n");
