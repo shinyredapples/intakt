@@ -42,6 +42,10 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
+use Intakt\Core\Build\Domain\BuildUsage;
+use Intakt\Core\Build\Domain\SessionLog;
+use Intakt\Core\Build\Domain\SessionUsage;
+use Intakt\Core\Build\Domain\UsageReading;
 use Intakt\Core\Build\UseCase\RunBuildJob\IsolatedSessionLog;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BranchPush;
@@ -162,6 +166,11 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(JobResult::class)]
 #[UsesClass(JobEnd::class)]
 #[UsesClass(JobOutput::class)]
+#[UsesClass(IsolatedSessionLog::class)]
+#[UsesClass(SessionLog::class)]
+#[UsesClass(SessionUsage::class)]
+#[UsesClass(BuildUsage::class)]
+#[UsesClass(UsageReading::class)]
 final class BuildTaskCommandTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/build.sh';
