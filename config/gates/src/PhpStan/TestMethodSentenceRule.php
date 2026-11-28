@@ -127,12 +127,23 @@ final readonly class TestMethodSentenceRule implements Rule
         [$sourceFile, $sourceLine, $trait] = $method->source;
 
         return match (true) {
-            null === $method->namedAt && null === $method->aliasedAt => null,
+            null === $method->namedAt && [] === $method->aliasedAt => null,
             null === $method->namedAt && $this->isUnderTests($sourceFile) => [$sourceFile, $lines[strtolower($trait.'::'.$method->name())] ?? $sourceLine, $trait],
-            null === $method->namedAt => $method->aliasedAt,
+            null === $method->namedAt => $this->firstAliasUnderTests($method->aliasedAt),
             !$this->isUnderTests($method->namedAt[0]) && $this->isUnderTests($sourceFile) => $class,
             default => $method->namedAt,
         };
+    }
+
+    // because one original name aliased several times is one name to fix, the first alias that can be fixed keeps the place
+    /**
+     * @param non-empty-list<Place> $aliases
+     *
+     * @return Place
+     */
+    private function firstAliasUnderTests(array $aliases): array
+    {
+        return array_find($aliases, fn (array $alias): bool => $this->isUnderTests($alias[0])) ?? $aliases[0];
     }
 
     // because a test the consuming class takes from a trait is run only when the composition of its `use` blocks keeps it public, the same source that decides which alias is judged, and reflection decides only for a test no trait brings in

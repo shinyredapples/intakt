@@ -45,9 +45,9 @@ final readonly class TestProviderCollector implements Collector
         }
 
         $native = $class->getNativeReflection();
-        // each reference names the class and the test that make it with the visibility reflection gives the test, because reflection may give a trait method the visibility of another adaptation in its `use` block (upstream/phpstan-trait-alias-drops-visibility/), so the rule asks the composed trait methods first and PHPUnit ignores a provider attribute on a method it does not run
+        // each reference names the class whose `use` blocks bring the test in (a parent's for an inherited one) and the test, with the visibility reflection gives it, because reflection may give a trait method the visibility of another adaptation in its `use` block (upstream/phpstan-trait-alias-drops-visibility/), so the rule asks that class's composed trait methods first and PHPUnit ignores a provider attribute on a method it does not run
         $named = array_values(array_filter($native->getMethods(), PhpUnitTestMethod::isNamedOrMarked(...)));
-        $references = array_merge(...array_map(fn (ReflectionMethod $test): array => array_map(static fn (array $reference): array => [...$reference, $class->getName(), $test->getName(), $test->isPublic()], [...$this->providersInTheClass($test, $native), ...$this->externalProviders($test)]), $named));
+        $references = array_merge(...array_map(fn (ReflectionMethod $test): array => array_map(static fn (array $reference): array => [...$reference, $test->getBetterReflection()->getImplementingClass()->getName(), $test->getName(), $test->isPublic()], [...$this->providersInTheClass($test, $native), ...$this->externalProviders($test)]), $named));
         $runs = $this->staticRuns(array_values(array_filter($named, PhpUnitTestMethod::isRun(...))), $class->getName());
 
         return [] === $references && [] === $runs ? null : ['references' => $references, 'runs' => $runs];

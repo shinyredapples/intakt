@@ -17,6 +17,7 @@ use Intakt\Gates\PhpStan\TraitMethodLineCollector;
 use Override;
 use PhpParser\Node;
 use PHPStan\Collectors\Collector;
+use PHPStan\Parser\Parser;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 /**
@@ -584,6 +585,104 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
         self::assertStringNotContainsString('PublicConsumerTest::testData()', $this->ruleFindingsIn($sandbox));
     }
 
+    public function testAStillRunOriginalThatASourceWrapperAliasedIsReportedAtTheAliasInTheTestClass(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/OriginalChecks.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        trait OriginalChecks { public function testGo(): void {} }
+        trait OriginalWrapper { use OriginalChecks { testGo as testTheWrapperCheckRuns; } }
+        PHP_WRAP);
+        $sandbox->write('tests/OriginalCheckTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class OriginalCheckTest extends \PHPUnit\Framework\TestCase
+        {
+            use OriginalWrapper { testGo as testTheClassCheckRuns; }
+        }
+        PHP_WRAP);
+
+        self::assertSame('tests/OriginalCheckTest.php:7 intakt.testMethodSentence Test method Intakt\Sample\OriginalCheckTest::testGo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testATestMethodAnAbstractParentHidesDoesNotMakeAShortPublicAliasAnExternalProvider(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/InheritedConsumerTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        use PHPUnit\Framework\Attributes\DataProviderExternal;
+
+        trait InheritedRowSource { public static function rows(): array { return [[1]]; } }
+
+        final class InheritedTargetTest extends \PHPUnit\Framework\TestCase { use InheritedRowSource { rows as testData; } }
+
+        trait InheritedConsumerChecks
+        {
+            #[DataProviderExternal(InheritedTargetTest::class, 'testData')]
+            public function testItUsesRows(int $row): void {}
+        }
+
+        abstract class AbstractInheritedConsumer extends \PHPUnit\Framework\TestCase
+        {
+            use InheritedConsumerChecks { testItUsesRows as private; testItUsesRows as consume; }
+        }
+
+        final class InheritedConsumerTest extends AbstractInheritedConsumer {}
+        PHP_WRAP);
+
+        self::assertStringContainsString('tests/InheritedConsumerTest.php:9 intakt.testMethodSentence Test method Intakt\Sample\InheritedTargetTest::testData()', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAPublicAliasOfAWrapperThatIsNotAnalyzedStaysPublicWhenTheWrapperHidesTheOriginal(): void
+    {
+        $sandbox = $this->emptySandbox();
+        // because the gate excludes its fixtures folder, a wrapper there stands for an unchanged file a changed-files run leaves out
+        $sandbox->write('tests/Gates/Fixtures/HidingWrapper.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait HidingLeaf { public function helper(): void {} }\ntrait HidingWrapper { use HidingLeaf { helper as private; helper as verify; } }\n");
+        $sandbox->write('tests/HidingWrapperTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class HidingWrapperTest extends \PHPUnit\Framework\TestCase
+        {
+            use HidingWrapper { verify as testGo; }
+        }
+        PHP_WRAP);
+        // because the analysis finds a class it does not analyze only once PHP has loaded it
+        require_once $sandbox->root.'/tests/Gates/Fixtures/HidingWrapper.php';
+
+        self::assertSame('tests/HidingWrapperTest.php:7 intakt.testMethodSentence Test method Intakt\Sample\HidingWrapperTest::testGo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAnAliasOfANameAWrapperThatIsNotAnalyzedHidesStaysHidden(): void
+    {
+        $sandbox = $this->emptySandbox();
+        // because the gate excludes its fixtures folder, a wrapper there stands for an unchanged file a changed-files run leaves out
+        $sandbox->write('tests/Gates/Fixtures/ConcealingWrapper.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait ConcealingLeaf { public function testGo(): void {} }\ntrait ConcealingWrapper { use ConcealingLeaf { testGo as private; testGo as helper; } }\n");
+        $sandbox->write('tests/ConcealingWrapperTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class ConcealingWrapperTest extends \PHPUnit\Framework\TestCase
+        {
+            use ConcealingWrapper { testGo as testIt; }
+        }
+        PHP_WRAP);
+        // because the analysis finds a class it does not analyze only once PHP has loaded it
+        require_once $sandbox->root.'/tests/Gates/Fixtures/ConcealingWrapper.php';
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
     public function testAShortTestMethodOfATraitUnderSourceUsedWithoutAliasPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('test-method-src-trait-without-alias');
@@ -605,6 +704,9 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
     #[Override]
     protected function getCollectors(): array
     {
-        return [new TestMethodCollector(), new TraitAliasCollector(), new TraitMethodLineCollector(), new TestProviderCollector(self::createReflectionProvider())];
+        $parser = self::getContainer()->getService('defaultAnalysisParser');
+        self::assertInstanceOf(Parser::class, $parser);
+
+        return [new TestMethodCollector(), new TraitAliasCollector($parser), new TraitMethodLineCollector(), new TestProviderCollector(self::createReflectionProvider())];
     }
 }

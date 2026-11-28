@@ -172,6 +172,8 @@ services:
             - phpstan.collector
     -
         class: Intakt\Gates\PhpStan\TraitAliasCollector
+        arguments:
+            - @defaultAnalysisParser
         tags:
             - phpstan.collector
     -

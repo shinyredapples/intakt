@@ -12,18 +12,18 @@ use PhpParser\Modifiers;
  */
 final readonly class ComposedTraitMethod
 {
-    // namedAt is the alias that gave the method its name and stays null under the name its trait declares, because only an alias can be fixed where it is written; aliasedAt is the first alias of the method on its way to the class
+    // namedAt is the alias that gave the method its name and stays null under the name its trait declares, because only an alias can be fixed where it is written; aliasedAt lists the aliases of the method on its way to the class, innermost first, because a wrapper's alias outside tests/ cannot be fixed while the class's own alias can
     /**
-     * @param MethodFact $fact
-     * @param Place      $source
-     * @param Place|null $namedAt
-     * @param Place|null $aliasedAt
+     * @param MethodFact  $fact
+     * @param Place       $source
+     * @param Place|null  $namedAt
+     * @param list<Place> $aliasedAt
      */
     public function __construct(
         public array $fact,
         public array $source,
         public ?array $namedAt = null,
-        public ?array $aliasedAt = null,
+        public array $aliasedAt = [],
     ) {
     }
 
@@ -51,12 +51,11 @@ final readonly class ComposedTraitMethod
         return clone($this, ['fact' => ['visibility' => $visibility] + $this->fact]);
     }
 
-    // because one original name aliased several times is one name to fix, the first alias keeps the place
     /**
      * @param Place $alias
      */
     public function aliasedAt(array $alias): self
     {
-        return clone($this, ['aliasedAt' => $this->aliasedAt ?? $alias]);
+        return clone($this, ['aliasedAt' => [...$this->aliasedAt, $alias]]);
     }
 }
