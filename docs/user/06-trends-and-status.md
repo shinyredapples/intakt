@@ -61,7 +61,15 @@ When nobody works, the page says so: "No reviewer is working right now: reviewer
 
 ## When the Status page says new work is paused
 
-Intakt pauses new work when the disk of its mirrors folder, or of a mirror kept on a disk of its own, runs low on free space or on file slots (inodes). Only the mirrors folder and each mirror count: another folder you keep inside the mirrors folder is not measured. While it does, the Status page shows a line saying which one ran low, on which folder, and how much is left against the limit. Free space on that disk and reload the page: the line is gone. A mirror update or build step that was refused meanwhile does not start by itself: run it again. When the free space cannot be read at all, the page shows a red "Free disk space unknown" line instead, and a mirror update or build clone fails until it can be read.
+Say the disk of the mirrors folder, or of a project's mirror kept on a disk of its own, runs low on free space or on file slots (inodes). Intakt pauses new work, and the Status page shows a line saying which one ran low, on which folder, and how much is left against the limit. Another folder you keep inside the mirrors folder is not measured.
+
+To clear it:
+
+1. Free space on that disk.
+2. Reload the Status page: the line is gone.
+3. Run again any mirror update or build step that was refused meanwhile, because it does not start by itself.
+
+When the free space cannot be read at all, the page shows a red "Free disk space unknown" line instead, and a mirror update or build clone fails until it can be read.
 
 ## Status for scripts
 
