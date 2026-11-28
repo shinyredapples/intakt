@@ -480,6 +480,214 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
     }
 
+    public function testAnUnstagedEditFromAnIdentKeywordToAFreeFormIdStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryIgnoring("# \$Id\$\n*.log\n");
+        $sandbox->write('.gitignore', "# \$Id: x \$\n*.log\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAPatternEditFromLogToBakBesideAnObjectIdShapedIdKeywordWithoutTheIdentAttributeStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryIgnoring("# \$Id\$\n*.log\n");
+        $sandbox->write('.gitignore', '# $Id: '.str_repeat('a', 40)." \$\n*.bak\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAGitignoreCheckedOutInTheEncodingTheCommittedAttributesNamePasses(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInLatin1();
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame("caf\xE9.log\n", file_get_contents($sandbox->root.'/.gitignore'));
+        self::assertSame('', $sandbox->git('status', '--porcelain')->output, 'the checkout is clean');
+        self::assertSame([], $result->findings);
+    }
+
+    public function testAnUnstagedRuleEditInAnEncodedGitignoreStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInLatin1();
+        $sandbox->write('.gitignore', "caf\xE9.bak\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAnEncodedGitignoreWhoseCharsetPhpCannotDecodeCountsAsDiffering(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInLatin1();
+        $sandbox->write('.gitattributes', ".gitignore text working-tree-encoding=NO-SUCH-CHARSET\n");
+        $sandbox->git('add', '.gitattributes');
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAnEditFromAWildcardToAByteInvalidInTheNamedCharsetStillFailsTheGate(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('.gitattributes', ".gitignore text working-tree-encoding=SHIFT_JIS\n");
+        $sandbox->write('.gitignore', "a?.log\n");
+        $sandbox->commitAll('chore: check out the rules in shift_jis');
+        $sandbox->write('.gitignore', "a\x80.log\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAGitignoreCheckedOutInCp437ByTheCommittedAttributesPasses(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('.gitattributes', ".gitignore text working-tree-encoding=CP437\n");
+        $sandbox->write('.gitignore', "caf\x82.log\n");
+        $sandbox->commitAll('chore: check out the rules in cp437');
+        unlink($sandbox->root.'/.gitignore');
+        $sandbox->git('checkout', '--', '.gitignore');
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame("caf\x82.log\n", file_get_contents($sandbox->root.'/.gitignore'));
+        self::assertSame('', $sandbox->git('status', '--porcelain')->output, 'the checkout is clean');
+        self::assertSame([], $result->findings);
+    }
+
+    public function testCopyingTheStagedUtf8BlobOverLatin1RulesFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInLatin1();
+        $sandbox->write('.gitignore', $sandbox->git('show', 'HEAD:.gitignore')->output);
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAGitignoreCheckedOutInUtf16LittleEndianWithByteOrderMarkPasses(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInUtf16LeBom();
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame("\xFF\xFE*\0.\0l\0o\0g\0\n\0", file_get_contents($sandbox->root.'/.gitignore'));
+        self::assertSame('', $sandbox->git('status', '--porcelain')->output, 'the checkout is clean');
+        self::assertSame([], $result->findings);
+    }
+
+    public function testAnUnstagedRuleEditInAUtf16LittleEndianWithByteOrderMarkGitignoreStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInUtf16LeBom();
+        $sandbox->write('.gitignore', "\xFF\xFE*\0.\0b\0a\0k\0\n\0");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAUtf16LittleEndianGitignoreMissingTheByteOrderMarkCountsAsDiffering(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInUtf16LeBom();
+        $sandbox->write('.gitignore', "*\0.\0l\0o\0g\0\n\0");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertContains($this->differsFromIndex('.gitignore'), $result->findings);
+    }
+
+    public function testAGitignoreWithANonUtf8ByteUnderTheUtf8WorkingTreeEncodingGitTreatsAsIdentityPasses(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesIn('UTF-8', "a\x80.log\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame("a\x80.log\n", file_get_contents($sandbox->root.'/.gitignore'));
+        self::assertSame('', $sandbox->git('status', '--porcelain')->output, 'the checkout is clean');
+        self::assertSame([], $result->findings);
+    }
+
+    public function testAGitignoreUnderTheUtf8WorkingTreeEncodingSpelledWithoutCaseOrDashPasses(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesIn('utf8', "a\x80.log\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([], $result->findings);
+    }
+
+    public function testAnUnstagedRuleEditUnderTheUtf8WorkingTreeEncodingStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesIn('UTF-8', "a\x80.log\n");
+        $sandbox->write('.gitignore', "a\x80.bak\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAnUnstagedAttributesEditDoesNotChangeTheEncodingAnEncodedGitignoreIsReadIn(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInLatin1();
+        $sandbox->write('.gitattributes', "*.md text\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([], $result->findings);
+    }
+
+    public function testAGitlinkAtAGitignorePathGivesNoDifferingRuleFinding(): void
+    {
+        $sandbox = $this->repositoryWithAGitlinkNamedGitignore();
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([], $result->findings);
+    }
+
+    public function testAnUnstagedRuleEditBesideAGitlinkNamedGitignoreStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryWithAGitlinkNamedGitignore();
+        $sandbox->write('.gitignore', "*.bak\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testARegularFileInPlaceOfAGitlinkNamedGitignoreFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryWithAGitlinkNamedGitignore();
+        $sandbox->write('sub/.gitignore', "!keep.log\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('sub/.gitignore')], $result->findings);
+    }
+
+    public function testARegularFileInPlaceOfATrackedSymlinkedGitignoreFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.log\n");
+        $sandbox->write('rules.txt', "*.txt\n");
+        $sandbox->write('logs/keep.txt', "kept\n");
+        $sandbox->symlink('logs/.gitignore', '../rules.txt');
+        $sandbox->commitAll('chore: link the logs rules');
+        unlink($sandbox->root.'/logs/.gitignore');
+        $sandbox->write('logs/.gitignore', "*.tmp\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('logs/.gitignore')], $result->findings);
+    }
+
     public function testRestoringADifferingRuleFileWithLiteralPathspecsKeepsTheEditOfASimilarlyNamedOne(): void
     {
         $sandbox = $this->emptySandbox();
@@ -505,6 +713,54 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         $sandbox->commitAll('chore: expand the ident keyword in the rules');
         unlink($sandbox->root.'/.gitignore');
         $sandbox->git('checkout', '--', '.gitignore');
+
+        return $sandbox;
+    }
+
+    private function repositoryCheckingOutRulesInLatin1(): Sandbox
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('.gitattributes', ".gitignore text working-tree-encoding=ISO-8859-1\n");
+        $sandbox->write('.gitignore', "caf\xE9.log\n");
+        $sandbox->commitAll('chore: check out the rules in latin1');
+        unlink($sandbox->root.'/.gitignore');
+        $sandbox->git('checkout', '--', '.gitignore');
+
+        return $sandbox;
+    }
+
+    private function repositoryCheckingOutRulesInUtf16LeBom(): Sandbox
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('.gitattributes', ".gitignore text working-tree-encoding=UTF-16LE-BOM\n");
+        $sandbox->write('.gitignore', "\xFF\xFE*\0.\0l\0o\0g\0\n\0");
+        $sandbox->commitAll('chore: check out the rules in utf-16le with a byte order mark');
+        unlink($sandbox->root.'/.gitignore');
+        $sandbox->git('checkout', '--', '.gitignore');
+
+        return $sandbox;
+    }
+
+    private function repositoryCheckingOutRulesIn(string $encoding, string $rules): Sandbox
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('.gitattributes', ".gitignore text working-tree-encoding={$encoding}\n");
+        $sandbox->write('.gitignore', $rules);
+        $sandbox->commitAll('chore: name the default encoding for the rules');
+        unlink($sandbox->root.'/.gitignore');
+        $sandbox->git('checkout', '--', '.gitignore');
+
+        return $sandbox;
+    }
+
+    private function repositoryWithAGitlinkNamedGitignore(): Sandbox
+    {
+        $sandbox = $this->repositoryIgnoring("*.log\n");
+        $commit = trim($sandbox->git('rev-parse', 'HEAD')->output);
+        $sandbox->git('update-index', '--add', '--cacheinfo', '160000,'.$commit.',sub/.gitignore');
 
         return $sandbox;
     }
