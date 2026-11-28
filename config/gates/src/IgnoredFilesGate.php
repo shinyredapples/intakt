@@ -50,8 +50,7 @@ final readonly class IgnoredFilesGate implements Gate
             |> array_values(...);
     }
 
-    // Because the full report must name a file the reader can untrack, a path JSON would mangle or a line break would split is quoted as git quotes it.
-    // A path that is not UTF-8 fails the match, and so does one with a Unicode control (C0, DEL, C1 such as U+0085) or line separator.
+    // Because the full report must name a file the reader can untrack, a path JSON would mangle (not UTF-8) or a line break or control would split or hide (C0, DEL, C1 such as U+0085, U+2028, U+2029) is quoted as git quotes it.
     private function shown(string $path): string
     {
         $plain = 1 === preg_match('/^[^\p{Cc}\p{Zl}\p{Zp}]*$/u', $path) && !str_starts_with($path, '"');
