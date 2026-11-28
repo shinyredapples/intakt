@@ -115,6 +115,49 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertStringContainsString('docs/.gitignore: working-tree .gitignore differs from the index', $run->findingsOf('ignored'));
     }
 
+    public function testARuleEditKeepingSizeAndMtimeUnderTrustctimeFalseFailsTheGate(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->git('config', 'core.trustctime', 'false');
+        $sandbox->write('.gitignore', "*.log\n");
+        touch($sandbox->root.'/.gitignore', 1700000000);
+        $sandbox->write('build.log', "log\n");
+        $sandbox->git('add', '--force', '.gitignore', 'build.log');
+        $sandbox->commitAll('chore: start');
+        $sandbox->write('.gitignore', "*.tmp\n");
+        touch($sandbox->root.'/.gitignore', 1700000000);
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertTrue($run->failed('ignored'), $run->output());
+        self::assertStringContainsString('.gitignore: working-tree .gitignore differs from the index', $run->findingsOf('ignored'));
+    }
+
+    public function testAnUntrackedSymlinkedGitignoreBesideATrackedFilePassesTheGate(): void
+    {
+        $sandbox = $this->startedChange("/.evidence/\n");
+        $sandbox->write('logs/keep.txt', "keep.txt\n");
+        $sandbox->commitAll('chore: keep logs');
+        $sandbox->symlink('logs/.gitignore', 'keep.txt');
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertTrue($run->passed('ignored'), $run->output());
+    }
+
+    public function testATrackedSymlinkedGitignoreThatGitDoesNotReadPassesTheGate(): void
+    {
+        $sandbox = $this->startedChange("/.evidence/\n");
+        $sandbox->write('logs/rules.txt', "*.log\n");
+        $sandbox->symlink('logs/.gitignore', 'rules.txt');
+        $sandbox->commitAll('chore: link the log rules');
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertTrue($run->passed('ignored'), $run->output());
+    }
+
     public function testACleanTreeWithTheStagedRuleAndNothingIgnoredTrackedPassesTheGate(): void
     {
         $sandbox = $this->startedChange("*.log\n");
