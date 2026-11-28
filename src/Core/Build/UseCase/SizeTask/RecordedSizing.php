@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Core\Build\UseCase\SizeTask;
 
 use Intakt\Core\Build\Contract\ReadinessGap;
+use Intakt\Core\Build\Contract\SizeTier;
 use Intakt\Core\Build\Contract\SizingRequest;
 
-// Only the text's hash, the parking run and the missing items of a `task_sized` line, because that is all a later sizing of the task decides on: whether to size again, whose question to remove, and which comment to ensure.
+// Only the text's hash, the parking run, the missing items and the size of a `task_sized` line, because that is all a later sizing of the task decides on: whether to size again, whose question to remove, which comment to ensure, and whether a ready task still waits for its split.
 final readonly class RecordedSizing
 {
     /**
@@ -18,6 +19,7 @@ final readonly class RecordedSizing
         private SizingOutcome $outcome,
         private ?string $run,
         private array $missing,
+        private ?SizeTier $size,
     ) {
     }
 
@@ -34,17 +36,24 @@ final readonly class RecordedSizing
         $outcome = is_string($fields['outcome'] ?? null) ? SizingOutcome::tryFrom($fields['outcome']) : null;
         $missing = self::gapsIn($fields['missing'] ?? null);
         $run = $fields['run'] ?? null;
+        $size = is_string($fields['size'] ?? null) ? SizeTier::tryFrom($fields['size']) : null;
 
         if (!is_string($text) || !self::settles($outcome, $missing)) {
             return null;
         }
 
-        return new self($text, $outcome, is_string($run) ? $run : null, $missing);
+        return new self($text, $outcome, is_string($run) ? $run : null, $missing, $size);
     }
 
     public function isOf(SizingRequest $request): bool
     {
         return SizingRecords::textOf($request) === $this->text;
+    }
+
+    // A ready verdict of size split that is on record names a task sized before splitting existed, because a split since then records its plan instead.
+    public function awaitsItsSplit(): bool
+    {
+        return SizingOutcome::Ready === $this->outcome && SizeTier::Split === $this->size;
     }
 
     public function parkedBy(): ?string

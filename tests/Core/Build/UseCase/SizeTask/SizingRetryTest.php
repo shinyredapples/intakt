@@ -167,12 +167,12 @@ final class SizingRetryTest extends TestCase
 
     private function notReady(ReadinessGap $gap): SizingVerdict
     {
-        return new SizingVerdict(false, [$gap], SizeTier::Small, 20, 'Incomplete.');
+        return new SizingVerdict(false, [$gap], SizeTier::Small, 20, 'Incomplete.', []);
     }
 
     private function ready(): SizingVerdict
     {
-        return new SizingVerdict(true, [], SizeTier::Small, 20, 'Reassessed.');
+        return new SizingVerdict(true, [], SizeTier::Small, 20, 'Reassessed.', []);
     }
 
     private function vendorAnswering(SizingVerdict ...$verdicts): SizingVendor

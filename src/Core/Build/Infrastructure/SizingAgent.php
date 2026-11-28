@@ -7,6 +7,7 @@ namespace Intakt\Core\Build\Infrastructure;
 use Intakt\Core\Build\Contract\Sizer;
 use Intakt\Core\Build\Contract\SizingRequest;
 use Intakt\Core\Build\Contract\SizingVerdict;
+use Intakt\Core\Build\Domain\SplitLines;
 use JsonException;
 use Override;
 use ReflectionMethod;
@@ -37,7 +38,8 @@ final readonly class SizingAgent implements Sizer
 
         $verdict = $this->answerIn($execution);
 
-        return $verdict instanceof SizingVerdict && $verdict->agreesWithItself() ? $verdict : null;
+        // A split out of the line form is no answer either, so it splits nothing and is recorded as invalid.
+        return $verdict instanceof SizingVerdict && $verdict->agreesWithItself() && ([] === $verdict->parts || null !== SplitLines::partsIn($verdict->parts)) ? $verdict : null;
     }
 
     // Anything the Validator or the mapping refuses is no answer; a failed call is not the sizer's answer, so it stays an error.
@@ -75,7 +77,7 @@ final readonly class SizingAgent implements Sizer
         sort($answered);
 
         // Decoded as objects, because as arrays `{"0": ...}` and `{}` would read as lists.
-        return $expected === $answered && is_array($fields->missing) && count($expected) === $this->fieldNamesWrittenIn($text);
+        return $expected === $answered && is_array($fields->missing) && is_array($fields->parts) && count($expected) === $this->fieldNamesWrittenIn($text);
     }
 
     // Counted on the text, because decoding leaves one of a name written twice. Every string of the text is matched whole from its opening quote, so a quote or a colon inside one starts no match, and a string is a field name exactly when a colon follows it; names inside a nested object count too, so the verdict's count allows none.

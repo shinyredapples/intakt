@@ -99,7 +99,7 @@ final class SizingASampleTaskTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
 
-        $outcome = $this->sizing('{"ready":true,"missing":[],"size":"medium","estimated_lines":180,"reason":"One change."}', new SizingFixture(self::createStub(ManagerRegistry::class), $ledger, 12))->run('sample', 12);
+        $outcome = $this->sizing('{"ready":true,"missing":[],"size":"medium","estimated_lines":180,"reason":"One change.","parts":[]}', new SizingFixture(self::createStub(ManagerRegistry::class), $ledger, 12))->run('sample', 12);
 
         self::assertSame(SizingOutcome::Ready, $outcome);
         self::assertSame(
@@ -114,13 +114,30 @@ final class SizingASampleTaskTest extends KernelTestCase
         $ledger = new InMemoryLedger();
         $fixture = new SizingFixture(self::createStub(ManagerRegistry::class), $ledger, 12);
 
-        $outcome = $this->sizing('{"ready":false,"missing":["acceptance_condition"],"size":"small","estimated_lines":25,"reason":"No done condition."}', $fixture)->run('sample', 12);
+        $outcome = $this->sizing('{"ready":false,"missing":["acceptance_condition"],"size":"small","estimated_lines":25,"reason":"No done condition.","parts":[]}', $fixture)->run('sample', 12);
 
         self::assertSame(SizingOutcome::Parked, $outcome);
         self::assertSame(['sample:12'], $fixture->parked->fetchFirstColumn("SELECT project || ':' || task FROM build_parked_task"));
         self::assertSame([['sample', 12, "This task is not ready to build. It lacks: an acceptance condition.\n\n- Add the missing items to the task\n- Close the task"]], $fixture->comments->posted);
         $record = array_last($ledger->payloads());
         self::assertSame(['parked', ['acceptance_condition']], [$record['outcome'] ?? null, $record['missing'] ?? null]);
+    }
+
+    public function testASampleTaskOfTheSplitSizeIsSplitAndItsPlanPartsAndTokensAreRecorded(): void
+    {
+        $ledger = new InMemoryLedger();
+        $fixture = new SizingFixture(self::createStub(ManagerRegistry::class), $ledger, 12);
+        $parts = '["Read the cart | done-when: /cart lists the items | verify: bin/check --fast | files: src/Cart.php | depends on: none","Show the total | done-when: /cart shows the total | verify: bin/check --fast | files: src/Total.php | depends on: part 1"]';
+
+        $outcome = $this->sizing('{"ready":true,"missing":[],"size":"split","estimated_lines":900,"reason":"Two changes.","parts":'.$parts.'}', $fixture)->run('sample', 12);
+
+        self::assertSame(SizingOutcome::Split, $outcome);
+        self::assertSame(['usage_recorded', 'usage_recorded', 'task_split_planned', 'task_split'], array_map(static fn (LedgerEventKind $kind): string => $kind->value, $ledger->kinds()));
+        self::assertSame('12', $ledger->payloads()[0]['task'] ?? null);
+        self::assertSame([[100, 'Read the cart', ['ready']], [101, 'Show the total', ['ready']]], array_map(static fn (array $part): array => [$part['number'], $part['title'], $part['labels']], $fixture->parts->filed));
+        self::assertStringEndsWith('Waits for #100', $fixture->parts->filed[1]['body']);
+        self::assertSame([100, 101], $ledger->payloads()[3]['parts'] ?? null);
+        self::assertSame([['sample', 12, 'This task was split into #100, #101. It stays open as their umbrella.']], $fixture->comments->posted);
     }
 
     private function sizing(string $answer, SizingFixture $fixture): SizeTask

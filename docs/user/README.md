@@ -35,6 +35,15 @@ You will meet these characters on the dashboard. Each one stands where its job h
 8. [When something goes wrong](08-when-something-goes-wrong.md): the common surprises, why they happen, what to do.
 9. [Running it for a team](09-running-it-for-a-team.md): your own panel, your own CI, and where the details live.
 
+## When a task is too big
+
+You run `intakt:build:size` on a task, and the answer is `split`: the task is too big for one build.
+
+1. Intakt records its plan first. Then it files two to four new issues, the parts. Each part has the task's labels and waits for the parts it builds on.
+2. The task stays open as their umbrella, with one comment naming the parts. Editing it later does not size it again.
+3. If the command stops halfway, run it again. It finishes from the plan and files no part twice.
+4. A task is split only once, and a part is never split again ([details](../reference/user-manual.md#sizing-a-new-task)).
+
 ## Which tier a build runs on
 
 When Intakt builds a task, these inputs decide its tier, the first that applies wins:

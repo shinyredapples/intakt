@@ -34,6 +34,16 @@ final class TaskNotSized extends RuntimeException implements ReportableFailure
         return new self(sprintf('Issue %d of project "%s" is ready, but its earlier readiness question was not removed.', $task, $project));
     }
 
+    public static function notSplit(string $project, int $task, string $reason): self
+    {
+        return new self(sprintf('The split of issue %d of project "%s" stopped; running the command again finishes it from its plan: %s', $task, $project, $reason));
+    }
+
+    public static function planUnreadable(string $project, int $task): self
+    {
+        return new self(sprintf('Issue %d of project "%s" has a split plan on record that cannot be read, so it is neither split again nor finished.', $task, $project));
+    }
+
     public static function busy(string $project, int $task): self
     {
         return new self(sprintf('Issue %d of project "%s" is not sized: another sizing of it is running.', $task, $project));

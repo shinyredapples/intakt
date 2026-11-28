@@ -31,11 +31,11 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(LabelApplication::class)]
 final class EligibleTasksTest extends TestCase
 {
-    public function testATaskAnOwnerWroteAndLabeledEligibleIsSized(): void
+    public function testATaskAnOwnerWroteAndLabeledEligibleIsSizedWithTheLabelsItHolds(): void
     {
         $request = $this->fixture()->eligibleTasks()->requestFor('alpha', 7);
 
-        self::assertEquals(new SizingRequest('alpha', 7, 'Add a cart page', SampleIssue::BODY), $request);
+        self::assertEquals(new SizingRequest('alpha', 7, 'Add a cart page', SampleIssue::BODY, [SampleIssue::LABEL]), $request);
     }
 
     public function testATaskWithoutTheEligibilityLabelIsRefused(): void

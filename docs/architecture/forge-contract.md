@@ -36,7 +36,7 @@ The rest of this page is the detailed reference.
 
 ### Filing split parts
 
-`Plugin/GitHubForge/Contract/TaskParts::fileOnce(project, PartIssue)` files one part of a split task as an issue of the project's GitHub repository and returns its number. A `PartIssue` is the title, the body (the split adds the part's `Waits for #n` lines to it), the marker `<!-- intakt:part <sizing key> <n> -->`, the original's labels (`IssueLabels`) and the moment the split was planned. `GitHubTaskParts` sends the body with the marker after a blank line, and the labels, with an installation token (its REST calls are `PartIssueCalls`), and never retries a write, because GitHub can store an issue and still answer 502. Nothing calls it yet; the split that does is not built (see [Task sizing](task-sizing.md#not-built-here)).
+`Plugin/GitHubForge/Contract/TaskParts::fileOnce(project, PartIssue)` files one part of a split task as an issue of the project's GitHub repository and returns its number. A `PartIssue` is the title, the body (the split adds the part's `Waits for #n` lines to it), the marker `<!-- intakt:part <sizing key> <n> -->`, the original's labels (`IssueLabels`) and the moment the split was planned. `GitHubTaskParts` sends the body with the marker after a blank line, and the labels, with an installation token (its REST calls are `PartIssueCalls`), and never retries a write, because GitHub can store an issue and still answer 502. `SplitTask` calls it for each part of a split (see [Task sizing](task-sizing.md#the-split)).
 
 It files each part once, holding a lock per part (`CreatedParts::whileHeld()`, not waited for: a busy part fails with `Another run is filing this part.`) across the steps below, in this order:
 

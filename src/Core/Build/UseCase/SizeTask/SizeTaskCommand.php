@@ -17,7 +17,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand(name: 'intakt:build:size', description: 'Check one new issue for readiness and estimate its size in one tool-less call, record the verdict in the ledger and park the task with one question when it is not ready')]
+#[AsCommand(name: 'intakt:build:size', description: 'Check one new issue for readiness and estimate its size in one tool-less call, record the verdict in the ledger, park the task with one question when it is not ready and split it into its parts once when it must be split')]
 final readonly class SizeTaskCommand
 {
     public function __construct(private SizeTask $sizeTask)
