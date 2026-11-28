@@ -10,6 +10,8 @@ use Intakt\Gates\PhpStan\TestMethodName;
 use Intakt\Gates\PhpStan\TestMethodSentenceRule;
 use Intakt\Gates\PhpStan\TestProviderCollector;
 use Intakt\Gates\PhpStan\TraitAliasTestMethodCollector;
+use Intakt\Gates\PhpStan\TraitComposition;
+use Intakt\Gates\PhpStan\TraitMethod;
 use Intakt\Gates\StaticAnalysisGate;
 use Override;
 use PhpParser\Node;
@@ -23,8 +25,10 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(TraitAliasTestMethodCollector::class)]
 #[CoversClass(TestMethodName::class)]
 #[CoversClass(TestMethodSentenceRule::class)]
+#[CoversClass(TraitComposition::class)]
+#[CoversClass(TraitMethod::class)]
+#[CoversClass(TestProviderCollector::class)]
 #[UsesClass(TestMethodCollector::class)]
-#[UsesClass(TestProviderCollector::class)]
 #[UsesClass(PhpUnitTestMethod::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 final class TraitAliasTestMethodCollectorTest extends PhpStanRuleTestCase
@@ -137,6 +141,54 @@ final class TraitAliasTestMethodCollectorTest extends PhpStanRuleTestCase
         self::assertSame('tests/SampleTest.php:9 intakt.testMethodSentence Test method Intakt\Sample\SampleTest::testRuns()'.self::FINDING, $this->ruleFindingsIn($sandbox));
     }
 
+    public function testRenamingAnAliasAWrapperTraitDeclaresReportsBothNamesTheClassRuns(): void
+    {
+        $sandbox = $this->wrapped('public function runs(): void {}', 'use Inner { runs as testRuns; }', 'Wrapper { testRuns as testAgain; }');
+
+        self::assertSame($this->findingsAtTheClassAlias('testAgain', 'testRuns'), $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testATestAWrapperTraitMakesPublicIsReportedUnderBothNamesTheClassRuns(): void
+    {
+        $sandbox = $this->wrapped('protected function testRuns(): void {}', 'use Inner { testRuns as public; }', 'Wrapper { testRuns as testAgain; }');
+
+        self::assertSame($this->findingsAtTheClassAlias('testAgain', 'testRuns'), $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testATestAWrapperTraitMakesProtectedIsNotReportedUnderAnyName(): void
+    {
+        $sandbox = $this->wrapped('public function testRuns(): void {}', 'use Inner { testRuns as protected; }', 'Wrapper { testRuns as testAgain; }');
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testHidingTheExcludedWrapperOfOneTestLeavesTheSelectedWrapperJudged(): void
+    {
+        $sandbox = $this->wrapped('public function testRuns(): void {}', 'use Inner;', 'Wrapper, Other { Wrapper::testRuns insteadof Other; Wrapper::testRuns as testAgain; Other::testRuns as private; }');
+
+        self::assertSame($this->findingsAtTheClassAlias('testAgain', 'testRuns'), $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAProviderNamedOnlyByAHiddenTraitTestLeavesThePublicStaticAliasJudged(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->write('src/Inner.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\nuse PHPUnit\\Framework\\Attributes\\DataProvider;\ntrait Inner\n{\n    #[DataProvider('testRows')]\n    public function testRuns(): void {}\n    public static function rows(): iterable { return []; }\n}\n");
+        $sandbox->write('src/Wrapper.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Wrapper\n{\n    use Inner;\n}\n");
+        $sandbox->write('tests/SampleTest.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\nuse PHPUnit\\Framework\\TestCase;\nfinal class SampleTest extends TestCase\n{\n    use Wrapper {\n        testRuns as private;\n        testRuns as private testAgain;\n        rows as testRows;\n    }\n}\n");
+
+        self::assertSame('tests/SampleTest.php:10 intakt.testMethodSentence Test method Intakt\Sample\SampleTest::testRows()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAProviderNamedByARunningTraitTestExemptsThePublicStaticAlias(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->write('src/Inner.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\nuse PHPUnit\\Framework\\Attributes\\DataProvider;\ntrait Inner\n{\n    #[DataProvider('testRows')]\n    public function testRuns(): void {}\n    public static function rows(): iterable { return []; }\n}\n");
+        $sandbox->write('src/Wrapper.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Wrapper\n{\n    use Inner;\n}\n");
+        $sandbox->write('tests/SampleTest.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\nuse PHPUnit\\Framework\\TestCase;\nfinal class SampleTest extends TestCase\n{\n    use Wrapper {\n        rows as testRows;\n    }\n}\n");
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
     #[Override]
     protected function setUp(): void
     {
@@ -150,6 +202,22 @@ final class TraitAliasTestMethodCollectorTest extends PhpStanRuleTestCase
     {
         putenv(false === $this->changedFilesOnly ? StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE : StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'='.$this->changedFilesOnly);
         parent::tearDown();
+    }
+
+    private function wrapped(string $inner, string $wrapper, string $use): Sandbox
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->write('src/Inner.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Inner\n{\n    ".$inner."\n}\n");
+        $sandbox->write('src/Wrapper.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Wrapper\n{\n    ".$wrapper."\n}\n");
+        $sandbox->write('src/Other.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Other\n{\n    use Inner;\n}\n");
+        $sandbox->write('tests/SampleTest.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\nuse PHPUnit\\Framework\\TestCase;\nfinal class SampleTest extends TestCase\n{\n    use ".$use."\n}\n");
+
+        return $sandbox;
+    }
+
+    private function findingsAtTheClassAlias(string ...$methods): string
+    {
+        return implode("\n", array_map(static fn (string $method): string => 'tests/SampleTest.php:7 intakt.testMethodSentence Test method Intakt\Sample\SampleTest::'.$method.'()'.self::FINDING, $methods));
     }
 
     protected function ruleFor(string $root): TestMethodSentenceRule

@@ -43,8 +43,9 @@ final readonly class TestProviderCollector implements Collector
         }
 
         $native = $class->getNativeReflection();
-        // because PHPUnit ignores a provider attribute on a method it does not run as a test, such as a private helper
-        $tests = array_values(array_filter($native->getMethods(), PhpUnitTestMethod::isRun(...)));
+        $composition = new TraitComposition($this->reflections);
+        // because PHPUnit ignores a provider attribute on a method it does not run as a test, such as a private helper or a trait test the use block hides
+        $tests = array_values(array_filter($native->getMethods(), static fn (ReflectionMethod $method): bool => PhpUnitTestMethod::isMarkedOrNamedAsTest($method) && $composition->isPublic($class, $method)));
         $references = array_merge(...array_map(fn (ReflectionMethod $test): array => [...$this->providersInTheClass($test, $native), ...$this->externalProviders($test)], $tests));
         $runs = $this->staticRuns($tests, $class->getName());
 

@@ -4,14 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
-use PhpParser\Modifiers;
 use PhpParser\Node;
 use PhpParser\Node\Identifier;
-use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\Node\Stmt\TraitUseAdaptation\Alias;
 use PHPStan\Analyser\Scope;
-use PHPStan\BetterReflection\Reflection\Adapter\ReflectionMethod;
 use PHPStan\Collectors\Collector;
 use PHPStan\Reflection\ClassReflection;
 use PHPStan\Reflection\ReflectionProvider;
@@ -43,13 +40,20 @@ final readonly class TraitAliasTestMethodCollector implements Collector
             return null;
         }
 
-        $trait = $scope->getTraitReflection();
+        $owner = $scope->getTraitReflection() ?? $class;
+        $composition = new TraitComposition($this->reflections);
+        $exposed = $composition->takenFromTraits($class);
+        $declared = $composition->takenFromTraits($owner);
         $records = [];
 
         foreach ($this->renamingAliases($node) as $alias) {
-            foreach ($this->misnamedTestsOf($alias, $node, $class) as $method) {
+            foreach ($this->namesRunUnder($alias, $owner, $declared) as $name => $identity) {
+                $method = $exposed[strtolower($name)] ?? null;
+
                 // keyed by name because a class that renames one method twice still runs its original name once
-                $records[strtolower($method->getName())] ??= [$trait?->getFileName() ?? $scope->getFile(), $alias->getStartLine(), $trait?->getName() ?? $class->getName(), $class->getName(), $method->getName(), $this->mayBeProvider($class, $method)];
+                if ($method instanceof TraitMethod && $method->identity() === $identity && $this->isMisnamedTest($class, $method)) {
+                    $records[strtolower($method->name)] ??= [$owner->getFileName() ?? $scope->getFile(), $alias->getStartLine(), $owner->getName(), $class->getName(), $method->name, $this->mayBeProvider($class, $method)];
+                }
             }
         }
 
@@ -65,62 +69,34 @@ final readonly class TraitAliasTestMethodCollector implements Collector
     }
 
     /**
-     * @return list<ReflectionMethod>
+     * @param array<string, TraitMethod> $declared
+     *
+     * @return array<string, list<string>>
      */
-    private function misnamedTestsOf(Alias $alias, TraitUse $use, ClassReflection $class): array
+    // the alias and the original name, each with the identity the class must still expose under it: an outer alias, the class's own method or the other trait insteadof selects is judged where it is declared
+    private function namesRunUnder(Alias $alias, ClassReflection $owner, array $declared): array
+    {
+        $method = $declared[strtolower((string) $alias->newName)] ?? null;
+
+        if (!$method instanceof TraitMethod || $owner->getName().':'.$alias->getStartLine() !== $method->renamedAt || null === $method->before) {
+            return [];
+        }
+
+        return [$method->name => $method->identity(), $alias->method->toString() => $method->before];
+    }
+
+    private function isMisnamedTest(ClassReflection $class, TraitMethod $method): bool
     {
         $native = $class->getNativeReflection();
-        $methods = array_map($native->getMethod(...), array_filter([(string) $alias->newName, $alias->method->toString()], $native->hasMethod(...)));
 
-        return array_values(array_filter($methods, fn (ReflectionMethod $method): bool => $this->comesFrom($method, $alias, $use) && $this->isPublic($method, $alias, $use) && PhpUnitTestMethod::isMarkedOrNamedAsTest($method) && !TestMethodName::readsAsSentence($method->getName())));
+        return $method->isPublic && $native->hasMethod($method->name) && PhpUnitTestMethod::isMarkedOrNamedAsTest($native->getMethod($method->name)) && !TestMethodName::readsAsSentence($method->name);
     }
 
-    // because a method the class declares itself, or takes from another trait through insteadof, is judged where it is declared
-    private function comesFrom(ReflectionMethod $method, Alias $alias, TraitUse $use): bool
+    private function mayBeProvider(ClassReflection $class, TraitMethod $method): bool
     {
-        $aliasName = $method->getBetterReflection()->getAliasName();
-        $sameName = null === $aliasName ? 0 === strcasecmp($method->getName(), $alias->method->toString()) : 0 === strcasecmp($aliasName, (string) $alias->newName);
+        $native = $class->getNativeReflection()->getMethod($method->name);
 
-        return $sameName && array_any($use->traits, fn (Name $used): bool => $this->provides($used, $method)) && (!$alias->trait instanceof Name || $this->provides($alias->trait, $method));
-    }
-
-    // because BetterReflection mixes the visibility changes of the original name and its aliases when a class renames a method (upstream/phpstan-trait-alias-hidden-original-visibility/), the use block and the trait's declaration decide, as in PHP
-    private function isPublic(ReflectionMethod $method, Alias $alias, TraitUse $use): bool
-    {
-        $changes = null === $method->getBetterReflection()->getAliasName()
-            ? array_filter($use->adaptations, fn (Node $adaptation): bool => $adaptation instanceof Alias && !$adaptation->newName instanceof Identifier && 0 === strcasecmp($adaptation->method->toString(), $method->getName()) && (!$adaptation->trait instanceof Name || $this->provides($adaptation->trait, $method)))
-            : [$alias];
-        $change = array_last(array_filter($changes, static fn (Alias $change): bool => 0 !== ($change->newModifier & Modifiers::VISIBILITY_MASK)));
-
-        return $change instanceof Alias ? 0 !== ($change->newModifier & Modifiers::PUBLIC) : $this->isDeclaredPublic($method, $alias);
-    }
-
-    private function isDeclaredPublic(ReflectionMethod $method, Alias $alias): bool
-    {
-        $trait = $this->reflections->getClass($method->getBetterReflection()->getDeclaringClass()->getName())->getNativeReflection();
-
-        return $trait->hasMethod($alias->method->toString()) && $trait->getMethod($alias->method->toString())->isPublic();
-    }
-
-    // because a trait named in the use block also passes on the methods of the traits it uses itself
-    private function provides(Name $trait, ReflectionMethod $method): bool
-    {
-        $declaring = $method->getBetterReflection()->getDeclaringClass()->getName();
-
-        return $this->reflections->hasClass($trait->toString()) && array_any($this->traitsWithin($this->reflections->getClass($trait->toString())), static fn (string $name): bool => 0 === strcasecmp($name, $declaring));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function traitsWithin(ClassReflection $trait): array
-    {
-        return [$trait->getName(), ...array_merge(...array_map($this->traitsWithin(...), array_values($trait->getTraits())))];
-    }
-
-    private function mayBeProvider(ClassReflection $class, ReflectionMethod $method): bool
-    {
         // because PHPUnit calls only a static provider and iterates what it returns
-        return $method->isStatic() && !PhpUnitTestMethod::isMarked($method) && !$class->getNativeMethod($method->getName())->getOnlyVariant()->getNativeReturnType()->isIterable()->no();
+        return $native->isStatic() && !PhpUnitTestMethod::isMarked($native) && !$class->getNativeMethod($method->name)->getOnlyVariant()->getNativeReturnType()->isIterable()->no();
     }
 }
