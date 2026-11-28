@@ -11,6 +11,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingKind;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
@@ -26,6 +27,7 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(Finding::class)]
+#[UsesClass(FindingKind::class)]
 #[UsesClass(SessionSummary::class)]
 #[UsesClass(ToolCallCount::class)]
 final class SessionSummaryPageTest extends DashboardPageTestCase
@@ -80,6 +82,26 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
             'F2 P3 Name the cache window. Open',
             'F4 P2 Order the queue by hold time. Reported',
         ], $this->linesOf($crawler->filter('.log-summary .ls-findings li')));
+    }
+
+    public function testAFindingWithATitleAndKindIsListedByTheKindInWordsAndItsTitle(): void
+    {
+        $titled = new Finding('F1', Severity::P1, 'src/PushGate.php', 12, null, 'Read the status per push. It is cached.', FixableBy::Builder, false, null, null, title: 'Status read once only', kind: FindingKind::Logic);
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), new Paths(), [$titled], [$titled->withId('F4')], [], false));
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
+
+        self::assertSame(['F1 P1 Logic: Status read once only Open', 'F4 P1 Logic: Status read once only Reported'], $this->linesOf($crawler->filter('.log-summary .ls-findings li')));
+        self::assertCount(2, $crawler->filter('.log-summary .ls-findings .kind-sym svg'));
+    }
+
+    public function testAFindingRecordedWithoutATitleOrKindKeepsItsWholeTextAndNoSymbol(): void
+    {
+        $this->givenTheRunningRoundRecorded($this->summary());
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
+
+        self::assertCount(0, $crawler->filter('.log-summary .ls-findings .kind-sym'));
     }
 
     public function testEachFindingIdIsAButtonNamingTheFindingToHighlight(): void

@@ -1,0 +1,7 @@
+{#- A finding in a list that showed its whole text before titles (the now block, the session summary): the kind's symbol, then the reviewer's title when one is recorded, else the whole text as before, because older findings are never back-filled. -#}
+{{- include('dashboard/_kind_symbol.html.twig', {words: words}, with_context = false) -}}
+{%- if title is not null and title|trim is not empty -%}
+{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(title|trim)}, with_context = false) }}
+{%- else -%}
+{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: missing}, with_context = false) }}
+{%- endif -%}

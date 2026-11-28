@@ -1,6 +1,6 @@
 {#- A card's title is the finding's short line (RoundFinding::shortLine(): the stored title, else the headline of older findings), because a card shows one short line; the whole text follows it only when it goes on, so nothing the reviewer wrote is lost. -#}
 {%- set headline = finding.shortLine -%}
-<p class="fc-title"><span class="mono fc-id">{{ finding.id }}</span> <span class="fc-text">{{ include('dashboard/_kind_symbol.html.twig', {finding: finding}, with_context = false) }}{% if headline is null %}Text not recorded.{% else %}{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(headline)}, with_context = false) }}{% endif %}</span></p>
+<p class="fc-title"><span class="mono fc-id">{{ finding.id }}</span> <span class="fc-text">{{ include('dashboard/_kind_symbol.html.twig', {words: finding.kindWords}, with_context = false) }}{% if headline is null %}Text not recorded.{% else %}{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(headline)}, with_context = false) }}{% endif %}</span></p>
 {%- if finding.goesOnAfterItsShortLine %}
 <p class="fc-detail">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: ''}, with_context = false) }}</p>
 {%- endif %}

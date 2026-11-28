@@ -53,25 +53,24 @@ final readonly class RoundFinding
     // The line a card and the finding page show: the stored title, or the headline for a finding recorded without one, because older rows are never back-filled.
     public function shortLine(): ?string
     {
+        return $this->title() ?? $this->headline();
+    }
+
+    // Null for a finding recorded without a title or with a blank one, Unicode white space included, because the now block then keeps the whole text it showed before titles.
+    public function title(): ?string
+    {
         $title = preg_replace('/^[\s\p{Z}]+|[\s\p{Z}]+$/u', '', (string) $this->title);
 
-        return null === $title || '' === $title ? $this->headline() : $title;
+        return null === $title || '' === $title ? null : $title;
     }
 
     // Null for a finding recorded without a kind, because such a finding then shows no symbol.
     public function kindWords(): ?string
     {
-        return match ($this->kind) {
-            FindingKind::Security => 'Security',
-            FindingKind::Logic => 'Logic',
-            FindingKind::MissingTest => 'No test',
-            FindingKind::TidyUp => 'Tidy-up',
-            FindingKind::Other => 'Other',
-            null => null,
-        };
+        return $this->kind?->inWords();
     }
 
-    // The first sentence of its first line, the fallback for a finding recorded without a title, because a card shows one short line; of its own and a card shows one short line; null when no text is recorded, Unicode white space included.
+    // The first sentence of its first line, because a card of a finding recorded without a title still shows one short line; null when no text is recorded, Unicode white space included.
     public function headline(): ?string
     {
         $text = $this->trimmedText();
@@ -104,11 +103,12 @@ final readonly class RoundFinding
         return array_column($this->codeSpansOf($this->text ?? ''), 2);
     }
 
+    // False without recorded text, because a title alone leaves nothing to show below it.
     public function goesOnAfterItsShortLine(): bool
     {
-        $line = $this->shortLine();
+        $text = $this->trimmedText();
 
-        return null !== $line && $line !== $this->trimmedText();
+        return null !== $text && $this->shortLine() !== $text;
     }
 
     public function urgency(): ?FindingUrgency

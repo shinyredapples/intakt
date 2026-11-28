@@ -166,6 +166,14 @@ final class RoundFindingTest extends TestCase
         self::assertTrue(new RoundFinding('F1', 'P1', 'Broken.', title: 'Discount lost')->goesOnAfterItsShortLine());
     }
 
+    public function testAFindingWithATitleButNoRecordedTextDoesNotGoOnAfterItsShortLine(): void
+    {
+        self::assertSame([false, false], [
+            new RoundFinding('F1', 'P1', null, title: 'Discount lost')->goesOnAfterItsShortLine(),
+            new RoundFinding('F1', 'P1', "\u{00A0}", title: 'Discount lost')->goesOnAfterItsShortLine(),
+        ]);
+    }
+
     public function testAFindingsUrgencyReadsItsSeverityAsHowSoonToFixIt(): void
     {
         self::assertSame(['Urgent', 'Should fix', 'Nice to have', null, null], array_map(static fn (?string $severity): ?string => new RoundFinding('F1', $severity, 'A.')->urgency()?->words(), ['P1', 'P2', 'P3', 'P9', null]));
