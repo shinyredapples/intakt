@@ -25,6 +25,7 @@ use PHPStan\Reflection\ClassReflection;
  * @phpstan-type UsedTrait array{name: string, file: string, methods: list<MethodFact>, taken: list<TakenMethod>}
  * @phpstan-type AliasRecord array{trait: string|null, method: string, name: string|null, visibility: int, line: int}
  * @phpstan-type Exclusion array{trait: string, method: string}
+ * @phpstan-type Adaptations array{aliases: list<AliasRecord>, exclusions: list<Exclusion>}
  * @phpstan-type UseBlock array{class: Place, declarer: array{string, string}, statement: string, own: list<string>, traits: list<UsedTrait>, aliases: list<AliasRecord>, exclusions: list<Exclusion>}
  *
  * @implements Collector<TraitUse, UseBlock>
@@ -88,7 +89,7 @@ final readonly class TraitAliasCollector implements Collector
     {
         $own = $this->ownMethods($trait);
         $taken = array_values(array_udiff($trait->getNativeReflection()->getMethods(), $own, static fn (ReflectionMethod $left, ReflectionMethod $right): int => strcasecmp($left->getName(), $right->getName())));
-        $adaptations = [] === $taken ? [] : $this->adaptationsIn($trait);
+        $adaptations = [] === $taken ? ['aliases' => [], 'exclusions' => []] : $this->adaptationsIn($trait);
 
         return [
             'name' => $trait->getName(),
@@ -100,15 +101,19 @@ final readonly class TraitAliasCollector implements Collector
 
     // because a wrapper trait whose file a changed-files run did not analyze has no collected block, its own `use` blocks are read from its file as written
     /**
-     * @return list<AliasRecord>
+     * @return Adaptations
      */
     private function adaptationsIn(ClassReflection $trait): array
     {
         $file = $trait->getFileName();
         $line = $trait->getNativeReflection()->getStartLine();
         $declaration = null === $file ? null : new NodeFinder()->findFirst($this->parser->parseFile($file), static fn (Node $node): bool => $node instanceof Trait_ && $node->getStartLine() === $line);
+        $uses = $declaration instanceof Trait_ ? $declaration->getTraitUses() : [];
 
-        return $declaration instanceof Trait_ ? array_merge([], ...array_map($this->aliases(...), $declaration->getTraitUses())) : [];
+        return [
+            'aliases' => array_merge([], ...array_map($this->aliases(...), $uses)),
+            'exclusions' => array_merge([], ...array_map($this->exclusions(...), $uses)),
+        ];
     }
 
     /**
@@ -128,7 +133,7 @@ final readonly class TraitAliasCollector implements Collector
 
     // because a changed-files run may leave out a wrapper trait's own `use` block, the methods the wrapper takes from its traits are kept as the wrapper exposes them, so the composition still reaches them
     /**
-     * @param list<AliasRecord> $adaptations
+     * @param Adaptations $adaptations
      *
      * @return TakenMethod
      */
@@ -141,21 +146,27 @@ final readonly class TraitAliasCollector implements Collector
 
     // because BetterReflection gives a method that one block both aliases and hides the wrong visibility (upstream/phpstan-trait-alias-drops-visibility/): an alias takes its own modifier or the trait method's visibility, and an original name the last visibility-only adaptation of it
     /**
-     * @param list<AliasRecord> $adaptations
+     * @param Adaptations $adaptations
      */
     private function exposedVisibility(ClassReflection $wrapper, ReflectionMethod $method, array $adaptations): int
     {
         $name = $method->getName();
-        $alias = array_find($adaptations, static fn (array $adaptation): bool => null !== $adaptation['name'] && 0 === strcasecmp($adaptation['name'], $name));
-        $hiding = array_find(array_reverse($adaptations), static fn (array $adaptation): bool => null === $adaptation['name'] && 0 !== $adaptation['visibility'] && 0 === strcasecmp($adaptation['method'], $name));
+        $alias = array_find($adaptations['aliases'], static fn (array $adaptation): bool => null !== $adaptation['name'] && 0 === strcasecmp($adaptation['name'], $name));
+        $hiding = array_find(array_reverse($adaptations['aliases']), static fn (array $adaptation): bool => null === $adaptation['name'] && 0 !== $adaptation['visibility'] && 0 === strcasecmp($adaptation['method'], $name));
         $written = null === $alias ? $hiding['visibility'] ?? 0 : $alias['visibility'];
 
-        return 0 !== $written ? $written : $this->visibilityInTraitsOf($wrapper, $alias['method'] ?? $name, $method);
+        return 0 !== $written ? $written : $this->visibilityInTraitsOf($wrapper, $alias['trait'] ?? null, $alias['method'] ?? $name, $method, $adaptations['exclusions']);
     }
 
-    private function visibilityInTraitsOf(ClassReflection $wrapper, string $original, ReflectionMethod $reflected): int
+    // the trait that supplies the method is the one the alias names, or else the first that brings the name and that no insteadof excludes, as PHP picks it
+    /**
+     * @param list<Exclusion> $exclusions
+     */
+    private function visibilityInTraitsOf(ClassReflection $wrapper, ?string $named, string $original, ReflectionMethod $reflected, array $exclusions): int
     {
-        $source = array_find($wrapper->getTraits(), static fn (ClassReflection $trait): bool => $trait->getNativeReflection()->hasMethod($original));
+        $source = array_find($wrapper->getTraits(), static fn (ClassReflection $trait): bool => $trait->getNativeReflection()->hasMethod($original)
+            && (null === $named || 0 === strcasecmp(ltrim($named, '\\'), $trait->getName()))
+            && !array_any($exclusions, static fn (array $exclusion): bool => 0 === strcasecmp(ltrim($exclusion['trait'], '\\'), $trait->getName()) && 0 === strcasecmp($exclusion['method'], $original)));
         $public = $source?->getNativeReflection()->getMethod($original)->isPublic() ?? $reflected->isPublic();
 
         return $public ? Modifiers::PUBLIC : Modifiers::PRIVATE;

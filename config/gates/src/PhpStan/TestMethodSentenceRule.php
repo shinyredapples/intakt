@@ -155,15 +155,24 @@ final readonly class TestMethodSentenceRule implements Rule
     private function providersOfRunTests(CollectedDataNode $node, array $compositions): array
     {
         $providers = array_merge(...array_values($node->get(TestProviderCollector::class)));
-        $references = array_filter(
-            array_merge(...array_column($providers, 'references')),
-            static fn (array $reference): bool => ($compositions[strtolower($reference[3])]['methods'][strtolower($reference[4])] ?? null)?->isRunAsTest() ?? $reference[5],
-        );
 
         return [
-            'references' => array_map(static fn (array $reference): array => [$reference[0], $reference[1], $reference[2]], array_values($references)),
-            'runs' => array_merge(...array_column($providers, 'runs')),
+            'references' => $this->runAsTest(array_merge(...array_column($providers, 'references')), $compositions),
+            'runs' => $this->runAsTest(array_merge(...array_column($providers, 'runs')), $compositions),
         ];
+    }
+
+    /**
+     * @param list<array{string, string, string, string, string, bool}>                       $records
+     * @param array<string, array{class: Place, methods: array<string, ComposedTraitMethod>}> $compositions
+     *
+     * @return list<array{string, string, string}>
+     */
+    private function runAsTest(array $records, array $compositions): array
+    {
+        $run = array_filter($records, static fn (array $record): bool => ($compositions[strtolower($record[3])]['methods'][strtolower($record[4])] ?? null)?->isRunAsTest() ?? $record[5]);
+
+        return array_map(static fn (array $record): array => [$record[0], $record[1], $record[2]], array_values($run));
     }
 
     private function isUnderTests(string $file): bool

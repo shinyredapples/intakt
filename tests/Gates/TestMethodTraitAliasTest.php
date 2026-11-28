@@ -683,6 +683,75 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
         self::assertSame('', $this->ruleFindingsIn($sandbox));
     }
 
+    public function testAnAliasOfAWrapperThatIsNotAnalyzedKeepsTheVisibilityOfTheMethodInsteadofSelects(): void
+    {
+        $sandbox = $this->emptySandbox();
+        // because the gate excludes its fixtures folder, a wrapper there stands for an unchanged file a changed-files run leaves out
+        $sandbox->write('tests/Gates/Fixtures/SelectingWrapper.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait SelectingLeft { protected function verify(): void {} }\ntrait SelectingRight { public function verify(): void {} }\ntrait SelectingWrapper { use SelectingLeft, SelectingRight { SelectingRight::verify insteadof SelectingLeft; } }\n");
+        $sandbox->write('tests/SelectingWrapperTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class SelectingWrapperTest extends \PHPUnit\Framework\TestCase
+        {
+            use SelectingWrapper { verify as testGo; }
+        }
+        PHP_WRAP);
+        // because the analysis finds a class it does not analyze only once PHP has loaded it
+        require_once $sandbox->root.'/tests/Gates/Fixtures/SelectingWrapper.php';
+
+        self::assertSame('tests/SelectingWrapperTest.php:7 intakt.testMethodSentence Test method Intakt\Sample\SelectingWrapperTest::testGo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAnAliasOfAWrapperThatIsNotAnalyzedStaysHiddenWhenInsteadofSelectsTheProtectedMethod(): void
+    {
+        $sandbox = $this->emptySandbox();
+        // because the gate excludes its fixtures folder, a wrapper there stands for an unchanged file a changed-files run leaves out
+        $sandbox->write('tests/Gates/Fixtures/ShieldingWrapper.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait ShieldingLeft { public function verify(): void {} }\ntrait ShieldingRight { protected function verify(): void {} }\ntrait ShieldingWrapper { use ShieldingLeft, ShieldingRight { ShieldingRight::verify insteadof ShieldingLeft; } }\n");
+        $sandbox->write('tests/ShieldingWrapperTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class ShieldingWrapperTest extends \PHPUnit\Framework\TestCase
+        {
+            use ShieldingWrapper { verify as testGo; }
+        }
+        PHP_WRAP);
+        // because the analysis finds a class it does not analyze only once PHP has loaded it
+        require_once $sandbox->root.'/tests/Gates/Fixtures/ShieldingWrapper.php';
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAShortPublicProviderAliasIsReportedWhenASubclassThatDoesNotReferenceItRunsIt(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/ProviderAliasTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        trait ProviderAliasRows { public static function rows(): array { return [[1]]; } }
+
+        abstract class ProviderAliasBase extends \PHPUnit\Framework\TestCase
+        {
+            use ProviderAliasRows { rows as private; rows as testData; }
+        }
+
+        final class ProviderAliasConsumerTest extends ProviderAliasBase
+        {
+            #[\PHPUnit\Framework\Attributes\DataProvider('testData')]
+            public function testItAcceptsRows(int $row): void {}
+        }
+
+        final class ProviderAliasNonConsumerTest extends ProviderAliasBase {}
+        PHP_WRAP);
+
+        self::assertStringContainsString('tests/ProviderAliasTest.php:9 intakt.testMethodSentence Test method Intakt\Sample\ProviderAliasBase::testData()', $this->ruleFindingsIn($sandbox));
+    }
+
     public function testAShortTestMethodOfATraitUnderSourceUsedWithoutAliasPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('test-method-src-trait-without-alias');
