@@ -8,7 +8,11 @@ use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\DemoTour;
+use Intakt\Core\Dashboard\Infrastructure\LedgerQueuedRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\LedgerTrends;
+use Intakt\Core\Dashboard\Infrastructure\LiveTrends;
+use Intakt\Core\Dashboard\Infrastructure\PublishedBench;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedJudgedState;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
@@ -19,16 +23,21 @@ use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
+use Intakt\Tests\Core\Dashboard\Infrastructure\PublishedLiveEvents;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\StoredSerializerFactory;
+use Psr\Log\NullLogger;
 use Symfony\Bridge\Twig\Extension\RoutingExtension;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Routing\Generator\UrlGenerator;
 use Symfony\Component\Routing\RequestContext;
 use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
 use Twig\Environment;
+use Twig\Loader\ArrayLoader;
 use Twig\Loader\FilesystemLoader;
 
 // Built on the replay's own ledger and marks, because the caption reads the rows the replay appends.
@@ -48,6 +57,15 @@ final class TourCaptionsOn
     public static function judged(Ledger $ledger, ReplayMarks $marks, RoundUpdates $rounds = new RecordedRoundUpdates()): ReplayedJudgedState
     {
         return new ReplayedJudgedState(self::pages($ledger, $marks), $rounds);
+    }
+
+    // Into its own sink with a stand-in template by default, because most replay tests check the recorded updates alone and the page's partials need the whole application.
+    public static function trends(Ledger $ledger, ReplayMarks $marks, LiveUpdates $updates = new PublishedLiveEvents()): LiveTrends
+    {
+        $payloads = new LedgerPayloads(StoredSerializerFactory::create());
+        $readings = new LedgerTrends($ledger, self::pages($ledger, $marks), new LedgerQueuedRounds(new RoundPayloads($payloads)), new PublishedBench(''), new MockClock());
+
+        return new LiveTrends($readings, new Environment(new ArrayLoader([LiveTrends::TEMPLATE => 'trends'])), $updates, new LockFactory(new InMemoryStore()), new NullLogger());
     }
 
     private static function pages(Ledger $ledger, ReplayMarks $marks): LedgerReviewPages

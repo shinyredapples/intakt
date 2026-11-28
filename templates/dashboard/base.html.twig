@@ -245,15 +245,15 @@
         // Turbo appends a stream to the document element, so only the document sees it.
         document.addEventListener('turbo:before-stream-render', (event) => {
             const replaced = document.getElementById(event.target.getAttribute('target') ?? '');
-            if (event.target.getAttribute('action') === 'replace' && replaced?.id === 'working-now') {
+            if (event.target.getAttribute('action') === 'replace' && ['working-now', 'up-next'].includes(replaced?.id)) {
                 const render = event.detail.render;
-                // The pushed Working now carries every project's cards, so the project choice is put back on them; a focused card is found again by its link, because a card the push moved or rebuilt is a new node and the keyboard would fall back to the page start.
+                // The pushed Working now and the Trends Up next carry every project's rows, so the project choice is put back on them; a focused row is found again by its link, because a row the push moved or rebuilt is a new node and the keyboard would fall back to the page start.
                 event.detail.render = (stream) => {
                     const focusedLink = replaced.contains(document.activeElement) ? document.activeElement.closest('a[href]')?.getAttribute('href') ?? null : null;
                     render(stream);
                     showProject();
                     if (focusedLink !== null) {
-                        [...(document.getElementById('working-now')?.querySelectorAll('a[href]') ?? [])].find((link) => link.getAttribute('href') === focusedLink)?.focus({ preventScroll: true });
+                        [...(document.getElementById(replaced.id)?.querySelectorAll('a[href]') ?? [])].find((link) => link.getAttribute('href') === focusedLink)?.focus({ preventScroll: true });
                     }
                 };
                 return;

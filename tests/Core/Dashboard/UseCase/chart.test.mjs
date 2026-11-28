@@ -140,3 +140,68 @@ test('Escape hides a tip the pointer alone holds while the focus is elsewhere', 
     chart.focusOut();
     assert.equal(chart.tipTarget.hidden, true);
 });
+
+function markOf(left, reading, detail) {
+    return { ...box(left, 1050, 100, 150), isConnected: true, dataset: { chartReadingParam: reading, chartDetailParam: detail } };
+}
+
+function morphed(chart) {
+    chart.tipTarget.hidden = true;
+    chart.tipTarget.querySelector('strong').textContent = '';
+    chart.tipTarget.querySelector('span').textContent = '';
+    chart.restore({ target: chart.element });
+}
+
+test('a pushed morph keeps the tip of a hovered mark, with the value the push gave it', () => {
+    const chart = chartOf(600);
+    const mark = markOf(300, READING.reading, READING.detail);
+    chart.pointerEnter({ currentTarget: mark, params: READING });
+    mark.dataset = { chartReadingParam: '4 P1 findings', chartDetailParam: 'Security reviewer, 3 found by it alone' };
+
+    morphed(chart);
+
+    assert.equal(chart.tipTarget.hidden, false);
+    assert.equal(chart.tipTarget.querySelector('strong').textContent, '4 P1 findings');
+    assert.equal(chart.tipTarget.querySelector('span').textContent, 'Security reviewer, 3 found by it alone');
+});
+
+test('a pushed morph keeps the tip of a focused mark', () => {
+    const chart = chartOf(600);
+    chart.focusIn({ currentTarget: markOf(300, READING.reading, READING.detail), params: READING });
+
+    morphed(chart);
+
+    assert.equal(chart.tipTarget.hidden, false);
+    assert.equal(chart.tipTarget.querySelector('strong').textContent, '3 P1 findings');
+});
+
+test('a pushed morph that removed the held mark leaves the tip hidden', () => {
+    const chart = chartOf(600);
+    const mark = markOf(300, READING.reading, READING.detail);
+    chart.pointerEnter({ currentTarget: mark, params: READING });
+    mark.isConnected = false;
+
+    morphed(chart);
+
+    assert.equal(chart.tipTarget.hidden, true);
+});
+
+test('a pushed morph keeps a tip dismissed with Escape hidden', () => {
+    const chart = chartOf(600);
+    chart.pointerEnter({ currentTarget: markOf(300, READING.reading, READING.detail), params: READING });
+    chart.dismiss();
+
+    morphed(chart);
+
+    assert.equal(chart.tipTarget.hidden, true);
+});
+
+test('a morph of an element inside the chart does not show the tip on its own', () => {
+    const chart = chartOf(600);
+    chart.pointerEnter({ currentTarget: markOf(300, READING.reading, READING.detail), params: READING });
+    chart.tipTarget.hidden = true;
+
+    chart.restore({ target: chart.tipTarget });
+
+    assert.equal(chart.tipTarget.hidden, true);
+});

@@ -150,7 +150,7 @@ final class ReplayedReviewPageTest extends DashboardPageTestCase
         $rounds = new MercureRoundUpdates($this->updates, $twig, $summaries, $pages, new LockFactory(new InMemoryStore()), new NullLogger());
         $marks = new ReplayMarks(new MarkAnsweringQueries(ReplayMark::Replay));
 
-        return new ReplaysRecording($this->ledger, $this->updates, new MockClock('2026-11-22T09:00:00+00:00'), new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, '')), new ReplayedJudgedState($pages, $rounds));
+        return new ReplaysRecording($this->ledger, $this->updates, new MockClock('2026-11-22T09:00:00+00:00'), new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, '')), new ReplayedJudgedState($pages, $rounds), TourCaptionsOn::trends($this->ledger, $marks));
     }
 
     // The main view and the Full record as one document, because a listener holds both and each stream targets the parts of one of them.

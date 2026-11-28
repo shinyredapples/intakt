@@ -116,12 +116,11 @@ class FakeColumn extends FakeElement {
     }
 }
 
-// The board's Working now as the server renders it, so also as a push brings it: one card link per change in progress, each with its project, none hidden.
+// The board's Working now, or the Trends Up next, as the server renders it, so also as a push brings it: one row link per change in progress, each with its project, none hidden.
 class FakeWorkingNow extends FakeElement {
-    id = 'working-now';
-
-    constructor(page, projects) {
+    constructor(page, projects, id = 'working-now') {
         super(page);
+        this.id = id;
         this.cards = projects.map((project, index) => {
             const card = Object.assign(new FakeElement(page), { dataset: { project }, hidden: false });
             card.setAttribute('href', `/reviews/round-${index + 1}`);
@@ -247,7 +246,8 @@ export class Browser {
         const trail = this.projects.includes(linkedProject) ? Object.assign(new FakeElement(page), { dataset: { projectTrail: linkedProject } }) : null;
         const projectsItem = new FakeElement(page);
         const workingNow = new FakeWorkingNow(page, ['alpha', 'beta']);
-        const shownElements = { body, '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet, '[data-project-trail]': trail, '#col-in-review': new FakeColumn(page, 'col-in-review'), '#col-done': new FakeColumn(page, 'col-done', true), '#working-now': workingNow };
+        const upNext = new FakeWorkingNow(page, [], 'up-next');
+        const shownElements = { body, '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet, '[data-project-trail]': trail, '#col-in-review': new FakeColumn(page, 'col-in-review'), '#col-done': new FakeColumn(page, 'col-done', true), '#working-now': workingNow, '#up-next': upNext };
         if (trail) {
             projectsItem.setAttribute('aria-current', 'page');
             trail.remove = () => {
@@ -262,6 +262,22 @@ export class Browser {
         show(shownElements, allShown);
         context.location.href = this.address;
         runInNewContext(shellScript, context);
+        const pushRows = (id, projects) => {
+            const stream = new FakeElement(page);
+            stream.setAttribute('action', 'replace');
+            stream.setAttribute('target', id);
+            const event = {
+                target: stream,
+                detail: {
+                    render: () => {
+                        shownElements[`#${id}`] = new FakeWorkingNow(page, projects, id);
+                        show(shownElements, { ...allShown, '[data-project]': [...rows, ...shownElements['#working-now'].cards, ...shownElements['#up-next'].cards] });
+                    },
+                },
+            };
+            (documentListeners.get('turbo:before-stream-render') ?? []).forEach((listener) => listener(event));
+            event.detail.render(stream);
+        };
 
         return {
             theme: () => root.dataset.theme,
@@ -352,22 +368,11 @@ export class Browser {
             workingNow: () => shownElements['#working-now'],
             shownWorkingNow: () => shownElements['#working-now'].cards.filter((card) => !card.hidden).map((card) => card.dataset.project),
             // What Turbo does with the board's replace stream for Working now: put the server's section, every project's card shown, where the shown one was.
-            pushWorkingNow: (projects = ['alpha', 'beta']) => {
-                const stream = new FakeElement(page);
-                stream.setAttribute('action', 'replace');
-                stream.setAttribute('target', 'working-now');
-                const event = {
-                    target: stream,
-                    detail: {
-                        render: () => {
-                            shownElements['#working-now'] = new FakeWorkingNow(page, projects);
-                            show(shownElements, { ...allShown, '[data-project]': [...rows, ...shownElements['#working-now'].cards] });
-                        },
-                    },
-                };
-                (documentListeners.get('turbo:before-stream-render') ?? []).forEach((listener) => listener(event));
-                event.detail.render(stream);
-            },
+            pushWorkingNow: (projects = ['alpha', 'beta']) => pushRows('working-now', projects),
+            upNext: () => shownElements['#up-next'],
+            shownUpNext: () => shownElements['#up-next'].cards.filter((row) => !row.hidden).map((row) => row.dataset.project),
+            // The same for the Trends Up next, which LiveTrends pushes on the shell topic.
+            pushUpNext: (projects = ['alpha', 'beta']) => pushRows('up-next', projects),
             resize: (phone) => {
                 phoneWidth.matches = phone;
                 phoneWidth.dispatch('change', phoneWidth);

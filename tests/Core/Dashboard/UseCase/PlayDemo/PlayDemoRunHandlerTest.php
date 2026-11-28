@@ -331,7 +331,7 @@ final class PlayDemoRunHandlerTest extends TestCase
     {
         $marks = new ReplayMarks($this->marks);
         $captions = TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, $locks ?? new LockFactory(new InMemoryStore()), $marks, $captions, TourCaptionsOn::judged($this->ledger, $marks));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, $locks ?? new LockFactory(new InMemoryStore()), $marks, $captions, TourCaptionsOn::judged($this->ledger, $marks), TourCaptionsOn::trends($this->ledger, $marks));
 
         return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $marks, $this->marks, $captions, $recording, $composeService);
     }

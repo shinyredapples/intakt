@@ -41,7 +41,17 @@ At the bottom of Trends, **Up next** lists the review rounds the board shows und
 - **In progress:** rounds whose reviewers have started, with the reviewers that did.
 - **Waiting to start:** rounds no reviewer has picked up yet. After them come pull requests the watcher queued that have not started yet, marked "Queued, not started yet".
 
-Click a round to open its review page. A queued pull request has no link until its round starts, because its review page does not exist before that. When nothing is going on, Up next says "Nothing running or queued.". The list shows the moment you opened the page: reload it to see newer rounds.
+Click a round to open its review page. A queued pull request has no link until its round starts, because its review page does not exist before that. When nothing is going on, Up next says "Nothing running or queued.".
+
+## Trends keeps itself current
+
+Leave Trends open while a review runs. You do not need to reload it:
+
+1. A round that opens, or a reviewer that starts, moves it in **Up next**.
+2. When the owl decides a round, the tiles and the charts count it. The headline shows the published bench run, so it stays as it is.
+3. While the demo plays back, the tiles, the charts and Up next move with each step of it.
+
+With the demo left out, the page keeps leaving it out. Without live updates the page stays as you opened it: reload it to see newer rounds.
 
 ## History: what changed and who changed it
 

@@ -714,6 +714,26 @@ test('a card focused in Working now keeps focus when Working now is pushed', () 
     assert.equal(page.workingNow().cards.includes(page.focused()), true);
 });
 
+test('a pushed Up next shows only the chosen project', () => {
+    const page = new Browser('light').open();
+    page.chooseProject('alpha');
+
+    page.pushUpNext(['alpha', 'beta', 'beta']);
+
+    assert.deepEqual(page.shownUpNext(), ['alpha']);
+});
+
+test('a row focused in Up next keeps focus when Up next is pushed', () => {
+    const page = new Browser('light').open();
+    page.pushUpNext();
+    page.upNext().cards[1].focus();
+
+    page.pushUpNext();
+
+    assert.equal(page.focusedLink(), '/reviews/round-2');
+    assert.equal(page.upNext().cards.includes(page.focused()), true);
+});
+
 test('a pushed Working now leaves focus alone when it was outside the section', () => {
     const page = new Browser('light').open();
     page.railToggle.focus();

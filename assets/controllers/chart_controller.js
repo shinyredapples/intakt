@@ -40,6 +40,28 @@ export default class extends Controller {
         this.tipTarget.hidden = true;
     }
 
+    // After a pushed morph, which puts the tip back to hidden and empty while a hovered or focused mark gets no new event; the mark's value is read again, because the push may have changed it. Only the chart's own event counts, since the morph reports every element it touched.
+    restore({ target }) {
+        if (target !== this.element) {
+            return;
+        }
+
+        this.pointed = this.stillHeld(this.pointed);
+        this.focused = this.stillHeld(this.focused);
+        this.settle();
+    }
+
+    // Dropped when the morph removed the mark, as when its bar went away.
+    stillHeld(held) {
+        if (null === held || !held.mark.isConnected) {
+            return null;
+        }
+
+        const { chartReadingParam: reading, chartDetailParam: detail } = held.mark.dataset;
+
+        return { mark: held.mark, params: { reading, detail } };
+    }
+
     // The pointer is read first when both hold a mark, because the tip then follows what the eye is on.
     settle() {
         const held = this.pointed ?? this.focused;
