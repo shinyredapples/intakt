@@ -166,7 +166,7 @@ final readonly class BuildTask
             $question = $this->questionIn($result);
 
             if ($question instanceof BuildQuestion) {
-                return $this->park($run, $task, $question);
+                return $this->park($run, $task, $result instanceof BuildJobOutcome ? $result : $question);
             }
 
             $ended = $this->endOf($step, $result);
@@ -307,12 +307,20 @@ final readonly class BuildTask
     }
 
     // The run ends at the build job without recording its step, because park() records it as asked in the transaction that stores the question.
-    private function park(BuildRun $run, ListedIssue $task, BuildQuestion $question): BuildTaskOutcome
+    private function park(BuildRun $run, ListedIssue $task, BuildJobOutcome|BuildQuestion $asked): BuildTaskOutcome
     {
+        $question = $asked instanceof BuildJobOutcome ? $asked->question : $asked;
+        $stopCause = $asked instanceof BuildJobOutcome ? $asked->stopCause : null;
+
+        // Never otherwise, because park() is reached only with an accepted question.
+        if (!$question instanceof BuildQuestion) {
+            throw new LogicException('a task is parked only with a question');
+        }
+
         try {
-            $this->parkedTasks->park($run, $question);
+            $this->parkedTasks->park($run, $question, $stopCause);
         } catch (TaskNotParked $notParked) {
-            $this->record($run, EndedStep::of(BuildStep::BuildJob, $notParked->getMessage()));
+            $this->record($run, EndedStep::of(BuildStep::BuildJob, $notParked->getMessage(), $stopCause));
 
             return new BuildTaskOutcome(BuildStep::BuildJob, $notParked->getMessage(), $task);
         }
