@@ -186,14 +186,30 @@ final class CeilingStartGuardTest extends TestCase
         self::assertSame(StartDecision::Start, $this->decide(1));
     }
 
-    public function testAShortWindowWithoutResetTimeHeldOnlyByTheWeeklyPaceIsFreeAtTheWeeklyReset(): void
+    // The pace needs 50 * 40 / (90 * 90) of the week elapsed, counting the current five hours: 149333.3 s against 104400 s now.
+    public function testAShortWindowWithoutResetTimeHeldOnlyByTheWeeklyPaceIsFreeOnceThePaceCatchesUp(): void
     {
         $this->readWindow(UsageWindow::Weekly, 40.0, $this->weekResets);
         $this->readWindow(UsageWindow::FiveHour, 50.0, null);
 
         $room = $this->guard()->roomOf($this->account());
 
-        self::assertSame([UsageWindow::FiveHour, $this->weekResets->getTimestamp()], [$room->atCeiling, $room->resetsAt?->getTimestamp()]);
+        self::assertSame([UsageWindow::FiveHour, 44934], [$room->atCeiling, $room->resetsAt?->getTimestamp() - $this->clock->now()->getTimestamp()]);
+    }
+
+    // At 81% of the week with 47 h 10 min left, the pace lifts the short ceiling above 75% after 600 s, before the short window resets after 1200 s.
+    public function testARisingWeeklyPaceFreesAShortWindowBeforeEitherReset(): void
+    {
+        $this->readWindow(UsageWindow::Weekly, 81.0, $this->clock->now()->modify('+47 hours 10 minutes'));
+        $this->readWindow(UsageWindow::FiveHour, 75.0, $this->clock->now()->modify('+20 minutes'));
+        $room = $this->guard()->roomOf($this->account());
+        $wait = $room->resetsAt?->getTimestamp() - $this->clock->now()->getTimestamp();
+
+        $this->clock->sleep(600);
+        $atTheBoundary = $this->guard()->roomOf($this->account())->atCeiling;
+        $this->clock->sleep(1);
+
+        self::assertSame([UsageWindow::FiveHour, 601, UsageWindow::FiveHour, null], [$room->atCeiling, $wait, $atTheBoundary, $this->guard()->roomOf($this->account())->atCeiling]);
     }
 
     public function testAShortWindowWithoutResetTimeAtItsOwnCeilingIsFreeAtAnUnknownTime(): void
