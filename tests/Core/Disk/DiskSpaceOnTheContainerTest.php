@@ -9,6 +9,7 @@ use Intakt\Core\Disk\Contract\DiskHold;
 use Intakt\Core\Disk\Contract\DiskServices;
 use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Disk\Contract\NearestFolder;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Disk\Infrastructure\DiskConfiguration;
 use Intakt\Core\Disk\Infrastructure\FlooredDiskSpace;
 use Intakt\Core\Git\Domain\Mirrors;
@@ -17,7 +18,12 @@ use Intakt\Core\Git\UseCase\MakeBuildClone\BuildCloneNotMade;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
 use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
+use Intakt\Core\Watcher\Domain\PendingHead;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\FailedHeads;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\PendingHeads;
+use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -34,6 +40,10 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(MirrorNotUpdated::class)]
 #[UsesClass(BuildCloneNotMade::class)]
 #[UsesClass(NearestFolder::class)]
+#[UsesClass(FailedHeads::class)]
+#[UsesClass(PendingHeads::class)]
+#[UsesClass(PendingHead::class)]
+#[UsesClass(NewWorkHeld::class)]
 final class DiskSpaceOnTheContainerTest extends KernelTestCase
 {
     private const int BYTES = DiskConfiguration::DEFAULT_MIN_FREE_BYTES;
@@ -133,6 +143,39 @@ final class DiskSpaceOnTheContainerTest extends KernelTestCase
         ], $steps);
     }
 
+    public function testTheWiredWatcherCountsNoFailureForAHeadHeldAtEachFloor(): void
+    {
+        EmptyDatabase::rowsIn(self::getContainer());
+        $head = RecordedForge::change('7', 'a', '2026-11-04T09:00:00Z');
+        $pending = self::getContainer()->get(PendingHeads::class);
+        $pending->enqueue('alpha', [$head]);
+        $remote = new TemporaryRepository();
+        $remote->commitFile('a.txt', 'one');
+        self::getContainer()->set(Mirrors::class, new Mirrors($this->scratch.'/mirrors'));
+        $reader = self::getContainer()->get(ControlledFreeSpaceReader::class);
+        $mirrors = self::getContainer()->get(UpdateMirror::class);
+        $failed = self::getContainer()->get(FailedHeads::class);
+        new Filesystem()->mkdir($this->scratch.'/mirrors');
+
+        $failures = [];
+        $failuresOfTheHeldHead = static function (MirrorNotUpdated $held) use ($failed, $pending, $head): int {
+            $failed->backOff('alpha', $head, $held);
+
+            return $pending->failuresOf('alpha', $head);
+        };
+
+        try {
+            foreach (self::READINGS as $case => [$bytes, $inodes]) {
+                $reader->report($bytes, $inodes);
+                $failures[$case] = $this->failuresAfter(static fn (): string => $mirrors->update('alpha', $remote->path), $failuresOfTheHeldHead);
+            }
+        } finally {
+            $remote->remove();
+        }
+
+        self::assertSame(['below the byte floor' => 'held, 0 failures', 'below the inode floor' => 'held, 0 failures', 'at both floors' => 'went ahead', 'no inode count' => 'went ahead'], $failures);
+    }
+
     protected function setUp(): void
     {
         $this->scratch = sys_get_temp_dir().'/intakt-disk-floors-'.bin2hex(random_bytes(6));
@@ -150,6 +193,20 @@ final class DiskSpaceOnTheContainerTest extends KernelTestCase
             $step();
         } catch (MirrorNotUpdated|BuildCloneNotMade $held) {
             return 'held: '.$held->getMessage();
+        }
+
+        return 'went ahead';
+    }
+
+    /**
+     * @param callable(MirrorNotUpdated): int $failuresOfTheHeldHead
+     */
+    private function failuresAfter(callable $step, callable $failuresOfTheHeldHead): string
+    {
+        try {
+            $step();
+        } catch (MirrorNotUpdated $held) {
+            return sprintf('held, %d failures', $failuresOfTheHeldHead($held));
         }
 
         return 'went ahead';

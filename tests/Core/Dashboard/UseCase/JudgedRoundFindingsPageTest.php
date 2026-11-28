@@ -90,6 +90,38 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         self::assertSame('P1F1 the amount is greater than 100, not why', $this->browser->request('GET', '/reviews/round-2')->filter('.state-block a.sb-finding')->text());
     }
 
+    public function testACardOfAFindingWithATitleAndKindShowsTheKindInWordsBeforeTheTitle(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixWithTitleAndKind('round-1', 'Total off by one', 'logic');
+
+        $title = $this->browser->request('GET', '/reviews/round-1/record')->filter('#round-round-1 .finding-card .fc-title');
+
+        self::assertSame(['F1 Logic: Total off by one', 1], [$title->text(), $title->filter('.kind-sym svg')->count()]);
+    }
+
+    public function testTheNowBlockShowsAFindingsKindInWordsAndItsTitleInsteadOfItsText(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixWithTitleAndKind('round-1', 'Total off by one', 'logic');
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+
+        $link = $this->browser->request('GET', '/reviews/round-2')->filter('.state-block a.sb-finding');
+
+        self::assertSame(['P1F1 Logic: Total off by one', 1], [$link->text(), $link->filter('.kind-sym svg')->count()]);
+    }
+
+    public function testTheNowBlockShowsTheWholeTextAndNoSymbolForAFindingRecordedWithoutATitleOrKind(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'Take the lock first. Then write.');
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+
+        $link = $this->browser->request('GET', '/reviews/round-2')->filter('.state-block a.sb-finding');
+
+        self::assertSame(['P1F1 Take the lock first. Then write.', 0], [$link->text(), $link->filter('.kind-sym')->count()]);
+    }
+
     #[TestWith(['Copy *.php…'])]
     #[TestWith(['Match **kwargs…'])]
     #[TestWith(['Use _private and more…'])]

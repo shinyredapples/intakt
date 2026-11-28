@@ -234,7 +234,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $verdict = $this->run->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], ScriptedReviewRun::streamed(...str_split($answer, 40)));
 
         self::assertEquals([ReadAnswer::of($verdict)], $this->run->updates->answers);
-        self::assertSame([$this->run->seen('tool', 'read src/Cart.php'), $this->run->seen('answer', 'changes [P1 src/Cart.php:12 The discount ends one day early.]')], $this->run->updates->seen);
+        self::assertSame([$this->run->seen('tool', 'read src/Cart.php'), $this->run->seen('answer', 'changes [P1 src/Cart.php:12 A cart loses its discount]')], $this->run->updates->seen);
         self::assertStringNotContainsString('"verdict"', implode("\n", $this->run->updates->seen));
     }
 

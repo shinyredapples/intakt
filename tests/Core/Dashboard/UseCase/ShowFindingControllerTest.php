@@ -37,6 +37,25 @@ final class ShowFindingControllerTest extends DashboardPageTestCase
         );
     }
 
+    public function testAFindingWithATitleAndKindShowsThemWithTheKindInWords(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeToFixWithTitleAndKind('round-1', 'Total off by one', 'logic');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/findings/F1');
+
+        self::assertSame('Logic: Total off by one', $crawler->filter('.finding-head h1')->text());
+    }
+
+    public function testAFindingRecordedWithoutAKindShowsNoSymbol(): void
+    {
+        $this->givenAFindingToFix();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/findings/F1');
+
+        self::assertCount(0, $crawler->filter('.finding-head .kind-sym'));
+    }
+
     public function testAFindingWithAFileAndLineDrawsTheFileAndMarksTheLine(): void
     {
         $this->givenAFindingToFix();
