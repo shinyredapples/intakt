@@ -40,8 +40,10 @@ final class HeldForSpaceTest extends TestCase
     {
         $held = $this->heldFor(new DiskHold(DiskFloor::Inodes, '/data', 5_000, 100_000))->now();
 
-        self::assertSame('New work is paused because the disk is low on free file slots (inodes).', $held['title'] ?? null);
-        self::assertSame('The disk of /data has 5,000 free file slots, below the floor of 100,000 (disk.min_free_inodes). Work already running goes on, and new work starts again by itself once space is back.', $held['text'] ?? null);
+        self::assertSame(
+            ['New work is paused because the disk is low on free file slots (inodes).', 'The disk of /data has 5,000 free file slots, below the floor of 100,000 (disk.min_free_inodes). Work already running goes on, and new work starts again by itself once space is back.'],
+            [$held['title'] ?? null, $held['text'] ?? null],
+        );
     }
 
     public function testAReadingOneByteBelowItsFloorIsRoundedDownSoItNeverReadsAsTheFloor(): void
