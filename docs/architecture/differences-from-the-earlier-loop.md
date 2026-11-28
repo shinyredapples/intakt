@@ -10,6 +10,12 @@ Intakt is to replace that loop for the owner's own use ([plan](../plan.md#replac
 - **Intakt:** `Waits for` lines are read from the task text only, and only when the task was written and last edited by an account with write access; comments are never read for them. A line may sit in a blockquote or a list and carry emphasis around the words (`> - **Waits for:** #9`); a note after the `#n` list may hold no digit of any script, a line whose list cannot be read (`Waits for #9 then 10`) holds the task as an unreadable wait, and a line inside an `<!-- external -->` block counts for nothing. The rules are listed in [Work intake](work-intake.md#wait-lines-domainissuereferences). Built in `Plugin/GitHubWorkSource` (`IssueReferences`, `IntakeRules`).
 - **Why:** the task text is the one place a wait is written and kept, so what a task waits for is read from one place and changes only when the task is edited.
 
+## An umbrella's parts from the ledger
+
+- **The loop:** an issue labeled `umbrella` closes once every issue its trusted `Waits for` notes name is closed, and only when the loop itself applied that label (its `test_unblock.py`).
+- **Intakt:** the parts come from the split's `task_split` record in the ledger, never from a note, a comment or a label; an umbrella closes once a complete listing shows it open and none of those parts open, each part filed in the project's current repository ([Work intake](work-intake.md#closing-an-umbrella)).
+- **Why:** the record is written by the split itself, so no text anyone can edit decides which issues are the parts.
+
 ## Finish before start in the build lane
 
 - **The loop:** an `urgent` task goes before work on an open pull request (its `test_priority.py`, [Parity](parity.md)), and a pull request whose task lost `ready` left the queue: on 2026-11-13 three pull requests, one of them approved, were orphaned this way.

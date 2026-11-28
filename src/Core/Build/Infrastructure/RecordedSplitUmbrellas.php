@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\Infrastructure;
 
+use Intakt\Core\Build\Contract\FinishedSplit;
+use Intakt\Core\Build\Contract\FinishedSplits;
 use Intakt\Core\Build\Contract\SplitUmbrellas;
 use Intakt\Core\Build\Contract\UmbrellaTasks;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -24,15 +26,67 @@ final readonly class RecordedSplitUmbrellas implements SplitUmbrellas
     {
         $numbers = [];
 
-        foreach ($this->ledger->readOfKindsMentioning(new Mentions(json_encode($project, JSON_THROW_ON_ERROR)), LedgerEventKind::TaskSplitPlanned) as $recorded) {
-            $fields = json_decode($recorded->event->payload);
-            $task = $fields instanceof stdClass && $project === ($fields->project ?? null) && is_string($fields->task ?? null) ? $fields->task : '';
+        foreach ($this->recordsOf($project, LedgerEventKind::TaskSplitPlanned) as $fields) {
+            $numbers[] = $this->taskIn($fields);
+        }
 
-            if (1 === preg_match('/^[1-9][0-9]*$/D', $task)) {
-                $numbers[] = (int) $task;
+        return new UmbrellaTasks(...array_filter($numbers, static fn (int $number): bool => 0 !== $number));
+    }
+
+    // A record whose parts are not a JSON list of issue numbers names no split, because closing an umbrella on parts nobody can read would close it while a part is open.
+    public function finishedOf(string $project): FinishedSplits
+    {
+        $splits = [];
+
+        foreach ($this->recordsOf($project, LedgerEventKind::TaskSplit) as $fields) {
+            $umbrella = $this->taskIn($fields);
+            $parts = $this->partsIn($fields, $umbrella);
+            if (0 !== $umbrella && [] !== $parts) {
+                $splits[] = new FinishedSplit($umbrella, ...$parts);
             }
         }
 
-        return new UmbrellaTasks(...$numbers);
+        return new FinishedSplits(...$splits);
+    }
+
+    /**
+     * @return list<stdClass>
+     */
+    private function recordsOf(string $project, LedgerEventKind $kind): array
+    {
+        $records = [];
+
+        foreach ($this->ledger->readOfKindsMentioning(new Mentions(json_encode($project, JSON_THROW_ON_ERROR)), $kind) as $recorded) {
+            $fields = json_decode($recorded->event->payload);
+            if ($fields instanceof stdClass && $project === ($fields->project ?? null)) {
+                $records[] = $fields;
+            }
+        }
+
+        return $records;
+    }
+
+    // Zero for anything but a positive number written as text, because no issue has number zero, so the caller drops such a record.
+    private function taskIn(stdClass $fields): int
+    {
+        $task = $fields->task ?? null;
+
+        return is_string($task) && 1 === preg_match('/^[1-9][0-9]*$/D', $task) ? (int) $task : 0;
+    }
+
+    // Empty unless every part is an issue number other than the umbrella's; a JSON object decodes to no array, so only a list passes.
+    /**
+     * @return list<int>
+     */
+    private function partsIn(stdClass $fields, int $umbrella): array
+    {
+        $parts = $fields->parts ?? null;
+        if (!is_array($parts)) {
+            return [];
+        }
+
+        $numbers = array_values(array_filter($parts, static fn (mixed $part): bool => is_int($part) && $part > 0 && $part !== $umbrella));
+
+        return count($numbers) === count($parts) ? $numbers : [];
     }
 }

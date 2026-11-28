@@ -43,6 +43,7 @@ You run `intakt:build:size` on a task, and the answer is `split`: the task is to
 2. The task stays open as their umbrella, with one comment naming the parts. It is never built itself: `intakt:queue:show` lists it as held, and the parts as tasks. Editing it later does not size it again.
 3. If the command stops halfway, run it again. It finishes from the plan and files no part twice.
 4. A task is split only once, and a part is never split again ([details](../reference/user-manual.md#sizing-a-new-task)).
+5. Once the last part is closed, the umbrella closes too, with a comment naming the parts. Until Intakt picks tasks on its own, `intakt:umbrellas:close <project>` does this step ([details](../reference/user-manual.md#closing-finished-umbrellas)).
 
 ## Which tier a build runs on
 

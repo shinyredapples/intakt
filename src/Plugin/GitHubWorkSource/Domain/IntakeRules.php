@@ -60,7 +60,7 @@ final readonly class IntakeRules
 
         $openPullRequests = array_map(static fn (QueuedIssue $item): int => $item->number(), array_values(array_filter($items, static fn (QueuedIssue $item): bool => $item->isPullRequest())));
 
-        return new IntakePlan($ready, $held, $pullRequests, $dependsOn, $openPullRequests, $closingPullRequests);
+        return new IntakePlan($ready, $held, $pullRequests, $dependsOn, $openPullRequests, $closingPullRequests, array_keys($open));
     }
 
     private function isCandidate(QueuedIssue $item): bool

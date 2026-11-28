@@ -13,7 +13,12 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Build\Contract\FinishedSplit;
+use Intakt\Core\Build\Contract\FinishedSplits;
+use Intakt\Core\Build\Contract\UmbrellaTasks;
 use Intakt\Core\Build\Infrastructure\RecordedSplitUmbrellas;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -22,8 +27,10 @@ use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
+use Intakt\Plugin\GitHubForge\Contract\KeyedComment;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
+use Intakt\Plugin\GitHubForge\Contract\TaskParts;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueHistories;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
@@ -46,6 +53,7 @@ use Intakt\Plugin\GitHubWorkSource\Infrastructure\CompleteListing;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\GitHubWorkSource;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStore;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\PullRequestsOfTasks;
+use Intakt\Plugin\GitHubWorkSource\Infrastructure\UmbrellaClosing;
 use Intakt\Plugin\WorkSource\Contract\HeldTask;
 use Intakt\Plugin\WorkSource\Contract\NothingPicked;
 use Intakt\Plugin\WorkSource\Contract\Task;
@@ -92,12 +100,20 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[UsesClass(WorkQueue::class)]
 #[UsesClass(Task::class)]
 #[UsesClass(HeldTask::class)]
+#[UsesClass(UmbrellaClosing::class)]
+#[UsesClass(RecordedSplitUmbrellas::class)]
+#[UsesClass(UmbrellaTasks::class)]
+#[UsesClass(FinishedSplit::class)]
+#[UsesClass(FinishedSplits::class)]
+#[UsesClass(KeyedComment::class)]
 final class GitHubWorkSourceTest extends KernelTestCase
 {
     private IntakeStore $store;
     private RecordedIssueReads $reads;
     private RecordedPullRequestBranches $branches;
     private BufferingLogger $logger;
+    private InMemoryLedger $ledger;
+    private RecordedTaskCloses $closes;
     private string $editor = 'ana';
     /** @var array<int, string> */
     private array $editorOf = [];
@@ -133,6 +149,30 @@ final class GitHubWorkSourceTest extends KernelTestCase
         self::assertSame(0, $this->reads->listings);
         self::assertSame([], $this->historiesRead);
         self::assertSame([], $this->asked);
+    }
+
+    public function testAnUmbrellaWhosePartsAreAllClosedIsClosedOnThePickTickAndTheNextTaskIsPicked(): void
+    {
+        $this->finishedSplit(7, 201, 202);
+        $this->reads->lists([Issues::task(7), Issues::task(30)]);
+
+        $pick = $this->source()->nextWork('alpha', WorkerState::Free);
+
+        self::assertEquals(new Task(30, 'Task 30', null), $pick->task);
+        self::assertSame([7], array_column($this->closes->closed, 'number'));
+        self::assertSame('All parts are closed (#201, #202), so this umbrella is closed.', $this->closes->closed[0]['comment']->body);
+    }
+
+    public function testNoUmbrellaIsClosedWhenTheListingCameBackShort(): void
+    {
+        $this->finishedSplit(7, 201, 202);
+        $this->reads->lists([Issues::task(7)]);
+        $this->historyFailure = new ForgeReadFailed('GitHub answered 502 to a read of the history.');
+
+        $pick = $this->source()->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(NothingPicked::ListingIncomplete, $pick->nothing);
+        self::assertSame([], $this->closes->closed);
     }
 
     public function testTheTaskThatSortsFirstIsPickedAndIsAReworkWhenATrustedPullRequestClosesIt(): void
@@ -971,6 +1011,8 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $this->reads = new RecordedIssueReads();
         $this->branches = new RecordedPullRequestBranches($this->reads);
         $this->logger = new BufferingLogger();
+        $this->ledger = new InMemoryLedger();
+        $this->closes = new RecordedTaskCloses();
     }
 
     protected function tearDown(): void
@@ -1090,8 +1132,18 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
             return in_array($account, $this->writers, true);
         });
-        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new EligibilityLabels(new ProjectEligibilityLabel('alpha', $this->eligibilityLabel)), new IssueReferences(), $this->logger, new RecordedSplitUmbrellas(new InMemoryLedger()));
+        $umbrellas = new RecordedSplitUmbrellas($this->ledger);
+        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new EligibilityLabels(new ProjectEligibilityLabel('alpha', $this->eligibilityLabel)), new IssueReferences(), $this->logger, $umbrellas);
+        $parts = self::createStub(TaskParts::class);
+        $parts->method('isFiledPart')->willReturn(true);
 
-        return new GitHubWorkSource($listing, $histories, $accounts, new IssueReferences(), $this->store, new PullRequestsOfTasks($this->branches, $histories, $accounts, new IssueReferences()), $this->logger);
+        return new GitHubWorkSource($listing, $histories, $accounts, new IssueReferences(), $this->store, new PullRequestsOfTasks($this->branches, $histories, $accounts, new IssueReferences()), $this->logger, new UmbrellaClosing($umbrellas, $parts, $this->closes, $this->logger));
+    }
+
+    private function finishedSplit(int $umbrella, int ...$parts): void
+    {
+        $payload = json_encode(['project' => 'alpha', 'task' => (string) $umbrella, 'run' => 'r1', 'parts' => $parts], JSON_THROW_ON_ERROR);
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplitPlanned, $payload, 'split-'.$umbrella));
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplit, $payload, 'split-'.$umbrella));
     }
 }

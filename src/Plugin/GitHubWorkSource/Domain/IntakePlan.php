@@ -14,6 +14,7 @@ final readonly class IntakePlan
      * @param array<int, list<int>> $dependsOn
      * @param list<int>             $openPullRequests
      * @param array<int, list<int>> $closingPullRequests
+     * @param list<int>             $open
      */
     public function __construct(
         public array $ready,
@@ -22,6 +23,13 @@ final readonly class IntakePlan
         public array $dependsOn,
         public array $openPullRequests,
         public array $closingPullRequests,
+        public array $open,
     ) {
+    }
+
+    // A number the complete listing does not show open counts as closed, because only a complete listing makes a plan.
+    public function isOpen(int $number): bool
+    {
+        return in_array($number, $this->open, true);
     }
 }
