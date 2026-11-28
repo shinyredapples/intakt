@@ -251,6 +251,32 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertStringEndsWith('"step":"build_job","outcome":"failed","failure":"'.BuildVerdict::NoCommits->reason().'","stop_cause":"'.$cause->value.'"}', $payload);
     }
 
+    #[TestWith([false, 'asked'])]
+    #[TestWith([true, 'failed'])]
+    public function testAStoppedBuildJobThatAsksAQuestionKeepsItsStopCauseInTheBuildJobLedgerRow(bool $refuseParking, string $expected): void
+    {
+        if ($refuseParking) {
+            $this->connection()->executeStatement("CREATE TRIGGER refuse_park BEFORE INSERT ON build_parked_task BEGIN SELECT RAISE(ABORT, 'refused'); END");
+        }
+
+        $stopped = new BuildJob('alpha', $this->folder.'/clone', 'feat/task', new BuildBrief('x', new Decisions(), null), Tier::Standard, 'intakt-job-alpha:1');
+        $scripted = new ScriptedJobRunner($this->folder.'/output');
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($scripted, $stopped): JobResult {
+            $this->stops->record($stopped, BuildStopCause::NoProgress);
+
+            return $scripted->run($spec);
+        });
+
+        (void) $this->buildTask(runner: $runner)->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
+
+        $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
+        self::assertIsString($payload);
+        $row = json_decode($payload, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($row);
+        self::assertSame(['build_job', $expected, 'no_progress'], [$row['step'], $row['outcome'], $row['stop_cause']]);
+    }
+
     protected function setUp(): void
     {
         $this->stops = new RecordedBuildStops();
