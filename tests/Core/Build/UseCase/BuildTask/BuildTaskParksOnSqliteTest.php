@@ -46,6 +46,7 @@ use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobEndFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
@@ -57,6 +58,7 @@ use Intakt\Core\HandBack\Contract\HandBackChecks;
 use Intakt\Core\HandBack\Contract\PullRequestTextRound;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
+use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
@@ -116,6 +118,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
 #[UsesClass(RecordedBuildStops::class)]
+#[UsesClass(BuildJobEndFailed::class)]
 #[UsesClass(BuildLimits::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
@@ -252,6 +255,24 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
         self::assertIsString($payload);
         self::assertStringEndsWith('"step":"build_job","outcome":"failed","failure":"'.BuildVerdict::NoCommits->reason().'","stop_cause":"'.$cause->value.'"}', $payload);
+    }
+
+    public function testAStoppedBuildJobWhoseEndEventIsNotRecordedIsStoredWithItsStopCauseInTheFailedRow(): void
+    {
+        $stopped = new BuildJob('alpha', $this->folder.'/clone', 'feat/task', new BuildBrief('x', new Decisions(), null), Tier::Standard, 'intakt-job-alpha:1');
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($stopped): never {
+            $this->stops->record($stopped, BuildStopCause::RunawayCeiling);
+
+            throw JobEventNotRecorded::for('job_ended', 'the database is locked');
+        });
+
+        $outcome = $this->buildTask(runner: $runner)->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
+        self::assertIsString($payload);
+        self::assertStringEndsWith('"step":"build_job","outcome":"failed","failure":"The ledger did not record the job event \"job_ended\": the database is locked","stop_cause":"runaway_ceiling"}', $payload);
     }
 
     public function testAStoppedBuildJobThatAsksAQuestionKeepsItsStopCauseInTheBuildJobLedgerRow(): void

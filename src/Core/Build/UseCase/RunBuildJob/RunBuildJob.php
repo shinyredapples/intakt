@@ -104,8 +104,7 @@ final readonly class RunBuildJob
      * @throws TierResolutionFailure
      * @throws BuilderNotOnClaudeCode
      * @throws JobRefused
-     * @throws DockerEngineFailed
-     * @throws JobEventNotRecorded
+     * @throws BuildJobEndFailed
      */
     #[NoDiscard]
     public function run(BuildJob $job): BuildJobOutcome
@@ -131,6 +130,11 @@ final readonly class RunBuildJob
             $reachedRunner = false;
 
             throw $failure;
+        } catch (DockerEngineFailed|JobEventNotRecorded $failure) {
+            // Read here and cleared for the finally, so the cause is still read once and reaches the failed build_job row with the failure.
+            $reachedRunner = false;
+
+            throw BuildJobEndFailed::after($failure, $this->stops->causeFor($job));
         } finally {
             // Read only for a job the runner was called with and did not refuse, also when that job failed, so its cause never reaches the branch's next build; read before the prompt is removed, so a failed removal cannot keep it.
             if ($reachedRunner) {
