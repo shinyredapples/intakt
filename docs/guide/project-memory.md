@@ -20,7 +20,7 @@ flowchart LR
 
 ## Notes that go out of date
 
-The same goes for a **settled finding**: a review point that was rejected on purpose, kept with the reason, so reviewers do not raise it again. It is remembered with a fingerprint of the code it points at; when that code changes on main it is marked stale and stops counting as settled. Deleting one from the dashboard comes with a later part; only the storage side of deleting exists now. (Intakt can store and expire these now; it does not yet record them from reviews or show them to reviewers.)
+The same goes for a **settled finding**: a review point the judge or a second, stronger review rejected, kept with the reason, so reviewers do not raise it again. It is remembered with a fingerprint of the file it points at. Each reviewer of a change touching that file sees it under "already settled, do not raise again unless this code changed", as long as the file is the same. Once the file changes it stops counting as settled. A reviewer can still raise it, but must say why the reason no longer holds. Deleting one from the dashboard comes with a later part.
 
 A note like "the verdict parser refuses empty lists because ..." is only true while that code stays the same. So each note that explains code remembers **which files it describes**. When one of those files changes on main, the note is marked **stale**: the briefing says so, and the dashboard shows it, until a later job describes the code again. No job reads an outdated explanation as fact.
 

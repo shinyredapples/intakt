@@ -59,7 +59,7 @@ final readonly class ReviewerAgent implements Reviewer
             return Verdict::noTools();
         }
 
-        $conversation = $this->runs->started($this->prompt->messagesFor($request->conversation, $request->brief));
+        $conversation = $this->runs->started($this->prompt->messagesFor($request->conversation, $request->brief, $request->checkout));
         $fenced = $this->prompt->fenced(new FaultTolerantToolbox($tools));
         $agent = $this->runs->agent($fenced, $platform, $model->model);
 

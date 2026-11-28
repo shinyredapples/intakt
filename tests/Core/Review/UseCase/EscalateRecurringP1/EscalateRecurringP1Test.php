@@ -126,7 +126,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
     {
         $second = $this->recurredOnASecondHead();
 
-        self::assertEquals([new EscalateRecurringP1($second, 'F1', $this->keyOf('F1'))], $this->fixture->escalations->messages);
+        self::assertEquals([new EscalateRecurringP1($second, 'F1', $this->keyOf('F1'), (string) hash_file('sha256', __DIR__.'/../RunReviewRound/RecordingBus.php'))], $this->fixture->escalations->messages);
     }
 
     public function testARecurringP1WithAKeptVerdictQueuesNoEscalationReview(): void

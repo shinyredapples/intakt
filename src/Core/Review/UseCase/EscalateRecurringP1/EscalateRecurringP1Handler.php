@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\UseCase\EscalateRecurringP1;
 use Closure;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Review\Contract\EscalationFailed;
+use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationRequest;
 use Intakt\Core\Review\Contract\EscalationReviewed;
 use Intakt\Core\Review\Contract\EscalationReviewer;
@@ -20,6 +21,8 @@ use Intakt\Core\Review\Domain\VerdictAlreadyKept;
 use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
+use Intakt\Core\Review\UseCase\SettleRejectedFindings\RejectedFindings;
+use Intakt\Core\Review\UseCase\SettleRejectedFindings\SettleRejectedFinding;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
@@ -40,6 +43,7 @@ final readonly class EscalateRecurringP1Handler
         private RoundLedger $ledger,
         private EscalationsOfChange $recorded,
         private LockFactory $locks,
+        private RejectedFindings $rejected,
     ) {
     }
 
@@ -123,6 +127,7 @@ final readonly class EscalateRecurringP1Handler
         }
 
         $this->keep($round, $command, $result->verdict);
+        $this->settleIfRejected($round, $command, $request);
     }
 
     private function failed(ReviewRound $round, EscalateRecurringP1 $command, string $reason): void
@@ -164,5 +169,22 @@ final readonly class EscalateRecurringP1Handler
 
             $this->ledger->escalationReviewed(new EscalationVerdictKept($command->round, $command->finding, $command->key, $verdict->outcome, $verdict->reasons));
         });
+    }
+
+    // From the verdict the key holds after keeping, so a rejection another writer's confirmation overtook is never settled; queued after the round's transaction, because the store write embeds text through a model.
+    private function settleIfRejected(ReviewRound $round, EscalateRecurringP1 $command, EscalationRequest $request): void
+    {
+        $kept = $this->verdicts->ofKey($command->key);
+
+        if (!$kept instanceof KeptVerdict || EscalationOutcome::Rejected !== $kept->outcome) {
+            return;
+        }
+
+        // Read through ??, because a message serialized before the field existed comes back with it uninitialized, and a plain read would throw.
+        $settle = $this->rejected->ofEscalation($round->project(), $request->finding->withJudgeNote($kept->reasons), $command->codeHash ?? null);
+
+        if ($settle instanceof SettleRejectedFinding) {
+            $this->rejected->send($settle);
+        }
     }
 }
