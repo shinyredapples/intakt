@@ -10,6 +10,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
+use Intakt\Plugin\GitHubWorkSource\Domain\ClosedUmbrellas;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
@@ -37,6 +38,7 @@ final readonly class GitHubWorkSource implements WorkSource
         private IntakeStore $store,
         private PullRequestsOfTasks $pullRequests,
         private LoggerInterface $logger,
+        private UmbrellaClosing $umbrellas,
     ) {
     }
 
@@ -51,6 +53,9 @@ final readonly class GitHubWorkSource implements WorkSource
         if (!$plan instanceof IntakePlan) {
             return WorkPick::nothing(NothingPicked::ListingIncomplete);
         }
+
+        // In the pick's tick, so an umbrella closes on its own once its last part is closed; each close is logged, and a refused one is tried on the next tick.
+        $this->umbrellas->closeFinished($project, $plan);
 
         if ([] === $plan->ready) {
             return WorkPick::nothing(NothingPicked::NoTaskReady);
@@ -85,6 +90,14 @@ final readonly class GitHubWorkSource implements WorkSource
     public function failedForGood(string $project, int $number, string $reason): void
     {
         $this->store->failForGood($project, $number, $reason);
+    }
+
+    // The close step alone, for intakt:umbrellas:close; null when the listing came back short, because then no part can count as closed.
+    public function closeFinishedUmbrellas(string $project): ?ClosedUmbrellas
+    {
+        $plan = $this->listing->planOf($project);
+
+        return $plan instanceof IntakePlan ? $this->umbrellas->closeFinished($project, $plan) : null;
     }
 
     // Nothing rather than reworks left out, because a task taken for a fresh build may have a pull request open, and the order depends on it.

@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Build\Contract\UmbrellaTasks;
 use Intakt\Core\Build\Infrastructure\RecordedSplitUmbrellas;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
@@ -14,6 +17,7 @@ use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
+use Intakt\Plugin\GitHubForge\Contract\TaskParts;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
@@ -32,6 +36,7 @@ use Intakt\Plugin\GitHubWorkSource\Infrastructure\CompleteListing;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\GitHubWorkSource;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStore;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\PullRequestsOfTasks;
+use Intakt\Plugin\GitHubWorkSource\Infrastructure\UmbrellaClosing;
 use Intakt\Plugin\GitHubWorkSource\UseCase\ShowQueue\ShowQueueCommand;
 use Intakt\Plugin\WorkSource\Contract\HeldTask;
 use Intakt\Plugin\WorkSource\Contract\Task;
@@ -73,12 +78,29 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[UsesClass(WorkQueue::class)]
 #[UsesClass(Task::class)]
 #[UsesClass(HeldTask::class)]
+#[UsesClass(RecordedSplitUmbrellas::class)]
+#[UsesClass(UmbrellaTasks::class)]
+#[UsesClass(UmbrellaClosing::class)]
 final class ShowQueueCommandTest extends KernelTestCase
 {
     private IntakeStore $store;
     private RecordedIssueReads $reads;
     private BufferingLogger $logger;
     private string $eligibilityLabel = 'intakt';
+    private InMemoryLedger $ledger;
+    private RecordedTaskCloses $closes;
+
+    public function testShowingTheQueueNeverClosesAnUmbrellaWhosePartsAreAllClosed(): void
+    {
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplitPlanned, '{"project":"alpha","task":"7","run":"r1","parts":[],"labels":[]}', 'split-7'));
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplit, '{"project":"alpha","task":"7","run":"r1","parts":[201,202]}', 'split-7'));
+        $this->reads->lists([Issues::task(7)]);
+
+        $tester = $this->show('alpha');
+
+        self::assertSame("Pick order of project alpha:\n  no task is ready\nHeld tasks of project alpha:\n  #7 Task 7: split into parts, which are built in its place\n", $tester->getDisplay());
+        self::assertSame([], $this->closes->closed);
+    }
 
     public function testThePickOrderPutsTheReworkFirstThenTheUrgentTaskThenPriorityThenDueDate(): void
     {
@@ -288,6 +310,8 @@ final class ShowQueueCommandTest extends KernelTestCase
         $this->store = new IntakeStore($entities);
         $this->reads = new RecordedIssueReads();
         $this->logger = new BufferingLogger();
+        $this->ledger = new InMemoryLedger();
+        $this->closes = new RecordedTaskCloses();
     }
 
     protected function tearDown(): void
@@ -318,9 +342,12 @@ final class ShowQueueCommandTest extends KernelTestCase
         $accounts = self::createStub(SteeringAccounts::class);
         $accounts->method('steers')->willReturn(true);
         $references = new IssueReferences();
-        $listing = new CompleteListing($this->reads, $histories, $accounts, $this->store, new EligibilityLabels(new ProjectEligibilityLabel('alpha', $this->eligibilityLabel)), $references, $this->logger, new RecordedSplitUmbrellas(new InMemoryLedger()));
+        $umbrellas = new RecordedSplitUmbrellas($this->ledger);
+        $listing = new CompleteListing($this->reads, $histories, $accounts, $this->store, new EligibilityLabels(new ProjectEligibilityLabel('alpha', $this->eligibilityLabel)), $references, $this->logger, $umbrellas);
+        $parts = self::createStub(TaskParts::class);
+        $parts->method('isFiledPart')->willReturn(true);
 
-        return new GitHubWorkSource($listing, $histories, $accounts, $references, $this->store, new PullRequestsOfTasks(new RecordedPullRequestBranches($this->reads), $histories, $accounts, $references), $this->logger);
+        return new GitHubWorkSource($listing, $histories, $accounts, $references, $this->store, new PullRequestsOfTasks(new RecordedPullRequestBranches($this->reads), $histories, $accounts, $references), $this->logger, new UmbrellaClosing($umbrellas, $parts, $this->closes, $this->logger));
     }
 
     /**

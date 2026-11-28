@@ -9,3 +9,9 @@ services:
     Intakt\Plugin\GitHubForge\Contract\IssueHistories: '@Intakt\Tests\Plugin\GitHubWorkSource\RecordedQueueAnswers'
     Intakt\Plugin\GitHubForge\Contract\SteeringAccounts: '@Intakt\Tests\Plugin\GitHubWorkSource\RecordedQueueAnswers'
     Intakt\Plugin\GitHubForge\Contract\PullRequestBranches: '@Intakt\Tests\Plugin\GitHubWorkSource\RecordedQueueAnswers'
+    # Kept, not sent, so intakt:umbrellas:close runs on an install without GitHub; public under a test name, so a test reads what it closed.
+    Intakt\Tests\Plugin\GitHubWorkSource\RecordedTaskCloses: ~
+    Intakt\Plugin\GitHubForge\Contract\TaskCloses: '@Intakt\Tests\Plugin\GitHubWorkSource\RecordedTaskCloses'
+    test.intakt.task_closes:
+        alias: Intakt\Tests\Plugin\GitHubWorkSource\RecordedTaskCloses
+        public: true
