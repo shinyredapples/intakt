@@ -80,7 +80,7 @@ final readonly class UpdateMirror
 
     private function holdBelowTheDiskFloors(string $path): void
     {
-        // Where the update writes: a fetch fills the mirror itself, which may be mounted on a disk of its own, while a first clone or the replacement of a folder that is no mirror goes to staging in the mirrors folder.
+        // Because the floors guard the folder the update writes to: a fetch fills the mirror itself, which may be mounted on a disk of its own, while a first clone or the replacement of a folder that is no mirror goes to staging in the mirrors folder.
         $folder = NearestFolder::of($this->isMirror($path) ? $path : $this->mirrors->directory);
 
         try {
