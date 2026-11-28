@@ -58,7 +58,7 @@ final readonly class RoundFinding
         return null === $title || '' === $title ? $this->headline() : $title;
     }
 
-    // Null for a finding recorded without a kind, which then shows no symbol.
+    // Null for a finding recorded without a kind, because such a finding then shows no symbol.
     public function kindWords(): ?string
     {
         return match ($this->kind) {

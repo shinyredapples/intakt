@@ -480,7 +480,14 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1'), new FindingIds(), [new JudgeDoneFinding('F1', Severity::P1, 'Broken. More.', new FindingIds(), title: 'Discount lost', kind: FindingKind::Logic)])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1'), new FindingIds(), [new JudgeDoneFinding(
+                'F1',
+                Severity::P1,
+                'Broken. More.',
+                new FindingIds(),
+                title: 'Discount lost',
+                kind: FindingKind::Logic,
+            )])),
         );
 
         self::assertSame(['Discount lost', 'Logic'], [$review?->rounds[0]->findings[0]->shortLine(), $review?->rounds[0]->findings[0]->kindWords()]);

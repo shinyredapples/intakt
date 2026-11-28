@@ -239,6 +239,16 @@ final class DashboardLedger implements Ledger
         ]);
     }
 
+    public function judgeToFixWithTitleAndKind(string $round, string $title, string $kind): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, [
+            'round' => $round,
+            'act' => ['F1'],
+            'follow_ups' => [],
+            'findings' => [['id' => 'F1', 'severity' => 'P1', 'text' => 'The total is off by one. It drops the last item.', 'merged' => [], 'file' => 'src/A.php', 'line' => 7, 'title' => $title, 'kind' => $kind]],
+        ]);
+    }
+
     public function judgeToFixWithoutPlace(string $round, string $text): void
     {
         $this->add(LedgerEventKind::JudgeDone, [
