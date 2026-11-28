@@ -41,7 +41,7 @@ final readonly class ParkedTasks
     /**
      * @throws TaskNotParked
      */
-    public function park(BuildRun $run, BuildQuestion $question, ?BuildStopCause $stopCause = null): void
+    public function park(BuildRun $run, BuildQuestion $question, ?BuildStopCause $stopCause): void
     {
         // Refused before any write, because inside a caller's transaction the commit only releases a savepoint and the caller could still take the question back.
         if ($this->connection->isTransactionActive()) {

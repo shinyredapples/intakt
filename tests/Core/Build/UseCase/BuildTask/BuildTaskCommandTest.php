@@ -20,6 +20,7 @@ use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
+use Intakt\Core\Build\UseCase\BuildTask\AskedQuestion;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskCommand;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskInput;
@@ -95,6 +96,7 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(BuildTaskCommand::class)]
+#[UsesClass(AskedQuestion::class)]
 #[UsesClass(BuildTaskInput::class)]
 #[UsesClass(BuildTask::class)]
 #[UsesClass(BuildTaskOutcome::class)]

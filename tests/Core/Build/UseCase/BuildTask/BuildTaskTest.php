@@ -34,6 +34,7 @@ use Intakt\Core\Build\Domain\ReadableLines;
 use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
+use Intakt\Core\Build\UseCase\BuildTask\AskedQuestion;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
@@ -54,7 +55,10 @@ use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
+use Intakt\Core\Job\Contract\DockerEngineFailed;
+use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Disk\Contract\DiskHold;
 use Intakt\Core\Disk\Contract\DiskSpace;
@@ -199,6 +203,8 @@ use Symfony\Component\Uid\Uuid;
 #[CoversClass(BuildTaskRequest::class)]
 #[CoversClass(BuildRun::class)]
 #[CoversClass(EndedStep::class)]
+#[CoversClass(BuildJobFailed::class)]
+#[UsesClass(AskedQuestion::class)]
 #[CoversClass(BuildStepNotRecorded::class)]
 #[CoversClass(GitBuildCheckout::class)]
 #[CoversClass(BuildCheckoutFailed::class)]
@@ -496,6 +502,43 @@ final class BuildTaskTest extends TestCase
 
         self::assertSame([null, null, null, $cause->value, null, null, null], array_column($this->stepsIn($ledger), 'stop_cause'));
         self::assertSame('passed', $this->stepsIn($ledger)[3]['outcome']);
+    }
+
+    #[TestWith([BuildStopCause::NoProgress])]
+    #[TestWith([BuildStopCause::RunawayCeiling])]
+    #[TestWith([BuildStopCause::PerTaskTotal])]
+    public function testABuildStoppedAndThenFailingToRecordItsJobEventKeepsItsStopCauseInTheFailedBuildJobRow(BuildStopCause $cause): void
+    {
+        $this->runner = $this->runnerStoppingThenFailing($cause, JobEventNotRecorded::for('job_ended', 'the ledger is full'));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        $row = $ledger->payloads()[3];
+        self::assertSame([BuildStep::BuildJob, 'failed', $outcome->failure, $cause->value], [$outcome->last, $row['outcome'], $row['failure'], $row['stop_cause']]);
+        self::assertSame(JobEventNotRecorded::for('job_ended', 'the ledger is full')->getMessage(), $outcome->failure);
+    }
+
+    public function testABuildStoppedAndThenHittingADockerEngineFailureKeepsItsStopCauseInTheFailedBuildJobRow(): void
+    {
+        $failure = DockerEngineFailed::noSocket('/run/docker.sock');
+        $this->runner = $this->runnerStoppingThenFailing(BuildStopCause::NoProgress, $failure);
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        $row = $ledger->payloads()[3];
+        self::assertSame([$failure->getMessage(), 'no_progress'], [$outcome->failure, $row['stop_cause']]);
+    }
+
+    public function testAJobFailureWithoutAStopLeavesTheStopCauseOfTheFailedBuildJobRowNull(): void
+    {
+        $this->runner = $this->runnerStoppingThenFailing(null, DockerEngineFailed::noSocket('/run/docker.sock'));
+        $ledger = new InMemoryLedger();
+
+        (void) $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertNull($ledger->payloads()[3]['stop_cause']);
     }
 
     public function testABuildJobThatWasNotStoppedRecordsNoStopCauseInAnyLedgerRow(): void
@@ -1694,6 +1737,20 @@ final class BuildTaskTest extends TestCase
             $change();
 
             return $result;
+        });
+
+        return $runner;
+    }
+
+    private function runnerStoppingThenFailing(?BuildStopCause $cause, DockerEngineFailed|JobEventNotRecorded $failure): JobRunner
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($cause, $failure): never {
+            if (null !== $cause) {
+                $this->stops->record($this->stoppedJob(), $cause);
+            }
+
+            throw $failure;
         });
 
         return $runner;

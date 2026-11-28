@@ -62,6 +62,7 @@ use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobResult;
+use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -252,6 +253,24 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
         self::assertIsString($payload);
         self::assertStringEndsWith('"step":"build_job","outcome":"failed","failure":"'.BuildVerdict::NoCommits->reason().'","stop_cause":"'.$cause->value.'"}', $payload);
+    }
+
+    public function testAStoppedBuildJobWhoseJobEventIsNotRecordedIsStoredWithItsStopCauseInTheFailedBuildJobLedgerRow(): void
+    {
+        $stopped = new BuildJob('alpha', $this->folder.'/clone', 'feat/task', new BuildBrief('x', new Decisions(), null), Tier::Standard, 'intakt-job-alpha:1');
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($stopped): never {
+            $this->stops->record($stopped, BuildStopCause::RunawayCeiling);
+
+            throw JobEventNotRecorded::for('job_ended', 'the ledger is full');
+        });
+
+        $outcome = $this->buildTask(runner: $runner)->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
+        self::assertIsString($payload);
+        self::assertStringEndsWith('"step":"build_job","outcome":"failed","failure":'.json_encode($outcome->failure, JSON_THROW_ON_ERROR).',"stop_cause":"runaway_ceiling"}', $payload);
     }
 
     public function testAStoppedBuildJobThatAsksAQuestionKeepsItsStopCauseInTheBuildJobLedgerRow(): void

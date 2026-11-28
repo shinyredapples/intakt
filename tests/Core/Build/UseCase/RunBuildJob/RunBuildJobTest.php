@@ -20,10 +20,12 @@ use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
@@ -52,6 +54,7 @@ use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunBuildJob::class)]
+#[CoversClass(BuildJobFailed::class)]
 #[CoversClass(BuildJobOutcome::class)]
 #[CoversClass(BuildVerdict::class)]
 #[CoversClass(BuilderNotOnClaudeCode::class)]
@@ -408,6 +411,33 @@ final class RunBuildJobTest extends TestCase
         }
 
         self::assertNull($this->stops->causeFor($this->job()));
+    }
+
+    public function testAJobWhoseRunnerFailsAfterTheStopHandsTheCauseAndTheOriginalFailureOnAndTheNextBuildCarriesNone(): void
+    {
+        $original = DockerEngineFailed::noSocket('/run/docker.sock');
+        $failing = true;
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use (&$failing, $original): JobResult {
+            if (!$failing) {
+                return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([]));
+            }
+            $this->stops->record($this->job(), BuildStopCause::NoProgress);
+
+            throw $original;
+        });
+        $builds = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
+
+        try {
+            (void) $builds->run($this->job());
+            self::fail('the failure was not passed on');
+        } catch (BuildJobFailed $failure) {
+            self::assertSame([$original->getMessage(), $original, BuildStopCause::NoProgress], [$failure->getMessage(), $failure->getPrevious(), $failure->stopCause]);
+        }
+
+        $failing = false;
+
+        self::assertNull($builds->run($this->job())->stopCause);
     }
 
     public function testARefusedJobLeavesTheCauseOfTheBuildThatHoldsTheBranch(): void
