@@ -71,19 +71,6 @@ final readonly class HeldForSpace
     /**
      * @return array{short: string, title: string, text: string, broken: bool}
      */
-    private function unreadable(FreeSpaceUnreadable $unreadable): array
-    {
-        return [
-            'short' => 'Free disk space unknown',
-            'title' => 'The free disk space cannot be read.',
-            'text' => $unreadable->getMessage().' A mirror update or build clone on that disk fails until it can be read.',
-            'broken' => true,
-        ];
-    }
-
-    /**
-     * @return array{short: string, title: string, text: string, broken: bool}
-     */
     private function held(DiskHold $hold): array
     {
         return match ($hold->floor) {
@@ -95,6 +82,19 @@ final readonly class HeldForSpace
                 'broken' => false,
             ],
         };
+    }
+
+    /**
+     * @return array{short: string, title: string, text: string, broken: bool}
+     */
+    private function unreadable(FreeSpaceUnreadable $unreadable): array
+    {
+        return [
+            'short' => 'Free disk space unknown',
+            'title' => 'The free disk space cannot be read.',
+            'text' => $unreadable->getMessage().' A mirror update or build clone on that disk fails until it can be read.',
+            'broken' => true,
+        ];
     }
 
     /**

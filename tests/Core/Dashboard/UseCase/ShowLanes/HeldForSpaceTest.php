@@ -44,6 +44,8 @@ final class HeldForSpaceTest extends TestCase
 
     private string $root;
 
+    private string $scratch;
+
     public function testAFolderBelowTheFreeBytesFloorReadsAsPausedForFreeSpaceInHumanUnits(): void
     {
         $held = $this->heldFor(new DiskHold(DiskFloor::Bytes, '/data', 1_288_490_189, 2_147_483_648))->now();
@@ -89,7 +91,7 @@ final class HeldForSpaceTest extends TestCase
     {
         $disk = self::createStub(DiskSpace::class);
         $disk->method('holdAt')->willReturn(new DiskHold(DiskFloor::Bytes, '/data', 1, 2), null);
-        $held = new HeldForSpace($disk, self::noMirrors(), self::MIRRORS);
+        $held = new HeldForSpace($disk, $this->noMirrors(), self::MIRRORS);
 
         self::assertSame([true, false], [null !== $held->now(), null !== $held->now()]);
     }
@@ -99,7 +101,7 @@ final class HeldForSpaceTest extends TestCase
         $disk = $this->createMock(DiskSpace::class);
         $disk->expects($this->once())->method('holdAt')->with(sys_get_temp_dir())->willReturn(null);
 
-        new HeldForSpace($disk, self::noMirrors(), sys_get_temp_dir().'/intakt-no-mirrors-'.bin2hex(random_bytes(6)))->now();
+        new HeldForSpace($disk, $this->noMirrors(), sys_get_temp_dir().'/intakt-no-mirrors-'.bin2hex(random_bytes(6)))->now();
     }
 
     public function testAnUnreadableDiskReadsAsABrokenLineNamingTheReasonInsteadOfFailingThePage(): void
@@ -112,7 +114,7 @@ final class HeldForSpaceTest extends TestCase
             'title' => 'The free disk space cannot be read.',
             'text' => 'The free space of /data cannot be read: df exited with 1. A mirror update or build clone on that disk fails until it can be read.',
             'broken' => true,
-        ], new HeldForSpace($disk, self::noMirrors(), self::MIRRORS)->now());
+        ], new HeldForSpace($disk, $this->noMirrors(), self::MIRRORS)->now());
     }
 
     public function testAnInodeReadThatTimesOutReadsAsABrokenLineNamingDf(): void
@@ -120,7 +122,7 @@ final class HeldForSpaceTest extends TestCase
         $disk = self::createStub(DiskSpace::class);
         $disk->method('holdAt')->willThrowException(new ProcessTimedOutException(new Process(['df'])->setTimeout(10), ProcessTimedOutException::TYPE_GENERAL));
 
-        self::assertStringStartsWith(sprintf('The free space of %s cannot be read: df timed out after 10 seconds.', sys_get_temp_dir()), new HeldForSpace($disk, self::noMirrors(), sys_get_temp_dir())->now()['text'] ?? '');
+        self::assertStringStartsWith(sprintf('The free space of %s cannot be read: df timed out after 10 seconds.', sys_get_temp_dir()), new HeldForSpace($disk, $this->noMirrors(), sys_get_temp_dir())->now()['text'] ?? '');
     }
 
     public function testRoundingThatMakesTheReadingAndTheFloorEqualShowsExactBytes(): void
@@ -183,7 +185,7 @@ final class HeldForSpaceTest extends TestCase
         $disk = self::createStub(DiskSpace::class);
         $disk->method('holdAt')->willReturnCallback(static fn (string $folder): DiskHold => $mirror === $folder ? new DiskHold(DiskFloor::Inodes, $folder, 2, 100) : throw new FreeSpaceUnreadable($folder, 'unreadable parent disk'));
 
-        $held = new HeldForSpace($disk, self::mirrorsAt($mirror), $this->root)->now();
+        $held = new HeldForSpace($disk, $this->mirrorsAt($mirror), $this->root)->now();
 
         self::assertStringStartsWith('The disk of '.$mirror.' has 2 free file slots', $held['text'] ?? '');
     }
@@ -194,19 +196,19 @@ final class HeldForSpaceTest extends TestCase
         $disk = self::createStub(DiskSpace::class);
         $disk->method('holdAt')->willReturnCallback(static fn (string $folder): ?DiskHold => $mirror === $folder ? throw new FreeSpaceUnreadable($folder, 'df exited with 1') : null);
 
-        $held = new HeldForSpace($disk, self::mirrorsAt($mirror), $this->root)->now();
+        $held = new HeldForSpace($disk, $this->mirrorsAt($mirror), $this->root)->now();
 
         self::assertSame([true, 'The free space of '.$mirror.' cannot be read: df exited with 1. A mirror update or build clone on that disk fails until it can be read.'], [$held['broken'] ?? null, $held['text'] ?? null]);
     }
 
     protected function setUp(): void
     {
-        $this->root = sys_get_temp_dir().'/intakt-held-for-space-'.bin2hex(random_bytes(6));
+        $this->root = $this->scratch = sys_get_temp_dir().'/intakt-held-for-space-'.bin2hex(random_bytes(6));
     }
 
     protected function tearDown(): void
     {
-        new Filesystem()->remove(strstr($this->root, '/install[local]', true) ?: $this->root);
+        new Filesystem()->remove($this->scratch);
     }
 
     private function heldOnlyAt(string $held): DiskSpace
@@ -226,12 +228,12 @@ final class HeldForSpaceTest extends TestCase
         return new MirrorsOnDisk($update, $mirrors);
     }
 
-    private static function noMirrors(): MirrorFolders
+    private function noMirrors(): MirrorFolders
     {
-        return self::mirrorsAt();
+        return $this->mirrorsAt();
     }
 
-    private static function mirrorsAt(string ...$paths): MirrorFolders
+    private function mirrorsAt(string ...$paths): MirrorFolders
     {
         $mirrors = self::createStub(MirrorFolders::class);
         $mirrors->method('existing')->willReturn(array_values($paths));
@@ -244,6 +246,6 @@ final class HeldForSpaceTest extends TestCase
         $disk = self::createStub(DiskSpace::class);
         $disk->method('holdAt')->willReturn($hold);
 
-        return new HeldForSpace($disk, self::noMirrors(), self::MIRRORS);
+        return new HeldForSpace($disk, $this->noMirrors(), self::MIRRORS);
     }
 }

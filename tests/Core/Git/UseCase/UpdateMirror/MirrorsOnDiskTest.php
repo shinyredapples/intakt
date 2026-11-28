@@ -37,6 +37,8 @@ final class MirrorsOnDiskTest extends TestCase
 {
     private string $mirrors;
 
+    private string $scratch;
+
     public function testABareMirrorOfAProjectIsListedByItsPath(): void
     {
         $this->bare('alpha.git');
@@ -100,12 +102,12 @@ final class MirrorsOnDiskTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-on-disk-'.bin2hex(random_bytes(6));
+        $this->mirrors = $this->scratch = sys_get_temp_dir().'/intakt-mirrors-on-disk-'.bin2hex(random_bytes(6));
     }
 
     protected function tearDown(): void
     {
-        new Filesystem()->remove(strstr($this->mirrors, '/install[local]', true) ?: $this->mirrors);
+        new Filesystem()->remove($this->scratch);
     }
 
     private function bare(string $name): void

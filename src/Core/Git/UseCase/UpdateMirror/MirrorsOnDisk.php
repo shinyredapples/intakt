@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Core\Git\UseCase\UpdateMirror;
 
 use Intakt\Core\Git\Contract\MirrorFolders;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
 use NoDiscard;
-use RuntimeException;
-use Symfony\Component\Process\Exception\ExceptionInterface as ProcessFailure;
+use Symfony\Component\Process\Exception\ExceptionInterface;
 
 final readonly class MirrorsOnDisk implements MirrorFolders
 {
@@ -31,7 +32,7 @@ final readonly class MirrorsOnDisk implements MirrorFolders
         // Listed by name and never by a pattern, because a pattern would give brackets in the install's path a meaning.
         $entries = scandir($directory);
 
-        return false === $entries ? [] : array_values(array_filter(array_map($this->mirrorNamed(...), $entries)));
+        return false === $entries ? [] : array_values(array_filter(array_map($this->mirrorNamed(...), $entries), static fn (?string $path): bool => null !== $path));
     }
 
     private function mirrorNamed(string $entry): ?string
@@ -45,7 +46,7 @@ final readonly class MirrorsOnDisk implements MirrorFolders
             $path = $this->mirrors->pathOf(substr($entry, 0, -strlen(self::SUFFIX)));
 
             return $this->update->isMirror($path) ? $path : null;
-        } catch (RuntimeException|ProcessFailure) {
+        } catch (ProjectNameRefused|RepositoryAttributesRefused|ExceptionInterface) {
             // Because an update of a folder whose name is refused or whose check cannot be answered fails on that, before it measures any disk.
             return null;
         }
