@@ -6,8 +6,11 @@ namespace Intakt\Tests\Core\Dashboard\UseCase\RemoveDemoProject;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\LedgerTrends;
 use Intakt\Core\Dashboard\Infrastructure\LiveBoardHeadline;
+use Intakt\Core\Dashboard\Infrastructure\LiveTrends;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedReviewRows;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
@@ -55,6 +58,8 @@ use Twig\Environment;
 #[UsesClass(ReplayMark::class)]
 #[UsesClass(LiveBoardHeadline::class)]
 #[UsesClass(LedgerReviewPages::class)]
+#[UsesClass(LiveTrends::class)]
+#[UsesClass(LedgerTrends::class)]
 final class RemoveDemoProjectCommandTest extends KernelTestCase
 {
     private InMemoryStore $locks;
@@ -170,7 +175,20 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
 
         $this->removal('intakt');
 
-        self::assertCount(2, $this->lastPushedBoard()->filter('#board-octopus.firstday:not([hidden]) img[src*="octopus-waiting-"]'));
+        self::assertCount(2, $this->lastPushContaining('board-octopus')->filter('#board-octopus.firstday:not([hidden]) img[src*="octopus-waiting-"]'));
+    }
+
+    public function testRemovingTheOnlyReplayedReviewPushesTheTrendsEmptyStateWithTheSetupLink(): void
+    {
+        $this->givenTheDemoProjectWithAReplayedReview();
+
+        $this->removal('intakt');
+
+        $trends = $this->lastPushContaining('target="up-next"');
+        self::assertCount(1, $trends->filter('turbo-stream[target="trends-with-demo"]'));
+        $figures = new Crawler($trends->filter('turbo-stream[target="trends-with-demo"] template')->html());
+        self::assertCount(1, $figures->filter('#trends-with-demo .empty a.btn.primary[href*="step=5"]'));
+        self::assertCount(0, $figures->filter('.tiles'));
     }
 
     public function testARemovalRefusedOutsideTheComposeDemoPushesNothing(): void
@@ -194,9 +212,9 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         $this->live = new PublishedLiveEvents();
     }
 
-    private function lastPushedBoard(): Crawler
+    private function lastPushContaining(string $text): Crawler
     {
-        $last = array_last($this->live->events);
+        $last = array_last(array_filter($this->live->events, static fn (LiveEvent $event): bool => str_contains($event->turboStream, $text)));
         self::assertNotNull($last);
 
         return new Crawler($last->turboStream);
@@ -224,7 +242,7 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         self::assertInstanceOf(ReplayMarks::class, $marks);
         self::assertInstanceOf(ReplayedReviewRows::class, $rows);
         $application = new Application();
-        $application->addCommand(new RemoveDemoProjectCommand($this->commands(), $marks, $rows, new LockFactory($this->locks), $this->headline(), $composeService));
+        $application->addCommand(new RemoveDemoProjectCommand($this->commands(), $marks, $rows, new LockFactory($this->locks), $this->headline(), $this->trends(), $composeService));
         $tester = new CommandTester($application->find('intakt:demo:remove'));
         $tester->execute([]);
 
@@ -239,6 +257,16 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         self::assertInstanceOf(Environment::class, $twig);
 
         return new LiveBoardHeadline($pages, $twig, $this->live, new LockFactory(new InMemoryStore()), new ArrayAdapter(), new NullLogger());
+    }
+
+    private function trends(): LiveTrends
+    {
+        $trends = self::getContainer()->get(LedgerTrends::class);
+        $twig = self::getContainer()->get(Environment::class);
+        self::assertInstanceOf(LedgerTrends::class, $trends);
+        self::assertInstanceOf(Environment::class, $twig);
+
+        return new LiveTrends($trends, $twig, $this->live, new LockFactory(new InMemoryStore()), new NullLogger());
     }
 
     /**

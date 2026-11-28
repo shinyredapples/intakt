@@ -438,7 +438,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame(array_fill(0, 2, 'keydown.esc@window->chart#dismiss'), $page->filter('[data-controller="chart"]')->each(static fn (Crawler $chart): string => (string) $chart->attr('data-action')));
+        self::assertSame(array_fill(0, 2, 'keydown.esc@window->chart#dismiss turbo:morph-element->chart#restore'), $page->filter('[data-controller="chart"]')->each(static fn (Crawler $chart): string => (string) $chart->attr('data-action')));
         self::assertSame([], array_filter($page->filter('#chart-catches .c-hit, #chart-judge .c-hit')->each(static fn (Crawler $mark): string => (string) $mark->attr('data-action')), static fn (string $action): bool => str_contains($action, 'keydown')));
     }
 

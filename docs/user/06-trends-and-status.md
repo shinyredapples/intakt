@@ -48,8 +48,8 @@ Click a round to open its review page. A queued pull request has no link until i
 Leave Trends open while a review runs. You do not need to reload it:
 
 1. A round that opens, or a reviewer that starts, moves it in **Up next**.
-2. When the owl decides a round, the headline, the tiles and the charts count it.
-3. While the demo plays back, they move with each step of it.
+2. When the owl decides a round, the tiles and the charts count it. The headline shows the published bench run, so it stays as it is.
+3. While the demo plays back, the tiles, the charts and Up next move with each step of it.
 
 With the demo left out, the page keeps leaving it out. Without live updates the page stays as you opened it: reload it to see newer rounds.
 

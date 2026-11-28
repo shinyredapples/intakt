@@ -65,7 +65,7 @@
 </dl>
 {% endif %}
 {% if not trends.anyReview %}
-{# The same start as step 5 of the setup page; an install without the sample change has nothing to start here, so the action opens that step, which says what is missing (D8 of #2858). Only the page renders it: LiveTrends pushes a way of counting only once it has a review, because a worker has no session for the form token. #}
+{# The same start as step 5 of the setup page; an install without the sample change has nothing to start here, so the action opens that step, which says what is missing (D8 of #2858). LiveTrends pushes it with the link only, because a worker has no session for the form token. #}
 <div class="empty">
     {{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 144}, with_context = false) }}
     <h2>No reviews yet</h2>
@@ -88,7 +88,7 @@
 {#- A chart without data, or of zeros only, is left out, so every chart on the page shows something (juror walk-through of issue 3141); its takeaway stays for a screen reader. -#}
 <div class="charts">
     {% if drawnReviewers is not empty %}
-    <section class="chart{{ drawnReviewers|length > 1 ? ' wide' }}" id="chart-catches" aria-labelledby="chart-catches-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
+    <section class="chart{{ drawnReviewers|length > 1 ? ' wide' }}" id="chart-catches" aria-labelledby="chart-catches-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss turbo:morph-element->chart#restore">
         {{ _self.title('chart-catches', 'Catches by reviewer', kinds.Counted) }}
         <p class="takeaway sr-only">{{ catches.takeaway }}</p>
         <p class="legend chart-legend"><span><i class="c-swatch"></i>Found by one reviewer only</span><span><i class="c-swatch c-whole"></i>Also found by others</span></p>
@@ -114,7 +114,7 @@
     </section>
     {% endif %}
     {% if outcomes is not null and outcomes.bars|filter(bar => (bar.value ?? 0) > 0) is not empty %}
-    <section class="chart" id="chart-judge" aria-labelledby="chart-judge-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
+    <section class="chart" id="chart-judge" aria-labelledby="chart-judge-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss turbo:morph-element->chart#restore">
         {{ _self.title('chart-judge', 'Checked findings', kinds.Counted) }}
         <p class="takeaway sr-only">{{ outcomes.takeaway }}</p>
         {{ include('dashboard/components/bar_chart.html.twig', {name: 'Findings by what the judge did with them, over every checked pass', bars: outcomes.bars, top: outcomes.scaleTop}, with_context = false) }}
@@ -130,7 +130,7 @@
     </section>
     {% endif %}
     {% if perDay is not null %}
-    <section class="chart wide" id="chart-per-day" aria-labelledby="chart-per-day-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
+    <section class="chart wide" id="chart-per-day" aria-labelledby="chart-per-day-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss turbo:morph-element->chart#restore">
         <h2 id="chart-per-day-title">{{ costDrawn ? 'Passes and cost per day' : 'Passes per day' }}</h2>
         <div class="multiples two">
             <figure class="multiple">

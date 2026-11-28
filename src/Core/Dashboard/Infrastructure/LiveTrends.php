@@ -9,6 +9,7 @@ use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
 use Symfony\Component\Uid\Uuid;
 use Throwable;
 use Twig\Environment;
@@ -55,18 +56,44 @@ final readonly class LiveTrends
     {
         $lock = $this->locks->createLock(self::LOCK);
 
-        // Tried without waiting, because the worker holding the lock reads the ledger again after it lets go, and so pushes what this one would have found.
-        while ($lock->acquire(false)) {
-            try {
-                $published = $this->publishedOnce();
-            } finally {
-                $lock->release();
-            }
+        try {
+            $this->publishedWhileFree($lock);
+            // Boundary: reads once more before the failure is logged, because a worker that found the lock taken during the failed read left its newer figures to this one.
+        } catch (Throwable $failure) {
+            $this->readAgainAfter($failure, $lock);
+        }
+    }
 
-            if ($this->stream() === $published) {
+    // Tried without waiting, because the worker holding the lock reads the ledger again after it lets go, and so pushes what this one would have found.
+    private function publishedWhileFree(LockInterface $lock): void
+    {
+        while ($lock->acquire(false)) {
+            if ($this->publishedAndUnchanged($lock)) {
                 return;
             }
         }
+    }
+
+    // The first failure is the one logged, and a second ends the turn, so a ledger that stays unreadable is read twice, not forever.
+    private function readAgainAfter(Throwable $failure, LockInterface $lock): never
+    {
+        try {
+            $this->publishedWhileFree($lock);
+        } finally {
+            throw $failure;
+        }
+    }
+
+    // True when the ledger read after the release renders what was pushed, so no newer figures wait for this worker.
+    private function publishedAndUnchanged(LockInterface $lock): bool
+    {
+        try {
+            $published = $this->publishedOnce();
+        } finally {
+            $lock->release();
+        }
+
+        return $this->stream() === $published;
     }
 
     private function publishedOnce(): string

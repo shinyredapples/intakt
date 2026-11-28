@@ -20,6 +20,7 @@ use Intakt\Core\Dashboard\UseCase\ShowTrends\ShowTrendsController;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
+use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -122,6 +123,23 @@ final class TrendsLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(['trends-with-demo', 'trends-without-demo', 'up-next'], array_values(array_filter($targets, static fn (string $target): bool => str_starts_with($target, 'trends-') || 'up-next' === $target)));
         self::assertSame([1, 0], [$trends->filter('#trends-with-demo')->count() + $trends->filter('#trends-without-demo')->count(), $board->filter('#trends-with-demo, #trends-without-demo, #up-next')->count()]);
         self::assertCount(1, $trends->filter('#up-next'));
+    }
+
+    public function testAToolCallATextAndASummaryReachTheRoundButPushNoTrends(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $inner = new RecordedRoundUpdates();
+        $trends = self::getContainer()->get(LiveTrends::class);
+        self::assertInstanceOf(LiveTrends::class, $trends);
+        $round = Uuid::fromString(self::ROUND);
+        $updates = new TrendsRoundUpdates($inner, $trends);
+
+        $updates->toolCalled($round, 'correctness', 'read_file');
+        $updates->textStreamed($round, 'correctness', 'Reading the diff.');
+        $updates->summaryChanged($round);
+
+        self::assertSame(['tool correctness read_file', 'text correctness Reading the diff.', 'summary '.self::ROUND], $inner->seen);
+        self::assertSame([], $this->published);
     }
 
     public function testATrendsPageListensToTheShellTopicTheTrendsArePushedOn(): void

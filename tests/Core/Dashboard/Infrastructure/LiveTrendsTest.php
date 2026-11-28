@@ -84,15 +84,16 @@ final class LiveTrendsTest extends KernelTestCase
         self::assertCount(0, new Crawler($live->events[0]->turboStream)->filter('turbo-stream:not([action="replace"][method="morph"])'));
     }
 
-    // The empty state carries a form token, which a worker without a session cannot make.
-    public function testBeforeAnyReviewOnlyUpNextIsPushedAndTheEmptyStateStaysAsLoaded(): void
+    // The empty state's form carries a token, which a worker without a session cannot make, so a push links to the setup step instead.
+    public function testBeforeAnyReviewTheEmptyStateIsPushedWithTheSetupLinkAndNoFormToken(): void
     {
         $live = new PublishedLiveEvents();
 
         $this->trendsOn(new DashboardLedger(), $live)->publishLatest(Uuid::v7());
 
-        self::assertSame(['up-next'], $this->targetsOf($live->events[0]));
+        self::assertSame(['trends-with-demo', 'trends-without-demo', 'up-next'], $this->targetsOf($live->events[0]));
         self::assertStringNotContainsString('_token', $live->events[0]->turboStream);
+        self::assertCount(2, new Crawler($live->events[0]->turboStream)->filter('.empty a.btn.primary[href*="step=5"]'));
     }
 
     public function testAJudgedRoundPushesItsPassInTheTiles(): void
@@ -144,6 +145,50 @@ final class LiveTrendsTest extends KernelTestCase
 
         self::assertSame([], $live->events);
         $held->release();
+    }
+
+    // Forced in this order, because repeated runs cannot show that a trigger arriving during the holder's failing read is published by the holder's second read.
+    public function testATriggerDuringAFailedReadIsPublishedByTheHoldersSecondRead(): void
+    {
+        $inner = new DashboardLedger();
+        $inner->startRound('r-1', 'alpha');
+        $live = new PublishedLiveEvents();
+        $second = null;
+        $ledger = new LedgerFailingOnce($inner, static function () use ($inner, &$second): void {
+            $inner->startRound('r-2', 'beta');
+            self::assertInstanceOf(LiveTrends::class, $second);
+            $second->publishLatest(Uuid::v7());
+        });
+        $second = $this->trendsOn($inner, $live);
+
+        $this->trendsOn($ledger, $live)->publishLatest(Uuid::v7());
+
+        self::assertCount(1, $live->events);
+        self::assertSame('2', new Crawler($live->events[0]->turboStream)->filter('#trends-with-demo .tile[data-tile="passes"] dd')->first()->text());
+        $logs = $this->logged();
+        self::assertCount(1, $logs);
+        self::assertSame(['warning', 'The trends were not published.'], [$logs[0][0], $logs[0][1]]);
+    }
+
+    public function testALedgerThatStaysUnreadableIsReadTwiceAndLoggedOnce(): void
+    {
+        $reads = 0;
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willReturnCallback(static function () use (&$reads): never {
+            ++$reads;
+
+            throw new RuntimeException('The ledger is gone.');
+        });
+        $ledger->method('readOfKind')->willReturnCallback(static function () use (&$reads): never {
+            ++$reads;
+
+            throw new RuntimeException('The ledger is gone.');
+        });
+
+        $this->trendsOn($ledger, new PublishedLiveEvents())->publishTheTrends();
+
+        self::assertSame(2, $reads);
+        self::assertCount(1, $this->logged());
     }
 
     public function testALedgerThatCannotBeReadIsLoggedWithTheRoundAndNotThrown(): void
