@@ -24,7 +24,7 @@ final class SessionLogTest extends TestCase
 
     public function testRecordsOfTheMessagesM1M1AndM2CountTwoMessages(): void
     {
-        $usage = SessionLog::usageIn(self::assistant('m1')."\n".self::assistant('m1')."\n".self::assistant('m2')."\n");
+        $usage = SessionLog::usageIn($this->assistant('m1')."\n".$this->assistant('m1')."\n".$this->assistant('m2')."\n");
 
         self::assertEquals(new BuildUsage(20, 40, 60, 80), $usage->usage);
         self::assertSame(200, $usage->usage?->total());
@@ -32,7 +32,7 @@ final class SessionLogTest extends TestCase
 
     public function testACutLogWithoutAResultLineIsStillRead(): void
     {
-        $usage = SessionLog::usageIn(self::assistant('m1')."\n".self::assistant('m2')."\nclaude cut after 3000 seconds, its commits are kept\nclaude exited with 143\n");
+        $usage = SessionLog::usageIn($this->assistant('m1')."\n".$this->assistant('m2')."\nclaude cut after 3000 seconds, its commits are kept\nclaude exited with 143\n");
 
         self::assertSame(UsageReading::Read, $usage->reading);
         self::assertEquals(new BuildUsage(20, 40, 60, 80), $usage->usage);
@@ -40,14 +40,14 @@ final class SessionLogTest extends TestCase
 
     public function testAMessageIdRepeatedAcrossTheLogIsCountedOnce(): void
     {
-        $usage = SessionLog::usageIn(self::assistant('m1')."\n".self::assistant('m2')."\n".self::assistant('m1')."\n".self::assistant('m1'));
+        $usage = SessionLog::usageIn($this->assistant('m1')."\n".$this->assistant('m2')."\n".$this->assistant('m1')."\n".$this->assistant('m1'));
 
         self::assertEquals(new BuildUsage(20, 40, 60, 80), $usage->usage);
     }
 
     public function testTheResultLineIsNotAddedToTheMessagesUsage(): void
     {
-        $usage = SessionLog::usageIn("noise\n".self::assistant('m1')."\n".self::RESULT."\nclaude exited with 0\n");
+        $usage = SessionLog::usageIn("noise\n".$this->assistant('m1')."\n".self::RESULT."\nclaude exited with 0\n");
 
         self::assertEquals(new BuildUsage(10, 20, 30, 40), $usage->usage);
     }
@@ -69,7 +69,7 @@ final class SessionLogTest extends TestCase
     #[TestWith(['null'])]
     public function testAMessageWithAnIdAndInvalidCountsIsMalformed(string $usage): void
     {
-        $read = SessionLog::usageIn(self::assistant('m1')."\n".self::assistant('m2', $usage)."\n".self::RESULT);
+        $read = SessionLog::usageIn($this->assistant('m1')."\n".$this->assistant('m2', $usage)."\n".self::RESULT);
 
         self::assertSame(UsageReading::Malformed, $read->reading);
         self::assertNull($read->usage);
@@ -82,12 +82,12 @@ final class SessionLogTest extends TestCase
     #[TestWith(['{"type":"assistant"}'])]
     public function testAnAssistantRecordWithoutAMessageIdIsMalformed(string $record): void
     {
-        self::assertSame(UsageReading::Malformed, SessionLog::usageIn(self::assistant('m1')."\n".$record)->reading);
+        self::assertSame(UsageReading::Malformed, SessionLog::usageIn($this->assistant('m1')."\n".$record)->reading);
     }
 
     public function testACountAtTheUpperBoundIsStillRead(): void
     {
-        $usage = SessionLog::usageIn(self::assistant('m1', '{"input_tokens":1000000000000000,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}'));
+        $usage = SessionLog::usageIn($this->assistant('m1', '{"input_tokens":1000000000000000,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}'));
 
         self::assertSame(BuildUsage::MOST, $usage->usage?->inputTokens);
     }
@@ -96,7 +96,7 @@ final class SessionLogTest extends TestCase
     {
         $most = '{"input_tokens":1000000000000000,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}';
 
-        $usage = SessionLog::usageIn(self::assistant('m1', $most)."\n".self::assistant('m2', $most));
+        $usage = SessionLog::usageIn($this->assistant('m1', $most)."\n".$this->assistant('m2', $most));
 
         self::assertSame(UsageReading::Malformed, $usage->reading);
     }
@@ -110,14 +110,14 @@ final class SessionLogTest extends TestCase
 
     public function testALineOfExactlyTheLineLimitIsAccepted(): void
     {
-        $usage = SessionLog::usageIn(str_repeat('x', SessionLog::MAX_LINE_BYTES)."\n".self::assistant('m1'));
+        $usage = SessionLog::usageIn(str_repeat('x', SessionLog::MAX_LINE_BYTES)."\n".$this->assistant('m1'));
 
         self::assertSame(UsageReading::Read, $usage->reading);
     }
 
     public function testALineOneByteOverTheLineLimitIsRefused(): void
     {
-        $usage = SessionLog::usageIn(self::assistant('m1')."\n".str_repeat('x', SessionLog::MAX_LINE_BYTES + 1));
+        $usage = SessionLog::usageIn($this->assistant('m1')."\n".str_repeat('x', SessionLog::MAX_LINE_BYTES + 1));
 
         self::assertSame(UsageReading::LineTooLong, $usage->reading);
     }
@@ -153,7 +153,7 @@ final class SessionLogTest extends TestCase
     {
         $this->expectExceptionMessage('A usage that was read carries its counts.');
 
-        (void) SessionUsage::withoutUsage(UsageReading::Read);
+        SessionUsage::withoutUsage(UsageReading::Read);
     }
 
     public function testTheLedgerPayloadNamesTheReadingAndEachCount(): void
@@ -168,7 +168,7 @@ final class SessionLogTest extends TestCase
         );
     }
 
-    private static function assistant(string $id, string $usage = self::USAGE): string
+    private function assistant(string $id, string $usage = self::USAGE): string
     {
         return '{"type":"assistant","message":{"id":"'.$id.'","type":"message","role":"assistant","model":"claude-opus-5-5","content":[{"type":"text","text":"x"}],"usage":'.$usage.'},"session_id":"s"}';
     }
