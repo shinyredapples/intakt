@@ -15,7 +15,7 @@ final class RouteNamesFollowUseCases
     private const string OWN_NAMESPACE = 'Intakt\\';
 
     /**
-     * @return list<string> one line per route that breaks the rule
+     * @return list<string>
      */
     public function findingsIn(RouteCollection $routes): array
     {
@@ -48,7 +48,7 @@ final class RouteNamesFollowUseCases
     private function findingFor(string $name, string $controller): ?string
     {
         if (1 !== preg_match(self::CONTROLLER, $controller, $parts)) {
-            return \sprintf('Route "%s" is served by %s, which is not in a UseCase/<Name>/ folder: move the controller into one, so the route name can be <module>_<use_case>.', $name, $controller);
+            return sprintf('Route "%s" is served by %s, which is not in a UseCase/<Name>/ folder: move the controller into one, so the route name can be <module>_<use_case>.', $name, $controller);
         }
 
         $expected = $this->snake($parts[1]).'_'.$this->snake($parts[2]);
@@ -57,7 +57,7 @@ final class RouteNamesFollowUseCases
             return null;
         }
 
-        return \sprintf('Route "%s" is served by %s, so it must be named "%s" (<module>_<use_case>): rename the route, or move the controller into the UseCase/<Name>/ folder the name says.', $name, $controller, $expected);
+        return sprintf('Route "%s" is served by %s, so it must be named "%s" (<module>_<use_case>): rename the route, or move the controller into the UseCase/<Name>/ folder the name says.', $name, $controller, $expected);
     }
 
     private function snake(string $word): string

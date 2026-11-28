@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Dashboard\UseCase\ShowReviewRecord\ShowReviewRecordController;
 use Intakt\Gates\Routing\RouteNamesFollowUseCases;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -15,14 +17,14 @@ final class RouteNamesFollowUseCasesTest extends TestCase
 {
     public function testARouteNamedAfterItsModuleAndUseCaseFolderIsAccepted(): void
     {
-        $routes = $this->routes(['dashboard_show_review_record' => 'Intakt\Core\Dashboard\UseCase\ShowReviewRecord\ShowReviewRecordController']);
+        $routes = $this->routes(['dashboard_show_review_record' => ShowReviewRecordController::class]);
 
         self::assertSame([], new RouteNamesFollowUseCases()->findingsIn($routes));
     }
 
     public function testAControllerGivenWithItsMethodIsCheckedLikeAnInvokableOne(): void
     {
-        $routes = $this->routes(['dashboard_show_review' => 'Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController::show']);
+        $routes = $this->routes(['dashboard_show_review' => ShowReviewController::class.'::show']);
 
         self::assertSame([], new RouteNamesFollowUseCases()->findingsIn($routes));
     }
@@ -40,8 +42,8 @@ final class RouteNamesFollowUseCasesTest extends TestCase
     public function testASecondRouteServedFromTheSameUseCaseFolderIsRejected(): void
     {
         $routes = $this->routes([
-            'dashboard_show_review' => 'Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController',
-            'dashboard_show_review_record' => 'Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController::record',
+            'dashboard_show_review' => ShowReviewController::class,
+            'dashboard_show_review_record' => ShowReviewController::class.'::record',
         ]);
 
         self::assertCount(1, new RouteNamesFollowUseCases()->findingsIn($routes));
@@ -80,7 +82,7 @@ final class RouteNamesFollowUseCasesTest extends TestCase
     }
 
     /**
-     * @param array<string, string> $controllers route name to controller
+     * @param array<string, string> $controllers
      */
     private function routes(array $controllers): RouteCollection
     {
