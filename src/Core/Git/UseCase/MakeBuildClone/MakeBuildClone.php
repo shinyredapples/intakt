@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\MakeBuildClone;
 
+use Intakt\Core\Disk\Contract\DiskHold;
+use Intakt\Core\Disk\Contract\DiskSpace;
+use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
+use Intakt\Core\Disk\Contract\NearestFolder;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
@@ -13,6 +18,7 @@ use Intakt\Core\Git\Domain\SourceLine;
 use Intakt\Core\Git\Domain\TaskBranch;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ExceptionInterface;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 use Throwable;
 
@@ -26,6 +32,7 @@ final readonly class MakeBuildClone
         private HardenedGit $hardened,
         private Filesystem $filesystem,
         private Mirrors $mirrors,
+        private DiskSpace $disk,
     ) {
     }
 
@@ -43,6 +50,7 @@ final readonly class MakeBuildClone
         $task = $this->taskRef($mirror, $main, $branch->name);
         $source = $this->verifiedSource($mirror, $branch->source, $directory);
         $format = $this->objectFormatOf($mirror, $directory);
+        $this->holdBelowTheDiskFloors($directory);
         $this->reserve($directory);
 
         try {
@@ -143,6 +151,24 @@ final readonly class MakeBuildClone
     {
         // Because a fetch from a SHA-256 mirror into a SHA-1 repository fails.
         return trim($this->mustRun($this->inMirror($mirror, ['rev-parse', '--show-object-format']), $directory));
+    }
+
+    private function holdBelowTheDiskFloors(string $directory): void
+    {
+        $folder = NearestFolder::of(dirname($directory));
+
+        try {
+            $hold = $this->disk->holdAt($folder);
+        } catch (FreeSpaceUnreadable $unreadable) {
+            throw BuildCloneNotMade::at($directory, $unreadable->getMessage(), $unreadable);
+        } catch (ProcessTimedOutException $timedOut) {
+            // Fixed words and no cause, as for git, so a timeout names df and not the git step around it.
+            throw BuildCloneNotMade::at($directory, new FreeSpaceUnreadable($folder, sprintf('df timed out after %s seconds', $timedOut->getExceededTimeout()))->getMessage());
+        }
+
+        if ($hold instanceof DiskHold) {
+            throw BuildCloneNotMade::at($directory, $hold->reason(), new NewWorkHeld($hold));
+        }
     }
 
     private function reserve(string $directory): void

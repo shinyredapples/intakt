@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildServices;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\QuestionRefused;
@@ -30,6 +31,8 @@ use Intakt\Plugin\Gate\Contract\Gate;
 use InvalidArgumentException;
 use NoDiscard;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Filesystem\Exception\IOException;
+use Symfony\Component\Filesystem\Exception\IOExceptionInterface;
 use Symfony\Component\Filesystem\Filesystem;
 
 final readonly class RunBuildJob
@@ -81,10 +84,13 @@ final readonly class RunBuildJob
         private Filesystem $filesystem,
         #[Autowire('%kernel.project_dir%/docker/job/build.sh')]
         private string $buildScript,
+        #[Autowire('%kernel.project_dir%/docker/job/precheck.sh')]
+        private string $precheckScript,
         // Under the project folder like the jobs' output directories, because the engine mounts host paths.
         #[Autowire('%kernel.project_dir%/var/prompts')]
         private string $promptFolder,
         private RecordedBuildStops $stops,
+        public BuildLimits $limits,
     ) {
         // Checked as given, because the compiled container would turn a YAML true into a one-second limit before a typed parameter saw it.
         if (!is_int($toolTimeLimitSeconds)) {
@@ -99,28 +105,30 @@ final readonly class RunBuildJob
 
     /**
      * @throws BuildCloneIsNoFolder
+     * @throws IOException
      * @throws TierResolutionFailure
      * @throws BuilderNotOnClaudeCode
      * @throws JobRefused
-     * @throws DockerEngineFailed
-     * @throws JobEventNotRecorded
+     * @throws BuildJobEndFailed
      */
     #[NoDiscard]
     public function run(BuildJob $job): BuildJobOutcome
     {
         $model = $this->modelFor($job);
         $clone = new JobInput($this->folder($job->clone), self::CLONE);
-        // The command is built before the prompt file exists, so a build script that cannot be read leaves no prompt behind.
+        // The command and the builder's check are taken before the prompt file exists, so a script that cannot be read leaves no prompt behind.
         $command = $this->commandOf($job, $model);
+        $precheck = $this->precheckInput();
         $prompt = $this->emptyPromptFile();
 
         $cause = null;
         $reachedRunner = false;
+        $promptRemoved = false;
 
         try {
             // Written and turned into the spec inside the try, because once the prompt file exists every failure must remove it, a failed write and a refused input included.
             $this->filesystem->appendToFile($prompt, $this->prompts->textFor($job->brief));
-            $spec = $this->specOf($job, $command, $clone, new JobInput($prompt, self::PROMPT));
+            $spec = $this->specOf($job, $command, $clone, new JobInput($prompt, self::PROMPT), $precheck);
             // Set only here, so whatever fails before the runner is called, of any exception class, never reads the cause.
             $reachedRunner = true;
             $outcome = $this->outcomeOfRunning($spec);
@@ -129,12 +137,26 @@ final readonly class RunBuildJob
             $reachedRunner = false;
 
             throw $failure;
+        } catch (DockerEngineFailed|JobEventNotRecorded $failure) {
+            // Passed on unchanged and without reading the cause, because the gate's registry lookup fails before the runner is called, so the cause is another build's.
+            if (!$reachedRunner) {
+                throw $failure;
+            }
+            // Read here and cleared for the finally, so the cause is still read once and reaches the failed build_job row with the failure.
+            $reachedRunner = false;
+            $end = BuildJobEndFailed::after($failure, $this->stops->causeFor($job));
+            $this->removeQuietly($prompt);
+            $promptRemoved = true;
+
+            throw $end;
         } finally {
             // Read only for a job the runner was called with and did not refuse, also when that job failed, so its cause never reaches the branch's next build; read before the prompt is removed, so a failed removal cannot keep it.
             if ($reachedRunner) {
                 $cause = $this->stops->causeFor($job);
             }
-            $this->filesystem->remove($prompt);
+            if (!$promptRemoved) {
+                $this->filesystem->remove($prompt);
+            }
         }
 
         return $outcome->stoppedFor($cause);
@@ -167,6 +189,18 @@ final readonly class RunBuildJob
         return new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES), (string) $this->toolTimeLimitSeconds);
     }
 
+    // Checked before the mount, because an engine may make a missing host path an empty folder, and the builder would then miss its check without being told.
+    private function precheckInput(): JobInput
+    {
+        $script = realpath($this->precheckScript);
+
+        if (false === $script || !is_file($script) || !is_readable($script)) {
+            throw new IOException(sprintf('The builder\'s check script "%s" is not a readable file.', $this->precheckScript), path: $this->precheckScript);
+        }
+
+        return new JobInput($script, BuilderPrompt::PRECHECK);
+    }
+
     // A file of its own for each run, readable by the orchestrator's user only, so two builds never share one.
     private function emptyPromptFile(): string
     {
@@ -192,6 +226,15 @@ final readonly class RunBuildJob
         }
 
         return $this->outcomeOf($result);
+    }
+
+    // A failed removal is dropped only here, because the job-end failure carries the stop cause the row must keep, and the prompt is a scratch file.
+    private function removeQuietly(string $prompt): void
+    {
+        try {
+            $this->filesystem->remove($prompt);
+        } catch (IOExceptionInterface) {
+        }
     }
 
     private function outcomeOf(JobResult $result): BuildJobOutcome

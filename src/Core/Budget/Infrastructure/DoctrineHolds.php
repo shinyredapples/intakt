@@ -53,19 +53,27 @@ final readonly class DoctrineHolds implements Holds
     #[Override]
     public function isCoolingDown(Account $account): bool
     {
-        $ahead = $this->entities->createQueryBuilder()
-            ->select('COUNT(cooldown.position)')
+        return $this->coolingDownUntil($account) instanceof DateTimeImmutable;
+    }
+
+    #[Override]
+    public function coolingDownUntil(Account $account): ?DateTimeImmutable
+    {
+        $latest = $this->entities->createQueryBuilder()
+            ->select('cooldown')
             ->from(AccountCooldownRecord::class, 'cooldown')
             ->where('cooldown.provider = :provider')
             ->andWhere('cooldown.account = :account')
             ->andWhere('cooldown.until > :now')
+            ->orderBy('cooldown.until', 'DESC')
+            ->setMaxResults(1)
             ->setParameter('provider', $account->provider)
             ->setParameter('account', $account->name)
             ->setParameter('now', $this->clock->now(), 'utc_datetime_immutable')
             ->getQuery()
-            ->getSingleScalarResult();
+            ->getOneOrNullResult();
 
-        return 0 < (int) $ahead;
+        return $latest instanceof AccountCooldownRecord ? $latest->until : null;
     }
 
     #[Override]

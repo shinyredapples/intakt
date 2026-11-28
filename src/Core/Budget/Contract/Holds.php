@@ -18,6 +18,9 @@ interface Holds
 
     public function isCoolingDown(Account $account): bool;
 
+    // The end of the latest cooldown of the account still ahead, null when none is, so a caller waits for the hold that lasts longest.
+    public function coolingDownUntil(Account $account): ?DateTimeImmutable;
+
     // In the order of the SharedHold cases, so the first one is the one that wins.
     /**
      * @return list<SharedHold>

@@ -195,7 +195,24 @@ final readonly class RoundLedger
 
         $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
 
-        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line, $this->storedNote($judged->notes->noteOf($finding->id)), $finding->gate_gap), $shown);
+        return array_map(fn (Finding $finding): JudgeDoneFinding => $this->recorded($finding, $judged), $shown);
+    }
+
+    // The title and kind are the reviewer's own, and a merged act entry carries its survivor's, because OnePerPlace builds the entry on the surviving finding.
+    private function recorded(Finding $finding, JudgedFindings $judged): JudgeDoneFinding
+    {
+        return new JudgeDoneFinding(
+            $finding->id,
+            $finding->severity,
+            $finding->text,
+            $finding->merged,
+            $finding->file,
+            $finding->line,
+            $this->storedNote($judged->notes->noteOf($finding->id)),
+            $finding->gate_gap,
+            $finding->title,
+            $finding->kind,
+        );
     }
 
     // Keyed at the head the round judged, because only the reviewed checkout holds the files a P1 named as the reviewers saw them.

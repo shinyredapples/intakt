@@ -57,12 +57,4 @@ final readonly class ModelWaits
 
         return null === $routerProvider ? $own : max($own, $this->pinnedCooldowns->secondsUntilFree(new PinnedProvider($account, $routerProvider)));
     }
-
-    // 0 while an account can take the model, else the shortest wait, at least a second, so a cooling model is never reported free and chosen again at once; the longest window is listed too, so min() always has a value.
-    public function secondsUntilFree(string|Model $model): int
-    {
-        $waits = $this->perAccount($this->routerProviderOf($model));
-
-        return in_array(0, $waits, true) ? 0 : min([AccountCooldowns::LONGEST_SECONDS, ...$waits]);
-    }
 }

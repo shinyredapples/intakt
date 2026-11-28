@@ -135,7 +135,7 @@ final class PinnedProviderCooldownTest extends TestCase
             return 'default';
         });
         $coolingDuringTheScan = new PinCoolingAfterARead($this->pins, $this->deepinfra('team'), $this->deepinfra(Account::DEFAULT), 120);
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $default, 'team' => $this->answering('team')], new NoCooldowns(), $this->clock, new NullLogger(), $coolingDuringTheScan);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $default, 'team' => $this->answering('team')], new NoCooldowns(), $this->clock, new NullLogger(), $coolingDuringTheScan, new OwnersOrderRanking());
 
         $answer = $platform->invoke(self::PINNED, 'Review.')->asText();
 
@@ -156,7 +156,7 @@ final class PinnedProviderCooldownTest extends TestCase
 
             throw new RateLimitExceededException(120);
         });
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $default, 'team' => $this->answering('team'), 'last' => $last], $accounts, $this->clock, new NullLogger(), $this->pins);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $default, 'team' => $this->answering('team'), 'last' => $last], $accounts, $this->clock, new NullLogger(), $this->pins, new OwnersOrderRanking());
 
         $out = $this->failureOf(static fn (): string => $platform->invoke(self::PINNED, 'Review.')->asText());
 
@@ -193,7 +193,7 @@ final class PinnedProviderCooldownTest extends TestCase
         $this->pins->coolDown($this->deepinfra(Account::DEFAULT), 1);
         $this->pins->coolDown($this->deepinfra('team'), 120);
         $endingWhileRead = new ClockMovingAfterARead($this->pins, $this->clock, $this->deepinfra(Account::DEFAULT), 2);
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->answering('first'), 'team' => $this->answering('second')], new NoCooldowns(), $this->clock, new NullLogger(), $endingWhileRead);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->answering('first'), 'team' => $this->answering('second')], new NoCooldowns(), $this->clock, new NullLogger(), $endingWhileRead, new OwnersOrderRanking());
 
         $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
 
@@ -217,7 +217,7 @@ final class PinnedProviderCooldownTest extends TestCase
         $provider = Provider::OpenAiCompatible;
         $accounts = new AccountCooldownWindows(new ReadingsInMemory($clock), $pool, $locks, $clock, new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [$provider->value => [Account::DEFAULT]]);
         $pins = new PinnedProviderCooldownWindows($pool, $clock, $locks);
-        $platform = new AccountFailoverPlatform($provider, [Account::DEFAULT => $this->answering(static fn (): never => throw new RateLimitExceededException(120))], $accounts, $clock, new NullLogger(), $pins);
+        $platform = new AccountFailoverPlatform($provider, [Account::DEFAULT => $this->answering(static fn (): never => throw new RateLimitExceededException(120))], $accounts, $clock, new NullLogger(), $pins, new OwnersOrderRanking());
 
         $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
 
@@ -271,7 +271,7 @@ final class PinnedProviderCooldownTest extends TestCase
         };
         $accounts = new AccountWindowsOnAClock($this->clock, [Provider::OpenAiCompatible->value => [Account::DEFAULT]]);
         $pins = new PinnedProviderCooldownWindows($pool, $this->clock, new LockFactory(new InMemoryStore()));
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->answering(static fn (): never => throw new RateLimitExceededException(120))], $accounts, $this->clock, new NullLogger(), $pins);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->answering(static fn (): never => throw new RateLimitExceededException(120))], $accounts, $this->clock, new NullLogger(), $pins, new OwnersOrderRanking());
 
         $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
 
@@ -297,7 +297,7 @@ final class PinnedProviderCooldownTest extends TestCase
 
             throw new RateLimitExceededException(0);
         });
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], $accounts, $this->clock, new NullLogger(), $pins);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], $accounts, $this->clock, new NullLogger(), $pins, new OwnersOrderRanking());
 
         $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
 
@@ -309,7 +309,7 @@ final class PinnedProviderCooldownTest extends TestCase
     public function testAnUnpinnedLimitWhoseWindowIsNotSavedKeepsTheFailoversErrorInsteadOfAOneSecondWait(): void
     {
         $limited = $this->answering(static fn (): never => throw new RateLimitExceededException(120));
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $this->pins);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $this->pins, new OwnersOrderRanking());
 
         $out = $this->failureOf(static fn (): object => $platform->invoke('model', 'Review.'));
 
@@ -334,7 +334,7 @@ final class PinnedProviderCooldownTest extends TestCase
 
             throw new RateLimitExceededException(120);
         });
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $pins);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $pins, new OwnersOrderRanking());
 
         $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
 
@@ -355,7 +355,7 @@ final class PinnedProviderCooldownTest extends TestCase
         $pins = new PinnedProviderCooldownWindows($pool, $this->clock, new LockFactory(new InMemoryStore()));
         $first = $this->answering(static fn (): never => throw new RateLimitExceededException(300));
         $second = $this->answering(static fn (): never => throw new RateLimitExceededException(45));
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $first, 'team' => $second], new NoCooldowns(), $this->clock, new NullLogger(), $pins);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $first, 'team' => $second], new NoCooldowns(), $this->clock, new NullLogger(), $pins, new OwnersOrderRanking());
 
         $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
 
@@ -383,7 +383,7 @@ final class PinnedProviderCooldownTest extends TestCase
 
             throw new RateLimitExceededException(120);
         });
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $first, 'team' => $second], new NoCooldowns(), $this->clock, new NullLogger(), $pins);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $first, 'team' => $second], new NoCooldowns(), $this->clock, new NullLogger(), $pins, new OwnersOrderRanking());
 
         $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
 
@@ -413,7 +413,7 @@ final class PinnedProviderCooldownTest extends TestCase
             throw new RateLimitExceededException(1);
         });
         $second = $this->answering(static fn (): never => throw new RateLimitExceededException(3600));
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $first, 'team' => $second], new NoCooldowns(), $this->clock, new NullLogger(), $pins);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $first, 'team' => $second], new NoCooldowns(), $this->clock, new NullLogger(), $pins, new OwnersOrderRanking());
 
         $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
 
@@ -442,7 +442,7 @@ final class PinnedProviderCooldownTest extends TestCase
         };
         $pins = new PinnedProviderCooldownWindows($pool, $this->clock, new LockFactory(new InMemoryStore()));
         $limited = $this->answering(static fn (): never => throw new RateLimitExceededException(120));
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $pins);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $pins, new OwnersOrderRanking());
 
         $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
 
@@ -462,7 +462,7 @@ final class PinnedProviderCooldownTest extends TestCase
         };
         $pins = new PinnedProviderCooldownWindows($pool, $this->clock, new LockFactory(new InMemoryStore()));
         $limited = $this->answering(static fn (): never => throw new RateLimitExceededException());
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $pins);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $pins, new OwnersOrderRanking());
 
         $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
 
@@ -503,7 +503,7 @@ final class PinnedProviderCooldownTest extends TestCase
 
             throw new RateLimitExceededException(1);
         });
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $pins);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $limited], new NoCooldowns(), $this->clock, new NullLogger(), $pins, new OwnersOrderRanking());
 
         $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
 
@@ -518,7 +518,7 @@ final class PinnedProviderCooldownTest extends TestCase
         $accounts->method('coolDown')->willThrowException(new RuntimeException('The disk is full.'));
         $limited = new RateLimitExceededException(120);
         $logger = new BufferingLogger();
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => new FailingWhenRead($limited)], $accounts, $this->clock, $logger, $this->pins);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => new FailingWhenRead($limited)], $accounts, $this->clock, $logger, $this->pins, new OwnersOrderRanking());
         $answer = $platform->invoke(self::PINNED, 'Review.');
 
         $out = $this->failureOf(static fn (): string => $answer->asText());
@@ -544,7 +544,7 @@ final class PinnedProviderCooldownTest extends TestCase
         $logger = new BufferingLogger();
         $accounts = new AccountCooldownWindows(new ReadingsInMemory($clock), $pool, new LockFactory(new InMemoryStore()), $clock, $ledger, $logger, StoredSerializerFactory::create(), [$provider->value => [Account::DEFAULT]]);
         $limited = new RateLimitExceededException(120);
-        $platform = new AccountFailoverPlatform($provider, [Account::DEFAULT => new FailingWhenRead($limited)], $accounts, $this->clock, $logger, $this->pins);
+        $platform = new AccountFailoverPlatform($provider, [Account::DEFAULT => new FailingWhenRead($limited)], $accounts, $this->clock, $logger, $this->pins, new OwnersOrderRanking());
         $answer = $platform->invoke(self::PINNED, 'Review.');
 
         $out = $this->failureOf(static fn (): string => $answer->asText());
@@ -569,7 +569,7 @@ final class PinnedProviderCooldownTest extends TestCase
 
     private function accounts(PlatformInterface $default, PlatformInterface $team): AccountFailoverPlatform
     {
-        return new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $default, 'team' => $team], new NoCooldowns(), $this->clock, new NullLogger(), $this->pins);
+        return new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $default, 'team' => $team], new NoCooldowns(), $this->clock, new NullLogger(), $this->pins, new OwnersOrderRanking());
     }
 
     private function deepinfra(string $account): PinnedProvider

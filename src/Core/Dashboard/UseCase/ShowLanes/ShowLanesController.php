@@ -19,6 +19,7 @@ final readonly class ShowLanesController
         private Ledger $ledger,
         private LedgerReviewPages $reviewPages,
         private LivePageRendering $pages,
+        private HeldForSpace $heldForSpace,
     ) {
     }
 
@@ -30,6 +31,7 @@ final readonly class ShowLanesController
         return new Response($this->pages->render($request, 'dashboard/lanes.html.twig', [
             'working' => $board->whoIsWorking(),
             'nobody_working' => $board->nobodyWorkingLine(),
+            'held_for_space' => $this->heldForSpace->now(),
             'rail_section' => 'board',
         ]));
     }
