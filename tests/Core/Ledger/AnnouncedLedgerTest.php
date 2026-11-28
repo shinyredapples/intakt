@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ledger;
 
 use DateTimeImmutable;
+use Doctrine\Common\EventManager;
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Driver\AbstractException;
@@ -176,7 +177,9 @@ final class AnnouncedLedgerTest extends KernelTestCase
         self::assertInstanceOf(ManagerRegistry::class, $original);
         $defaultManager = $original->getManager();
         self::assertInstanceOf(EntityManagerInterface::class, $defaultManager);
-        $this->manager = new EntityManager($this->connection, $defaultManager->getConfiguration(), $defaultManager->getEventManager());
+        $events = $defaultManager->getEventManager();
+        self::assertInstanceOf(EventManager::class, $events);
+        $this->manager = new EntityManager($this->connection, $defaultManager->getConfiguration(), $events);
         new SchemaTool($this->manager)->createSchema($this->manager->getMetadataFactory()->getAllMetadata());
 
         $registry = self::createStub(ManagerRegistry::class);

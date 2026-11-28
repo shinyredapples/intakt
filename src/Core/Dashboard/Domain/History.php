@@ -63,7 +63,7 @@ final readonly class History
         return $rows;
     }
 
-    // The first row in append order that names a round and a project gives the round its project.
+    // Shared by the page and the one-row push, so both give a round the project of its first row in append order.
     /**
      * @param list<HistoryRow> $rows
      *

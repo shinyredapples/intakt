@@ -31,7 +31,7 @@ final class AnnouncingConnection extends AbstractConnectionMiddleware
         try {
             parent::commit();
         } catch (Exception $failure) {
-            // A commit that failed stored none of the held events.
+            // Dropped, because a commit that failed stored none of the held events.
             $this->announcements->rolledBack();
 
             throw $failure;

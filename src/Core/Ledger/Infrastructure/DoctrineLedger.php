@@ -26,7 +26,6 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Uid\UuidV7;
 
 // The ledger owns the default entity manager: append flushes every pending change in it and a failed append's reset discards them, so a second entity needs its own manager or a flush of only the ledger record.
-// Named the Ledger, because AnnouncedLedger implements it too and decorates this one.
 #[AsAlias(Ledger::class)]
 final readonly class DoctrineLedger implements Ledger
 {

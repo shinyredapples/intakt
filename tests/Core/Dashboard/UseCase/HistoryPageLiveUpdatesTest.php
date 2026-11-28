@@ -190,7 +190,7 @@ final class HistoryPageLiveUpdatesTest extends DashboardPageTestCase
         $this->announce(new LedgerEvent(LedgerEventKind::OwnerAsked, json_encode($payload, JSON_THROW_ON_ERROR)));
     }
 
-    // What the application's ledger does once the append commits; the page tests read a ledger in memory, which announces nothing.
+    // Announced by hand, because the page tests read a ledger in memory, which announces nothing, unlike the application's ledger after a commit.
     private function announce(LedgerEvent $event): void
     {
         self::assertTrue($this->ledger->append($event)->succeeded());
