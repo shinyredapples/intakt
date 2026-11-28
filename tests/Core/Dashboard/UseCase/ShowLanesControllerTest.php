@@ -18,7 +18,14 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
+use Intakt\Core\Dashboard\UseCase\ShowLanes\HeldForSpace;
 use Intakt\Core\Dashboard\UseCase\ShowLanes\ShowLanesController;
+use Intakt\Core\Disk\Contract\DiskHold;
+use Intakt\Core\Disk\Contract\NearestFolder;
+use Intakt\Core\Disk\Infrastructure\DiskConfiguration;
+use Intakt\Core\Disk\Infrastructure\FlooredDiskSpace;
+use Intakt\Core\Git\Contract\GitServices;
+use Intakt\Tests\Core\Disk\ControlledFreeSpaceReader;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
@@ -38,6 +45,11 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(WhoIsWorking::class)]
 #[UsesClass(RefuseForeignHost::class)]
 #[UsesClass(ReplayMarks::class)]
+#[UsesClass(HeldForSpace::class)]
+#[UsesClass(FlooredDiskSpace::class)]
+#[UsesClass(DiskHold::class)]
+#[UsesClass(NearestFolder::class)]
+#[UsesClass(ControlledFreeSpaceReader::class)]
 final class ShowLanesControllerTest extends DashboardPageTestCase
 {
     public function testTheStatusPageNamesTheSameStatusLineAsTheBoardUnderAPathBackToNow(): void
@@ -144,6 +156,26 @@ final class ShowLanesControllerTest extends DashboardPageTestCase
         $this->ledger->judgeRound('round-1');
 
         self::assertCount(0, $this->browser->request('GET', '/lanes')->filter('img[src*="/roles/"]'));
+    }
+
+    public function testWhileTheDiskIsBelowTheFreeBytesFloorTheStatusPageSaysNewWorkIsPausedAndWhere(): void
+    {
+        self::getContainer()->get(ControlledFreeSpaceReader::class)->report(DiskConfiguration::DEFAULT_MIN_FREE_BYTES - 1, DiskConfiguration::DEFAULT_MIN_FREE_INODES);
+
+        $banner = $this->browser->request('GET', '/lanes')->filter('main .banner');
+
+        self::assertCount(1, $banner);
+        self::assertSame(
+            sprintf('New work is paused because the disk is low on free space. The disk of %s has 1.9 GiB free, below the floor of 2 GiB (disk.min_free_bytes). Work already running goes on, and new work starts again by itself once space is back.', NearestFolder::of((string) self::getContainer()->getParameter(GitServices::MIRRORS_DIRECTORY))),
+            $banner->filter('p')->text(),
+        );
+    }
+
+    public function testWithTheDiskAtBothFloorsTheStatusPageShowsNoPause(): void
+    {
+        self::getContainer()->get(ControlledFreeSpaceReader::class)->report(DiskConfiguration::DEFAULT_MIN_FREE_BYTES, DiskConfiguration::DEFAULT_MIN_FREE_INODES);
+
+        self::assertCount(0, $this->browser->request('GET', '/lanes')->filter('main .banner'));
     }
 
     public function testAReviewerThatHasAnsweredIsNoLane(): void
