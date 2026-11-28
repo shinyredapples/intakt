@@ -93,21 +93,26 @@ final class BuildSessionWatch implements JobWatch
     // The CLI only appends to the log, so a log that is another file, or shorter than what was read, was changed by the builder.
     private function follow(?JobOutputPiece $piece): void
     {
-        if (!$piece instanceof JobOutputPiece) {
-            $this->lost = null !== $this->identity;
+        $this->lost = $piece instanceof JobOutputPiece ? $this->isAnotherLog($piece) : null !== $this->identity;
 
-            return;
-        }
-
-        if ((null !== $this->identity && $piece->identity !== $this->identity) || $piece->size < $this->offset) {
-            $this->lost = true;
-
+        if ($this->lost || !$piece instanceof JobOutputPiece) {
             return;
         }
 
         $this->identity = $piece->identity;
         $this->offset += strlen($piece->bytes);
-        $lines = explode("\n", $this->partial.$piece->bytes);
+        $this->takeLines($piece->bytes);
+    }
+
+    private function isAnotherLog(JobOutputPiece $piece): bool
+    {
+        return (null !== $this->identity && $piece->identity !== $this->identity) || $piece->size < $this->offset;
+    }
+
+    // A line the last piece cut is finished by this one, so only whole lines are read.
+    private function takeLines(string $bytes): void
+    {
+        $lines = explode("\n", $this->partial.$bytes);
         $this->partial = array_pop($lines);
 
         if ($this->skippingLine && [] !== $lines) {

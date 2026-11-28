@@ -93,6 +93,6 @@ final class JobOutputPieceReadTest extends TestCase
 
     private function piece(int $from, int $maxBytes): ?JobOutputPiece
     {
-        return new JobOutputDirectories($this->folder)->piece($this->folder, 'build.log', $from, $maxBytes);
+        return new JobOutputDirectories($this->folder)->piece($this->folder.'/build.log', $from, $maxBytes);
     }
 }

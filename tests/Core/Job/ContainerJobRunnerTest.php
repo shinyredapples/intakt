@@ -362,7 +362,7 @@ final class ContainerJobRunnerTest extends TestCase
             public function endsSession(JobFollowedFile $file): bool
             {
                 file_put_contents($this->root.'/build-1/session.log', 'line one');
-                $this->seen = [$file->read(0, 4)?->bytes ?? 'none', $file->read(5, 100)?->bytes ?? 'none'];
+                $this->seen = [$file->read(0, 4)->bytes ?? 'none', $file->read(5, 100)->bytes ?? 'none'];
 
                 return true;
             }

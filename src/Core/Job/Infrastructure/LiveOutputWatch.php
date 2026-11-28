@@ -30,6 +30,6 @@ final readonly class LiveOutputWatch implements JobFollowedFile
 
     public function read(int $from, int $maxBytes): ?JobOutputPiece
     {
-        return $this->outputs->piece($this->directory, $this->watch->followedFile(), $from, $maxBytes);
+        return $this->outputs->piece($this->directory.'/'.$this->watch->followedFile(), $from, $maxBytes);
     }
 }

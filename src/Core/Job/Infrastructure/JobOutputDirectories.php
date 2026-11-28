@@ -10,9 +10,7 @@ use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobOutputFile;
 use Intakt\Core\Job\Contract\JobOutputPiece;
 use Intakt\Core\Job\Contract\JobOutputRefused;
-use RuntimeException;
 use SplFileInfo;
-use SplFileObject;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
@@ -68,7 +66,7 @@ final readonly class JobOutputDirectories
             }
 
             $size = $this->sizeOf($entry);
-            $skipped = $followed === $entry->getFilename() ? max(0, $size - self::TAIL_BYTES) : 0;
+            $skipped = $this->tailStart($entry->getFilename(), $size, $followed);
             $bytes += $size - $skipped;
 
             if ($bytes > self::MAX_BYTES) {
@@ -85,25 +83,17 @@ final readonly class JobOutputDirectories
     }
 
     // A piece of a file the running job writes. Opened for reading and writing, because opening for reading alone a pipe the job put in the file's place waits for a writer; then checked to be the plain file that was listed, because the job can swap the entry between the look and the open; never more than the asked bytes, because the file can grow while it is read.
-    public function piece(string $directory, string $name, int $from, int $maxBytes): ?JobOutputPiece
+    public function piece(string $path, int $from, int $maxBytes): ?JobOutputPiece
     {
-        $path = $directory.'/'.$name;
-        clearstatcache(true, $path);
-        $listed = is_link($path) || !is_file($path) ? false : lstat($path);
+        $handle = $this->openedPlainFile($path);
+        $opened = null === $handle ? false : fstat($handle);
 
-        try {
-            $file = false === $listed ? null : new SplFileObject($path, 'r+b');
-        } catch (RuntimeException) {
+        if (null === $handle || false === $opened) {
             return null;
         }
 
-        $opened = $file?->fstat();
-
-        if (!$file instanceof SplFileObject || false === $listed || !is_array($opened) || self::PLAIN_FILE !== ($opened['mode'] & self::FILE_TYPE) || [$opened['dev'], $opened['ino']] !== [$listed['dev'], $listed['ino']]) {
-            return null;
-        }
-
-        $bytes = $from < $opened['size'] && 0 === $file->fseek($from) ? $file->fread(min($maxBytes, $opened['size'] - $from)) : '';
+        $bytes = $from < $opened['size'] ? stream_get_contents($handle, min($maxBytes, $opened['size'] - $from), $from) : '';
+        fclose($handle);
 
         return new JobOutputPiece($opened['dev'].':'.$opened['ino'], $opened['size'], false === $bytes ? '' : $bytes);
     }
@@ -131,6 +121,43 @@ final readonly class JobOutputDirectories
     private function of(JobId $job): string
     {
         return $this->root.'/'.$job->value;
+    }
+
+    /**
+     * @return resource|null
+     */
+    private function openedPlainFile(string $path)
+    {
+        clearstatcache(true, $path);
+        $listed = is_link($path) || !is_file($path) ? false : lstat($path);
+        // Silenced, because a file the job locked or swapped away fails here, which is an answer, not a fault.
+        $handle = false === $listed ? false : @fopen($path, 'r+b');
+        $opened = false === $handle ? false : fstat($handle);
+
+        if (false !== $handle && false !== $opened && false !== $listed && $this->isTheListedPlainFile($opened, $listed)) {
+            return $handle;
+        }
+
+        if (false !== $handle) {
+            fclose($handle);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{dev: int, ino: int, mode: int} $opened
+     * @param array{dev: int, ino: int} $listed
+     */
+    private function isTheListedPlainFile(array $opened, array $listed): bool
+    {
+        return self::PLAIN_FILE === ($opened['mode'] & self::FILE_TYPE) && [$opened['dev'], $opened['ino']] === [$listed['dev'], $listed['ino']];
+    }
+
+    // The tail only, from the followed file, because the end of a watched job hands back that much of it.
+    private function tailStart(string $name, int $size, ?string $followed): int
+    {
+        return $followed === $name ? max(0, $size - self::TAIL_BYTES) : 0;
     }
 
     private function isNoOutput(DirectoryIterator $entry): bool

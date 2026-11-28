@@ -20,10 +20,10 @@ final class BuildLogTally
     /** @var list<string> */
     private array $changes = [];
 
-    /** @var array<string, array{test: bool, commit: bool, background: bool, shell: string, kill: bool}> */
+    /** @var array<string, BuildLogCall> */
     private array $open = [];
 
-    // Test runs that went on in the background, by the id of their shell; the empty id stands for one whose result named none.
+    // By the id of the shell, because a later call names that id when it looks at the run or kills it; the empty id is a run whose result named none.
     /** @var array<string, true> */
     private array $background = [];
 
@@ -50,7 +50,7 @@ final class BuildLogTally
             max($this->resultTokens, $this->messageTokens),
             hash('sha256', implode("\0", $this->changes)),
             $this->failing,
-            [] !== $this->background || in_array(true, array_column($this->open, 'test'), true),
+            [] !== $this->background || [] !== array_filter($this->open, static fn (BuildLogCall $call): bool => $call->runsTests),
         );
     }
 
@@ -98,21 +98,14 @@ final class BuildLogTally
 
         $tool = BuildLogEvents::textAt($block, 'name');
         $input = BuildLogEvents::arrayAt($block, 'input');
-        $command = BuildLogEvents::textAt($input, 'command');
-        $test = BuildLogEvents::runsTests($tool, $command);
+        $call = BuildLogCall::of($tool, $input);
 
-        if ($test) {
-            // A new test run tells that the one whose shell was never named is over.
+        if ($call->runsTests) {
+            // Dropped, because a new test run is the only sign that a run whose shell was never named is over.
             unset($this->background['']);
         }
 
-        $this->open[$id] = [
-            'test' => $test,
-            'commit' => BuildLogEvents::triesToCommit($tool, $command),
-            'background' => true === ($input['run_in_background'] ?? null),
-            'shell' => BuildLogEvents::shellLookedAt($input),
-            'kill' => str_starts_with($tool, 'Kill'),
-        ];
+        $this->open[$id] = $call;
         $change = BuildLogEvents::changeBy($tool, $input);
 
         if ('' !== $change) {
@@ -128,32 +121,34 @@ final class BuildLogTally
         $id = BuildLogEvents::textAt($block, 'tool_use_id');
         $call = $this->open[$id] ?? null;
 
-        if ('tool_result' !== BuildLogEvents::textAt($block, 'type') || null === $call) {
+        if ('tool_result' !== BuildLogEvents::textAt($block, 'type') || !$call instanceof BuildLogCall) {
             return;
         }
 
         unset($this->open[$id]);
         $text = BuildLogEvents::textOf($block['content'] ?? null);
-        $commit = $call['commit'] && true !== ($block['is_error'] ?? null) ? BuildLogEvents::commitIn($text) : '';
+        $this->endCommit($call, true === ($block['is_error'] ?? null) ? '' : $text);
+        $this->endTestRun($call, $text);
+        $this->endBackgroundRun($call, $text);
+    }
+
+    private function endCommit(BuildLogCall $call, string $text): void
+    {
+        $commit = $call->triesToCommit ? BuildLogEvents::commitIn($text) : '';
 
         if ('' !== $commit) {
             $this->changes[] = 'commit:'.$commit;
         }
-
-        if ($call['test']) {
-            $this->endTestRun($text, $call['background']);
-        }
-
-        if (isset($this->background[$call['shell']]) && ($call['kill'] || BuildLogEvents::showsEnded($text))) {
-            unset($this->background[$call['shell']]);
-            $this->failing = $call['kill'] ? $this->failing : BuildLogEvents::failuresIn($text);
-        }
     }
 
     // A run that went on in the background is still running, so it stays a running check until its shell shows it ended.
-    private function endTestRun(string $text, bool $sentToBackground): void
+    private function endTestRun(BuildLogCall $call, string $text): void
     {
-        $shell = BuildLogEvents::backgroundShellIn($text) ?? ($sentToBackground ? '' : null);
+        if (!$call->runsTests) {
+            return;
+        }
+
+        $shell = BuildLogEvents::backgroundShellIn($text) ?? ($call->sentToBackground ? '' : null);
 
         if (null === $shell) {
             $this->failing = BuildLogEvents::failuresIn($text);
@@ -162,5 +157,15 @@ final class BuildLogTally
         }
 
         $this->background[$shell] = true;
+    }
+
+    private function endBackgroundRun(BuildLogCall $call, string $text): void
+    {
+        if (!isset($this->background[$call->shell]) || (!$call->killsShell && !BuildLogEvents::showsEnded($text))) {
+            return;
+        }
+
+        unset($this->background[$call->shell]);
+        $this->failing = $call->killsShell ? $this->failing : BuildLogEvents::failuresIn($text);
     }
 }

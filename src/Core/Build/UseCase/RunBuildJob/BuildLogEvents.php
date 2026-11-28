@@ -77,7 +77,7 @@ final readonly class BuildLogEvents
         return 'Bash' === $tool && 1 === preg_match('~\bgit\s+commit\b~', $command) && !str_contains($command, '--allow-empty');
     }
 
-    // The hash git prints in the first line of a commit it made, such as "[main 1a2b3c4] subject"; empty when the result shows none.
+    // Read from the line git prints for a commit it made, such as "[main 1a2b3c4] subject", because each commit has its own hash where two commands can read the same.
     public static function commitIn(string $text): string
     {
         return 1 === preg_match('~^\[[^\]\n]+ ([0-9a-f]{7,64})\] ~m', $text, $found) ? $found[1] : '';
