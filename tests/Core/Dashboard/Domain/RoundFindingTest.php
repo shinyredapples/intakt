@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\Domain;
 
 use Intakt\Core\Dashboard\Domain\FindingUrgency;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
+use Intakt\Core\Review\Contract\FindingKind;
 use Intakt\Core\Review\Contract\NearLine;
 use Intakt\Core\Review\Contract\QuoteNearLines;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -14,6 +15,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RoundFinding::class)]
 #[CoversClass(FindingUrgency::class)]
+#[UsesClass(FindingKind::class)]
 #[UsesClass(NearLine::class)]
 #[UsesClass(QuoteNearLines::class)]
 final class RoundFindingTest extends TestCase
@@ -122,16 +124,46 @@ final class RoundFindingTest extends TestCase
 
     public function testAFindingWithASecondSentenceGoesOnAfterItsHeadline(): void
     {
-        self::assertTrue(new RoundFinding('F1', 'P2', 'Keep `Ready? yes` as the prompt. More.')->goesOnAfterItsHeadline());
+        self::assertTrue(new RoundFinding('F1', 'P2', 'Keep `Ready? yes` as the prompt. More.')->goesOnAfterItsShortLine());
     }
 
     public function testAFindingOfOneSentenceOrWithoutTextDoesNotGoOnAfterItsHeadline(): void
     {
         self::assertSame([false, false, false], [
-            new RoundFinding('F1', 'P2', " Keep `Ready? yes` as the prompt.\u{2003}")->goesOnAfterItsHeadline(),
-            new RoundFinding('F1', 'P2', "\u{00A0}")->goesOnAfterItsHeadline(),
-            new RoundFinding('F1', 'P2', null)->goesOnAfterItsHeadline(),
+            new RoundFinding('F1', 'P2', " Keep `Ready? yes` as the prompt.\u{2003}")->goesOnAfterItsShortLine(),
+            new RoundFinding('F1', 'P2', "\u{00A0}")->goesOnAfterItsShortLine(),
+            new RoundFinding('F1', 'P2', null)->goesOnAfterItsShortLine(),
         ]);
+    }
+
+    public function testAFindingWithAStoredTitleShowsTheTitleAsItsShortLine(): void
+    {
+        self::assertSame('Discount lost', new RoundFinding('F1', 'P1', 'A cart of 100 loses its discount. More.', title: 'Discount lost')->shortLine());
+    }
+
+    public function testAFindingRecordedWithoutATitleFallsBackToTheHeadlineOfItsText(): void
+    {
+        self::assertSame('A cart loses its discount.', new RoundFinding('F1', 'P1', 'A cart loses its discount. More.')->shortLine());
+    }
+
+    public function testAFindingWithABlankTitleFallsBackToTheHeadline(): void
+    {
+        self::assertSame('Broken.', new RoundFinding('F1', 'P1', 'Broken. More.', title: " \u{00A0}")->shortLine());
+    }
+
+    public function testAFindingRecordedWithoutAKindShowsNoSymbol(): void
+    {
+        self::assertNull(new RoundFinding('F1', 'P1', 'Broken.')->kindWords());
+    }
+
+    public function testAFindingWithAStoredKindNamesItInWords(): void
+    {
+        self::assertSame('No test', new RoundFinding('F1', 'P1', 'Broken.', kind: FindingKind::MissingTest)->kindWords());
+    }
+
+    public function testAFindingWhoseTitleDiffersFromItsTextStillShowsTheWholeText(): void
+    {
+        self::assertTrue(new RoundFinding('F1', 'P1', 'Broken.', title: 'Discount lost')->goesOnAfterItsShortLine());
     }
 
     public function testAFindingsUrgencyReadsItsSeverityAsHowSoonToFixIt(): void

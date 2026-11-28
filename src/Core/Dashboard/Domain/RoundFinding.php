@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
+use Intakt\Core\Review\Contract\FindingKind;
 use Intakt\Core\Review\Contract\NearLine;
 use Intakt\Core\Review\Contract\QuoteNearLines;
 use Intakt\Core\Review\Contract\QuotesCounted;
@@ -26,6 +27,8 @@ final readonly class RoundFinding
         public ?string $droppedBecause = null,
         public QuotesCounted $quotes = new QuotesCounted(),
         private array $nearest = [],
+        private ?string $title = null,
+        private ?FindingKind $kind = null,
     ) {
         $this->call = JudgeCall::NotActedOn;
     }
@@ -47,7 +50,28 @@ final readonly class RoundFinding
         return [$this->id, ...$this->merged];
     }
 
-    // The first sentence of its first line, because a finding has no title of its own and a card shows one short line; null when no text is recorded, Unicode white space included.
+    // The line a card and the finding page show: the stored title, or the headline for a finding recorded without one, because older rows are never back-filled.
+    public function shortLine(): ?string
+    {
+        $title = preg_replace('/^[\s\p{Z}]+|[\s\p{Z}]+$/u', '', (string) $this->title);
+
+        return null === $title || '' === $title ? $this->headline() : $title;
+    }
+
+    // Null for a finding recorded without a kind, which then shows no symbol.
+    public function kindWords(): ?string
+    {
+        return match ($this->kind) {
+            FindingKind::Security => 'Security',
+            FindingKind::Logic => 'Logic',
+            FindingKind::MissingTest => 'No test',
+            FindingKind::TidyUp => 'Tidy-up',
+            FindingKind::Other => 'Other',
+            null => null,
+        };
+    }
+
+    // The first sentence of its first line, the fallback for a finding recorded without a title, because a card shows one short line; of its own and a card shows one short line; null when no text is recorded, Unicode white space included.
     public function headline(): ?string
     {
         $text = $this->trimmedText();
@@ -80,11 +104,11 @@ final readonly class RoundFinding
         return array_column($this->codeSpansOf($this->text ?? ''), 2);
     }
 
-    public function goesOnAfterItsHeadline(): bool
+    public function goesOnAfterItsShortLine(): bool
     {
-        $headline = $this->headline();
+        $line = $this->shortLine();
 
-        return null !== $headline && $headline !== $this->trimmedText();
+        return null !== $line && $line !== $this->trimmedText();
     }
 
     public function urgency(): ?FindingUrgency
