@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Mcp\Contract;
 
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingKind;
@@ -31,11 +33,27 @@ final class FindingTitleAndKindContractTest extends KernelTestCase
 
     private string $roundId;
 
+    private RoundFixture $fixture;
+
     public function testAMergedActEntryCarriesTheTitleAndKindOfTheFindingThatSurvived(): void
     {
         $answer = $this->client->call('tools/call', ['name' => 'review_act_list', 'arguments' => ['roundId' => $this->roundId]], 3);
 
         $entry = McpServerClient::at($answer, 'result', 'structuredContent', 'act', '0');
+        self::assertIsArray($entry);
+        self::assertSame(['F1', ['F2'], 'A large cart loses its discount', 'logic'], [$entry['id'] ?? null, $entry['merged'] ?? null, $entry['title'] ?? null, $entry['kind'] ?? null]);
+    }
+
+    public function testTheJudgeDoneEventReadBackFromTheLedgerCarriesTheSurvivorsTitleAndKind(): void
+    {
+        $events = array_filter(iterator_to_array($this->fixture->ledger()->readInOrder()), static fn (RecordedEvent $event): bool => LedgerEventKind::JudgeDone === $event->event->kind);
+        self::assertCount(1, $events);
+        $payload = json_decode(array_values($events)[0]->event->payload, true, 8, JSON_THROW_ON_ERROR);
+        self::assertIsArray($payload);
+        $findings = $payload['findings'] ?? null;
+        self::assertIsArray($findings);
+
+        $entry = array_values(array_filter($findings, static fn (mixed $finding): bool => is_array($finding) && 'F1' === ($finding['id'] ?? null)))[0] ?? null;
         self::assertIsArray($entry);
         self::assertSame(['F1', ['F2'], 'A large cart loses its discount', 'logic'], [$entry['id'] ?? null, $entry['merged'] ?? null, $entry['title'] ?? null, $entry['kind'] ?? null]);
     }
@@ -64,7 +82,7 @@ final class FindingTitleAndKindContractTest extends KernelTestCase
     {
         $kernel = self::bootKernel();
         self::assertInstanceOf(Kernel::class, $kernel);
-        $fixture = new RoundFixture(self::getContainer());
+        $fixture = $this->fixture = new RoundFixture(self::getContainer());
         $round = $fixture->start(1);
         $this->roundId = $round->id()->toRfc4122();
         $findings = [
