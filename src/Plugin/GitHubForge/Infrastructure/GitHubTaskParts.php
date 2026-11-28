@@ -42,9 +42,8 @@ final readonly class GitHubTaskParts implements TaskParts
     public function fileOnce(string $project, PartIssue $part): int
     {
         $path = $this->repositories->addressOf($project)->path().'/issues';
-        $body = $part->body."\n\n".$part->marker;
 
-        return $this->filedBefore($path, $part) ?? $this->filed($path, $part, $body);
+        return $this->filedBefore($path, $part) ?? $this->filed($path, $part);
     }
 
     // By this App's mark and the marker, never by the title, because anyone can write the marker into an issue of their own, and two parts may share a title.
@@ -87,7 +86,7 @@ final readonly class GitHubTaskParts implements TaskParts
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
-            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class));
+            throw $this->unreachable($failure::class);
         }
 
         if ($status < 200 || $status >= 300) {
@@ -95,6 +94,45 @@ final readonly class GitHubTaskParts implements TaskParts
         }
 
         return $this->listIn($body);
+    }
+
+    /**
+     * @throws ForgeReadFailed
+     */
+    private function bearer(): string
+    {
+        try {
+            return $this->tokens->current()->value;
+        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+            throw new ForgeReadFailed('No GitHub read of the issues: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
+        }
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
+    }
+
+    /**
+     * @return list<array<mixed>>
+     *
+     * @throws ForgeReadFailed
+     */
+    private function listIn(string $body): array
+    {
+        try {
+            $issues = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $invalid) {
+            throw new ForgeReadFailed('GitHub listed the issues as something other than JSON.', $invalid->getCode(), previous: $invalid);
+        }
+
+        // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
+        if (!is_array($issues) || !array_is_list($issues) || !str_starts_with(ltrim($body), '[')) {
+            throw new ForgeReadFailed('GitHub answered an issue listing that is not a list.');
+        }
+
+        return array_map(static fn (mixed $issue): array => is_array($issue) ? $issue : throw new ForgeReadFailed('GitHub listed an issue that is not an object.'), $issues);
     }
 
     /**
@@ -132,17 +170,17 @@ final readonly class GitHubTaskParts implements TaskParts
     /**
      * @throws ForgeWriteFailed
      */
-    private function filed(string $path, PartIssue $part, string $body): int
+    private function filed(string $path, PartIssue $part): int
     {
         // Never retried, because GitHub can create an issue and still answer 502, and a retry would file it twice.
-        $options = ['auth_bearer' => $this->writeBearer(), 'json' => ['title' => $part->title, 'body' => $body, 'labels' => [...$part->labels]], 'headers' => ['Accept' => 'application/vnd.github+json'], 'max_retries' => 0];
+        $options = ['auth_bearer' => $this->writeBearer(), 'json' => ['title' => $part->title, 'body' => $part->body."\n\n".$part->marker, 'labels' => [...$part->labels]], 'headers' => ['Accept' => 'application/vnd.github+json'], 'max_retries' => 0];
 
         try {
             $response = $this->calls->asInstallation('POST', $path, $options);
             $status = $response->getStatusCode();
             $stored = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
-            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure::class));
+            throw $this->unreachableForWrite($failure::class);
         }
 
         if ($status < 200 || $status >= 300) {
@@ -150,6 +188,24 @@ final readonly class GitHubTaskParts implements TaskParts
         }
 
         return $this->confirmedNumber($stored, $part->marker);
+    }
+
+    /**
+     * @throws ForgeWriteFailed
+     */
+    private function writeBearer(): string
+    {
+        try {
+            return $this->tokens->current()->value;
+        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+            throw new ForgeWriteFailed('No GitHub write of an issue: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
+        }
+    }
+
+    // Not chained either, because the trace of a failed create holds the bearer token too.
+    private function unreachableForWrite(string $failure): ForgeWriteFailed
+    {
+        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
     }
 
     // Checked on every create, because a later run finds the part only by this App's mark and the marker in its body, and a part it cannot find would be filed again.
@@ -171,50 +227,5 @@ final readonly class GitHubTaskParts implements TaskParts
         }
 
         return $this->isThisAppsPart($issue, $marker) ? $number : throw new ForgeWriteFailed('GitHub stored the part without this App\'s mark or its marker, so no retry would find it.');
-    }
-
-    /**
-     * @return list<array<mixed>>
-     *
-     * @throws ForgeReadFailed
-     */
-    private function listIn(string $body): array
-    {
-        try {
-            $issues = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException $invalid) {
-            throw new ForgeReadFailed('GitHub listed the issues as something other than JSON.', $invalid->getCode(), previous: $invalid);
-        }
-
-        // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
-        if (!is_array($issues) || !array_is_list($issues) || !str_starts_with(ltrim($body), '[')) {
-            throw new ForgeReadFailed('GitHub answered an issue listing that is not a list.');
-        }
-
-        return array_map(static fn (mixed $issue): array => is_array($issue) ? $issue : throw new ForgeReadFailed('GitHub listed an issue that is not an object.'), $issues);
-    }
-
-    /**
-     * @throws ForgeReadFailed
-     */
-    private function bearer(): string
-    {
-        try {
-            return $this->tokens->current()->value;
-        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
-            throw new ForgeReadFailed('No GitHub read of the issues: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
-        }
-    }
-
-    /**
-     * @throws ForgeWriteFailed
-     */
-    private function writeBearer(): string
-    {
-        try {
-            return $this->tokens->current()->value;
-        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
-            throw new ForgeWriteFailed('No GitHub write of an issue: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
-        }
     }
 }

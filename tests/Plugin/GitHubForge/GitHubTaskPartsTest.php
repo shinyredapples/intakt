@@ -49,7 +49,7 @@ final class GitHubTaskPartsTest extends TestCase
         $tracker->answerToAStoredCreate = 502;
 
         try {
-            (void) $this->fileOnce($tracker);
+            $this->fileOnce($tracker);
             self::fail('A create answered with 502 was reported as filed.');
         } catch (ForgeWriteFailed $failed) {
             self::assertSame('GitHub answered 502 to a write.', $failed->getMessage());
@@ -72,7 +72,7 @@ final class GitHubTaskPartsTest extends TestCase
     public function testAPullRequestOfThisAppThatCarriesTheMarkerDoesNotStandForThePart(): void
     {
         $tracker = new ScriptedIssueTracker();
-        (void) $this->fileOnce($tracker);
+        $this->fileOnce($tracker);
         $tracker->issues[0]['pull_request'] = ['url' => 'https://api.github.com/x'];
 
         self::assertSame(2, $this->fileOnce($tracker));
@@ -82,7 +82,7 @@ final class GitHubTaskPartsTest extends TestCase
     {
         $tracker = new ScriptedIssueTracker();
 
-        (void) $this->fileOnce($tracker);
+        $this->fileOnce($tracker);
 
         self::assertSame('GET https://api.github.com/repos/acme/widget/issues?state=all&since=2026-11-27T12:00:00Z&sort=created&direction=asc&per_page=100&page=1', $tracker->requests[0]);
     }
@@ -105,7 +105,7 @@ final class GitHubTaskPartsTest extends TestCase
         $tracker->refusal = 500;
 
         try {
-            (void) $this->fileOnce($tracker);
+            $this->fileOnce($tracker);
             self::fail('A part was filed without the read of the issues filed since the plan.');
         } catch (ForgeReadFailed $failed) {
             self::assertSame('GitHub answered 500 to a read of the issues.', $failed->getMessage());
@@ -121,7 +121,7 @@ final class GitHubTaskPartsTest extends TestCase
 
         $this->expectExceptionObject(new ForgeWriteFailed('GitHub stored the part without this App\'s mark or its marker, so no retry would find it.'));
 
-        (void) $this->fileOnce($tracker);
+        $this->fileOnce($tracker);
     }
 
     private function fileOnce(ScriptedIssueTracker $tracker): int

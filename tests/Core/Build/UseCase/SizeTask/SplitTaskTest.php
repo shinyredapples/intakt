@@ -208,7 +208,7 @@ final class SplitTaskTest extends TestCase
     public function testAPlanOnRecordThatCannotBeReadStopsTheSizingWithoutACall(): void
     {
         $fixture = $this->fixture();
-        (void) $fixture->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplitPlanned, '{"project":"alpha","task":"7","run":"r1","parts":["only one"]}', SizingRecords::keyOf('alpha', 7)));
+        $fixture->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplitPlanned, '{"project":"alpha","task":"7","run":"r1","parts":["only one"]}', SizingRecords::keyOf('alpha', 7)));
 
         try {
             (void) $fixture->sizing($this->vendor())->run('alpha', 7);
