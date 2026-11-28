@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+trait Steps
+{
+    use Checks {
+        runs as testRuns;
+    }
+}

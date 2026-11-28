@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+trait FirstChecks
+{
+    public function testTheFirstChecksRun(): void
+    {
+        self::assertTrue(true);
+    }
+}

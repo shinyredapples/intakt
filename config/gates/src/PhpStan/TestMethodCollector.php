@@ -16,11 +16,6 @@ use PHPUnit\Framework\TestCase;
  */
 final readonly class TestMethodCollector implements Collector
 {
-    // an acronym or a capital with the lowercase letters and digits after it is one word, so HTTPRequest and Its192Px are two words each; a run of capitals stays one word even when it starts with A or I, because only a dictionary could tell an article in AURL from the acronym ASCII
-    private const string WORD = '[A-Z]{2,}(?![a-z])[0-9]*|[A-Z][a-z0-9]*';
-
-    private const int SENTENCE_WORDS = 3;
-
     public function getNodeType(): string
     {
         return InClassMethodNode::class;
@@ -38,6 +33,11 @@ final readonly class TestMethodCollector implements Collector
             return null;
         }
 
+        // because PHPStan visits a trait method a class renames only under its last alias, in the trait's file; TraitAliasTestMethodCollector judges each alias and the original name at the alias instead
+        if ($node->getOriginalNode()->hasAttribute('originalTraitMethodName')) {
+            return null;
+        }
+
         $method = $class->getNativeReflection()->getMethod($node->getOriginalNode()->name->toString());
 
         return $this->isMisnamedTest($method) ? $this->location($node, $scope, $method) : null;
@@ -45,9 +45,7 @@ final readonly class TestMethodCollector implements Collector
 
     private function isMisnamedTest(ReflectionMethod $method): bool
     {
-        $name = $method->getName();
-
-        return PhpUnitTestMethod::isRun($method) && (!str_starts_with($name, 'test') || !$this->readsAsSentence(substr($name, 4)));
+        return PhpUnitTestMethod::isRun($method) && !TestMethodName::readsAsSentence($method->getName());
     }
 
     /**
@@ -59,11 +57,6 @@ final readonly class TestMethodCollector implements Collector
         $file = $trait?->getFileName() ?? $scope->getFile();
 
         return [$file, $node->getOriginalNode()->name->getStartLine(), $trait?->getName() ?? $node->getClassReflection()->getName(), $method->getDeclaringClass()->getName(), $method->getName(), $this->mayBeProvider($node, $method)];
-    }
-
-    private function readsAsSentence(string $words): bool
-    {
-        return 1 === preg_match('~^(?:'.self::WORD.')+$~', $words) && self::SENTENCE_WORDS <= preg_match_all('~'.self::WORD.'~', $words);
     }
 
     private function mayBeProvider(InClassMethodNode $node, ReflectionMethod $method): bool

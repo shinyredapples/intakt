@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\TestCase;
+
+final class HiddenTest extends TestCase
+{
+    use SharedChecks {
+        testRuns as private;
+        testRuns as private testHidden;
+        testRuns as protected testShielded;
+    }
+}

@@ -31,7 +31,7 @@ final readonly class TestMethodSentenceRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        $collected = array_merge(...array_values($node->get(TestMethodCollector::class)));
+        $collected = array_merge(...array_values($node->get(TestMethodCollector::class)), ...array_merge(...array_values($node->get(TraitAliasTestMethodCollector::class))));
         $providers = array_merge(...array_values($node->get(TestProviderCollector::class)));
         $findings = [];
 

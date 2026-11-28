@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\TestCase;
+
+final class BothTest extends TestCase
+{
+    use FirstChecks, SecondChecks {
+        FirstChecks::testTheFirstChecksRun insteadof SecondChecks;
+        SecondChecks::testTheFirstChecksRun as testSecond;
+        check as helper;
+    }
+}

@@ -1,0 +1,14 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\TestCase;
+
+final class SendingTest extends TestCase
+{
+    use Checks {
+        runs as testRuns;
+    }
+}
