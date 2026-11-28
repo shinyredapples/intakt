@@ -247,7 +247,8 @@ export class Browser {
         const trail = this.projects.includes(linkedProject) ? Object.assign(new FakeElement(page), { dataset: { projectTrail: linkedProject } }) : null;
         const projectsItem = new FakeElement(page);
         const workingNow = new FakeWorkingNow(page, ['alpha', 'beta']);
-        const shownElements = { body, '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet, '[data-project-trail]': trail, '#col-in-review': new FakeColumn(page, 'col-in-review'), '#col-done': new FakeColumn(page, 'col-done', true), '#working-now': workingNow };
+        const historyRows = Object.assign(new FakeElement(page), { id: 'history-rows' });
+        const shownElements = { body, '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet, '[data-project-trail]': trail, '#col-in-review': new FakeColumn(page, 'col-in-review'), '#col-done': new FakeColumn(page, 'col-done', true), '#working-now': workingNow, '#history-rows': historyRows };
         if (trail) {
             projectsItem.setAttribute('aria-current', 'page');
             trail.remove = () => {
@@ -362,6 +363,23 @@ export class Browser {
                         render: () => {
                             shownElements['#working-now'] = new FakeWorkingNow(page, projects);
                             show(shownElements, { ...allShown, '[data-project]': [...rows, ...shownElements['#working-now'].cards] });
+                        },
+                    },
+                };
+                (documentListeners.get('turbo:before-stream-render') ?? []).forEach((listener) => listener(event));
+                event.detail.render(stream);
+            },
+            // What Turbo does with History's prepend stream: put the server's row, shown, on top of the rows.
+            pushHistoryRow: (project) => {
+                const stream = new FakeElement(page);
+                stream.setAttribute('action', 'prepend');
+                stream.setAttribute('target', 'history-rows');
+                const event = {
+                    target: stream,
+                    detail: {
+                        render: () => {
+                            rows.unshift(Object.assign(new FakeElement(page), { dataset: { project }, hidden: false }));
+                            show(shownElements, { ...allShown, '[data-project]': [...rows, ...workingNow.cards] });
                         },
                     },
                 };

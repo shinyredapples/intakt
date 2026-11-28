@@ -714,6 +714,24 @@ test('a card focused in Working now keeps focus when Working now is pushed', () 
     assert.equal(page.workingNow().cards.includes(page.focused()), true);
 });
 
+test('a pushed history row of a project the filter hides arrives hidden', () => {
+    const page = new Browser('light', { address: 'http://localhost/history' }).open();
+    page.chooseProject('alpha');
+
+    page.pushHistoryRow('beta');
+
+    assert.deepEqual(page.shownRows(), ['alpha']);
+});
+
+test('a pushed history row tells the history filter to run again', () => {
+    const page = new Browser('light', { address: 'http://localhost/history' }).open();
+    const seen = page.listenForShownProjects();
+
+    page.pushHistoryRow('beta');
+
+    assert.deepEqual(seen, [['beta', 'beta', 'alpha', 'beta']]);
+});
+
 test('a pushed Working now leaves focus alone when it was outside the section', () => {
     const page = new Browser('light').open();
     page.railToggle.focus();

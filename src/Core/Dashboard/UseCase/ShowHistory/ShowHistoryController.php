@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\UseCase\ShowHistory;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
+use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Domain\History;
 use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
@@ -36,6 +37,7 @@ final readonly class ShowHistoryController
             'project_names' => $names,
             // The shared live filter update lists only the shared names, so the shell keeps these and their choice when it arrives.
             'page_projects' => array_values(array_diff($names, $this->filter->names())),
+            'topics' => [DashboardTopics::HISTORY],
         ]));
     }
 }

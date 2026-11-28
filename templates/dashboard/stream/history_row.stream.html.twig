@@ -1,0 +1,4 @@
+{#- The newest row goes on top, as the page lists newest first; the shell script runs the project filter on it, and through it the History chips and text. -#}
+<turbo-stream action="prepend" target="history-rows"><template>{{ include('dashboard/_history_row.html.twig', {row: row}, with_context = false) }}</template></turbo-stream>
+{#- A page that had no rows drops its empty state; its ledger, hidden while the table is empty, shows with the row. -#}
+<turbo-stream action="remove" target="history-empty"></turbo-stream>
