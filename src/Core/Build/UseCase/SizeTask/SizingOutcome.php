@@ -14,6 +14,8 @@ enum SizingOutcome: string
     case Invalid = 'invalid';
     // The task's latest ready or parked verdict is on the same text, so no call was made.
     case AlreadySized = 'already_sized';
+    // The task was split into its parts now, or a split interrupted before was finished from its plan.
+    case Split = 'split';
 
     // Not ready with nothing missing is invalid too, because there would be nothing to ask; the agent already refuses such an answer.
     public static function of(?SizingVerdict $verdict): self

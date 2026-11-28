@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\SizeTask;
 
+use Intakt\Core\Build\Contract\SizeTier;
 use Intakt\Core\Build\Contract\SizingRequest;
+use Intakt\Core\Build\Contract\SizingVerdict;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTaskNotCleared;
@@ -30,7 +32,7 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\LockInterface;
 use Symfony\Component\Uid\Uuid;
 
-// Plain code decides every step, because the model only answers one typed object and a steered answer must not park or split a task by itself.
+// Plain code decides every step, because the model only answers one typed object and a steered answer must not park or split a task by itself: a split's parts pass the line check before they are planned.
 final readonly class SizeTask
 {
     public function __construct(
@@ -40,6 +42,7 @@ final readonly class SizeTask
         private ParkedTasks $parkedTasks,
         private TaskComments $comments,
         private LockFactory $locks,
+        private SplitTask $splits,
     ) {
     }
 
@@ -89,6 +92,13 @@ final readonly class SizeTask
     {
         $request = $this->tasks->requestFor($run->project, $run->task);
 
+        // Before any verdict, because a planned split is finished from its record and never sized or split again.
+        $plan = $this->splits->planOf($request);
+
+        if ($plan instanceof SplitPlan) {
+            return $this->splits->finished($plan);
+        }
+
         $latest = $this->records->latestVerdictOf($request);
 
         if ($latest instanceof RecordedSizing && $latest->isOf($request)) {
@@ -111,6 +121,11 @@ final readonly class SizeTask
 
         if (SizingOutcome::Ready === $outcome) {
             $this->releasedFromItsReadinessQuestion($run, $latest);
+        }
+
+        // A part keeps a split verdict whole, because a part is never split again; its `task_sized` line says ready with size split.
+        if ($verdict instanceof SizingVerdict && SizingOutcome::Ready === $outcome && SizeTier::Split === $verdict->size && !SplitPlan::isPart($request)) {
+            return $this->splits->finished($this->splits->planned($run, $request, $verdict));
         }
 
         // After the release, so a record says ready only once the earlier readiness question is gone.

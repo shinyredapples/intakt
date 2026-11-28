@@ -10,6 +10,7 @@ use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\SizeTask\EligibleTasks;
 use Intakt\Core\Build\UseCase\SizeTask\SizeTask;
 use Intakt\Core\Build\UseCase\SizeTask\SizingRecords;
+use Intakt\Core\Build\UseCase\SizeTask\SplitTask;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
@@ -30,6 +31,10 @@ final readonly class SizingFixture
 
     public SampleIssue $issue;
 
+    public FiledParts $parts;
+
+    public KindRefusingLedger $splitLedger;
+
     public function __construct(
         private ManagerRegistry $registry,
         public InMemoryLedger $ledger = new InMemoryLedger(),
@@ -37,6 +42,8 @@ final readonly class SizingFixture
     ) {
         $this->parked = ParkedTaskTable::inMemory();
         $this->comments = new PostedTaskComments();
+        $this->parts = new FiledParts();
+        $this->splitLedger = new KindRefusingLedger($this->ledger);
         $this->issue = new SampleIssue($number);
     }
 
@@ -49,6 +56,7 @@ final readonly class SizingFixture
             $this->parkedTasks(),
             $comments ?? $this->comments,
             new LockFactory(new InMemoryStore()),
+            new SplitTask($this->splitLedger, $this->parts, $comments ?? $this->comments),
         );
     }
 
