@@ -86,6 +86,7 @@ use Symfony\Component\Filesystem\Filesystem;
 final class RunBuildJobCommandTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/build.sh';
+    private const string PRECHECK = __DIR__.'/../../../../../docker/job/precheck.sh';
 
     private string $folder = '';
 
@@ -306,6 +307,7 @@ final class RunBuildJobCommandTest extends TestCase
             1500,
             new Filesystem(),
             self::SCRIPT,
+            self::PRECHECK,
             $this->folder.'/prompts',
             new RecordedBuildStops(),
             new BuildLimits(1, 1, 1, 1),

@@ -32,6 +32,11 @@ final readonly class BuilderPrompt
 
     private const string REWORK = 'This build is a rework of a published pull request: its commits are on the branch. Fix what the act list and the CI log below name, then edit the published pull request text: change only the lines this build changes, and write the result to PR.md in the checkout root.';
 
+    // Where the build job mounts docker/job/precheck.sh, named here because the instructions name it.
+    public const string PRECHECK = '/input/precheck.sh';
+
+    private const string SELF_CHECK = 'Before you end with PR.md, run "sh %s" in the checkout. It repeats the checks of what you hand back that you can fix here: a new commit on the task\'s branch, a history that continues from the branch as you received it, no merge commit, and PR.md. Fix each line it prints and run it again until it prints "precheck clean". It is advice: Intakt checks what you hand back itself.';
+
     private const string QUESTION = 'If you need a decision the task does not cover, do not guess and write no PR.md: write the file %s in the checkout root instead, a JSON object with "question" (text), "choices" (a list of one or more texts) and "recommendation" (one of the choices), and stop.';
 
     public function __construct(
@@ -85,16 +90,22 @@ final readonly class BuilderPrompt
     private function closingOf(?Rework $rework): array
     {
         if (!$rework instanceof Rework) {
-            return [new PromptPart(self::FIRST_BUILD), $this->questionPart()];
+            return [new PromptPart(self::FIRST_BUILD), $this->selfCheckPart(), $this->questionPart()];
         }
 
         return [
             new PromptPart(self::REWORK),
+            $this->selfCheckPart(),
             $this->questionPart(),
             ...$this->actListOf($rework),
             ...$this->ciLogOf($rework),
             new PromptPart('The published pull request text to edit:', $this->cut->fenced(UntrustedSource::PullRequestText, $rework->publishedText)),
         ];
+    }
+
+    private function selfCheckPart(): PromptPart
+    {
+        return new PromptPart(sprintf(self::SELF_CHECK, self::PRECHECK));
     }
 
     private function questionPart(): PromptPart

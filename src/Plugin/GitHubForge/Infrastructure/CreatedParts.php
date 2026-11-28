@@ -8,7 +8,9 @@ use Closure;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\PayloadFields;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\GitHubForge\Contract\PartIssue;
@@ -75,6 +77,18 @@ final readonly class CreatedParts
         }
 
         return $number;
+    }
+
+    // By the project, its repository and the number exactly, because the same issue number in another project is another task, and a project alias may be remapped to another repository whose issue of that number is no part.
+    public function holds(PartPlace $place, int $issue): bool
+    {
+        $kept = $this->ledger->readOfKindsMentioning(new Mentions(json_encode($place->project, JSON_THROW_ON_ERROR)), LedgerEventKind::PartIssueCreated);
+
+        return array_any([...$kept], static function (RecordedEvent $line) use ($place, $issue): bool {
+            $fields = PayloadFields::of($line);
+
+            return $fields->text('project') === $place->project && $fields->text('repository') === $place->repository && $fields->number('issue') === $issue;
+        });
     }
 
     // Whether the part's last line is anything but a refusal, because a create whose number was never kept may still have stored the part, while a create GitHub refused stored nothing and may be sent again.

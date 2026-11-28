@@ -31,6 +31,7 @@ use Intakt\Plugin\Gate\Contract\Gate;
 use InvalidArgumentException;
 use NoDiscard;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Exception\IOExceptionInterface;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -83,6 +84,8 @@ final readonly class RunBuildJob
         private Filesystem $filesystem,
         #[Autowire('%kernel.project_dir%/docker/job/build.sh')]
         private string $buildScript,
+        #[Autowire('%kernel.project_dir%/docker/job/precheck.sh')]
+        private string $precheckScript,
         // Under the project folder like the jobs' output directories, because the engine mounts host paths.
         #[Autowire('%kernel.project_dir%/var/prompts')]
         private string $promptFolder,
@@ -102,6 +105,7 @@ final readonly class RunBuildJob
 
     /**
      * @throws BuildCloneIsNoFolder
+     * @throws IOException
      * @throws TierResolutionFailure
      * @throws BuilderNotOnClaudeCode
      * @throws JobRefused
@@ -112,8 +116,9 @@ final readonly class RunBuildJob
     {
         $model = $this->modelFor($job);
         $clone = new JobInput($this->folder($job->clone), self::CLONE);
-        // The command is built before the prompt file exists, so a build script that cannot be read leaves no prompt behind.
+        // The command and the builder's check are taken before the prompt file exists, so a script that cannot be read leaves no prompt behind.
         $command = $this->commandOf($job, $model);
+        $precheck = $this->precheckInput();
         $prompt = $this->emptyPromptFile();
 
         $cause = null;
@@ -123,7 +128,7 @@ final readonly class RunBuildJob
         try {
             // Written and turned into the spec inside the try, because once the prompt file exists every failure must remove it, a failed write and a refused input included.
             $this->filesystem->appendToFile($prompt, $this->prompts->textFor($job->brief));
-            $spec = $this->specOf($job, $command, $clone, new JobInput($prompt, self::PROMPT));
+            $spec = $this->specOf($job, $command, $clone, new JobInput($prompt, self::PROMPT), $precheck);
             // Set only here, so whatever fails before the runner is called, of any exception class, never reads the cause.
             $reachedRunner = true;
             $outcome = $this->outcomeOfRunning($spec);
@@ -182,6 +187,18 @@ final readonly class RunBuildJob
     private function commandOf(BuildJob $job, string $model): JobCommand
     {
         return new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES), (string) $this->toolTimeLimitSeconds);
+    }
+
+    // Checked before the mount, because an engine may make a missing host path an empty folder, and the builder would then miss its check without being told.
+    private function precheckInput(): JobInput
+    {
+        $script = realpath($this->precheckScript);
+
+        if (false === $script || !is_file($script) || !is_readable($script)) {
+            throw new IOException(sprintf('The builder\'s check script "%s" is not a readable file.', $this->precheckScript), path: $this->precheckScript);
+        }
+
+        return new JobInput($script, BuilderPrompt::PRECHECK);
     }
 
     // A file of its own for each run, readable by the orchestrator's user only, so two builds never share one.

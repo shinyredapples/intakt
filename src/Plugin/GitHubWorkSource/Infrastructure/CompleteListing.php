@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
+use Intakt\Core\Build\Contract\SplitUmbrellas;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
@@ -40,6 +41,7 @@ final readonly class CompleteListing
         private EligibilityLabels $labels,
         private IssueReferences $references,
         private LoggerInterface $logger,
+        private SplitUmbrellas $umbrellas,
     ) {
     }
 
@@ -59,27 +61,22 @@ final readonly class CompleteListing
     {
         $readBefore = $this->store->syncStateOf($project);
         try {
-            $rules = $this->rulesOf($project);
+            // Each project names its own eligibility label, so a project beside another loop builds only what carries its label; a project without a watch section has no label to build by, so nothing is listed for it.
+            $label = $this->labels->of($project);
             $listing = $this->reads->listOpen($project, $readBefore->validator);
             $rows = $this->rowsOf($project, $listing);
-            $vouched = $this->vouchWhatSteers($project, $rows, $rules);
+            $vouched = $this->vouchWhatSteers($project, $rows, $label);
         } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked|ProjectNamesNoEligibilityLabel $short) {
             return $this->shortListing($project, $short);
         }
 
         if ($listing->isUnchanged() && [] === $vouched) {
-            return $this->planOver($project, $rows, $rules);
+            return $this->planOver($project, $rows, $label);
         }
 
         $listed = new ListingRows($rows, $listing->isUnchanged() ? $readBefore->validator : $listing->validator);
 
-        return $this->store->recordIfStill($project, $readBefore, $listed) ? $this->planOver($project, $rows, $rules) : $this->planOverTheNewerRows($project, $rules);
-    }
-
-    // Each project names its own eligibility label, so a project beside another loop builds only what carries its label; a project without a watch section has no label to build by, so nothing is listed for it.
-    private function rulesOf(string $project): IntakeRules
-    {
-        return new IntakeRules($this->labels->of($project));
+        return $this->store->recordIfStill($project, $readBefore, $listed) ? $this->planOver($project, $rows, $label) : $this->planOverTheNewerRows($project, $label);
     }
 
     // An unchanged listing is answered from the stored rows, and so is the history of an item whose update time stands; the rest is taken from the listing, because the milestone due date changes without moving it.
@@ -116,9 +113,9 @@ final readonly class CompleteListing
      *
      * @return list<int>
      */
-    private function vouchWhatSteers(string $project, array $rows, IntakeRules $rules): array
+    private function vouchWhatSteers(string $project, array $rows, string $label): array
     {
-        $needing = array_map(static fn (QueuedIssue $item): int => $item->number(), $rules->itemsNeedingHistory(array_map(static fn (StoredIssue $row): QueuedIssue => $row->queued(), $rows)));
+        $needing = array_map(static fn (QueuedIssue $item): int => $item->number(), new IntakeRules($label)->itemsNeedingHistory(array_map(static fn (StoredIssue $row): QueuedIssue => $row->queued(), $rows)));
         $steers = fn (string $account): bool => $this->accounts->steers($project, $account);
 
         $vouched = [];
@@ -155,18 +152,20 @@ final readonly class CompleteListing
     /**
      * @param list<StoredIssue> $rows
      */
-    private function planOver(string $project, array $rows, IntakeRules $rules): IntakePlan
+    private function planOver(string $project, array $rows, string $label): IntakePlan
     {
-        return $this->planOverWith($rules, $rows, $this->store->failuresOf($project));
+        $failures = $this->store->failuresOf($project);
+
+        return $this->planOverWith($this->rulesOf($project, $label), $rows, $failures);
     }
 
     // Another worker that stored a listing meanwhile holds the newer rows, but vouched them under its own eligibility label, so a row that is a candidate under this one has its history read first; the rows are not written again, because only a write that won may write.
-    private function planOverTheNewerRows(string $project, IntakeRules $rules): ?IntakePlan
+    private function planOverTheNewerRows(string $project, string $label): ?IntakePlan
     {
         $readBefore = $this->store->syncStateOf($project);
         $newer = $this->store->issuesOf($project);
         try {
-            $this->vouchWhatSteers($project, $newer, $rules);
+            $this->vouchWhatSteers($project, $newer, $label);
         } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short) {
             return $this->shortListing($project, $short);
         }
@@ -174,7 +173,13 @@ final readonly class CompleteListing
         $failures = $this->store->failuresOf($project);
         $this->stillNewestSince($project, $readBefore);
 
-        return $this->planOverWith($rules, $newer, $failures);
+        return $this->planOverWith($this->rulesOf($project, $label), $newer, $failures);
+    }
+
+    // Called last, after the listing, the histories and the failures, because a split plan recorded while those were read must still hold its original; build admission checks again for a plan recorded after this.
+    private function rulesOf(string $project, string $label): IntakeRules
+    {
+        return new IntakeRules($label, $this->umbrellas->of($project));
     }
 
     /**

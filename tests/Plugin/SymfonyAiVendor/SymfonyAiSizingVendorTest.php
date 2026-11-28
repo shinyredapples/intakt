@@ -70,7 +70,7 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[UsesClass(AppendResult::class)]
 final class SymfonyAiSizingVendorTest extends KernelTestCase
 {
-    private const string READY = '{"ready":true,"missing":[],"size":"small","estimated_lines":40,"reason":"Fine."}';
+    private const string READY = '{"ready":true,"missing":[],"size":"small","estimated_lines":40,"reason":"Fine.","parts":[]}';
 
     public function testTheSizingCallsTokensAreChargedToTheTask(): void
     {
