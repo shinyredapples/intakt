@@ -21,10 +21,11 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         $sandbox->write('var/debug.log', "trace\n");
         $sandbox->git('add', '--force', 'var/debug.log');
 
-        $run = $sandbox->runGate(new IgnoredFilesGate());
+        $run = $sandbox->check('--only=ignored');
 
+        self::assertSame(1, $run->exitCode(), $run->output());
         self::assertTrue($run->failed('ignored'), $run->output());
-        self::assertStringContainsString('var/debug.log', $run->findingsOf('ignored'));
+        self::assertStringContainsString('var/debug.log: tracked, but .gitignore excludes it', $run->findingsOf('ignored'));
     }
 
     public function testARepositoryWithNothingIgnoredTrackedPasses(): void
