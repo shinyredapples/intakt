@@ -28,7 +28,7 @@ final class RouteNamesGate implements RunsTheChangesCode
         echo json_encode($declared, JSON_THROW_ON_ERROR);
         PHP;
 
-    private const array OPTIONS =['--format=json', '--env='.self::ENVIRONMENT, '--no-ansi', '--no-interaction'];
+    private const array OPTIONS = ['--format=json', '--env='.self::ENVIRONMENT, '--no-ansi', '--no-interaction'];
 
     public function name(): string
     {
