@@ -80,6 +80,48 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertSame([], iterator_to_array($ledger->readOfKindAbout(LedgerEventKind::ReviewerStarted, 'r')));
     }
 
+    public function testTheNewestOfKindAboutReadReturnsTheLastAppendedEventOfThatKindAndSubject(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+
+        foreach ([[LedgerEventKind::ReviewerStarted, 'first', 'r1'], [LedgerEventKind::ReviewerStarted, 'retry', 'r1'], [LedgerEventKind::VerdictReceived, 'other kind', 'r1'], [LedgerEventKind::ReviewerStarted, 'other subject', 'r2'], [LedgerEventKind::ReviewerStarted, 'no subject', null]] as [$kind, $payload, $subject]) {
+            self::assertTrue($ledger->append(new LedgerEvent($kind, $payload, $subject))->succeeded());
+        }
+
+        $newest = $ledger->newestOfKindAbout(LedgerEventKind::ReviewerStarted, 'r1');
+
+        self::assertSame(['retry', 'r1'], [$newest?->event->payload, $newest?->event->subject]);
+    }
+
+    public function testTheNewestOfKindAboutReadReturnsNullWhenNoEventHasThatKindAndSubject(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+
+        foreach ([[LedgerEventKind::VerdictReceived, 'other kind', 'r1'], [LedgerEventKind::ReviewerStarted, 'longer subject', 'r10'], [LedgerEventKind::ReviewerStarted, 'no subject', null]] as [$kind, $payload, $subject]) {
+            self::assertTrue($ledger->append(new LedgerEvent($kind, $payload, $subject))->succeeded());
+        }
+
+        self::assertNull($ledger->newestOfKindAbout(LedgerEventKind::ReviewerStarted, 'r1'));
+        self::assertNull($ledger->newestOfKindAbout(LedgerEventKind::ReviewerStarted, 'r'));
+    }
+
+    public function testTheNewestOfKindAboutReadFetchesOneRowInOneQuery(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, 'first', 'r1'))->succeeded());
+        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, 'retry', 'r1'))->succeeded());
+        $queries = self::getContainer()->get('doctrine.debug_data_holder');
+        self::assertInstanceOf(DebugDataHolder::class, $queries);
+        $queries->reset();
+
+        $ledger->newestOfKindAbout(LedgerEventKind::ReviewerStarted, 'r1');
+
+        $sql = array_column(array_merge(...array_values($queries->getData())), 'sql');
+        self::assertCount(1, $sql);
+        self::assertIsString($sql[0]);
+        self::assertStringEndsWith('LIMIT 1', $sql[0]);
+    }
+
     public function testAReadWithoutSubjectReturnsOnlyTheEventsOfThatKindAppendedWithoutOneInTheOrderTheyWereAppended(): void
     {
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');

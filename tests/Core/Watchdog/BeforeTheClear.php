@@ -10,6 +10,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\Mentions;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Override;
 
@@ -55,6 +56,12 @@ final class BeforeTheClear implements Ledger
     public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
     {
         return $this->inner->readOfKindAbout($kind, $subject);
+    }
+
+    #[Override]
+    public function newestOfKindAbout(LedgerEventKind $kind, string $subject): ?RecordedEvent
+    {
+        return $this->inner->newestOfKindAbout($kind, $subject);
     }
 
     #[Override]

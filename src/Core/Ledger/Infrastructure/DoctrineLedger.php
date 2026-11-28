@@ -7,8 +7,14 @@ namespace Intakt\Core\Ledger\Infrastructure;
 use Closure;
 use DateTimeZone;
 use Doctrine\DBAL\Exception;
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
+use Doctrine\DBAL\Platforms\AbstractPlatform;
+use Doctrine\DBAL\Platforms\Exception\NotSupported;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Exception\EntityManagerClosed;
+use Doctrine\ORM\Query\ResultSetMappingBuilder;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ledger\Contract\AppendResult;
@@ -71,6 +77,26 @@ final readonly class DoctrineLedger implements Ledger
     public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
     {
         return $this->eventsOf(array_filter($this->recordsOf(['kind' => $kind->value, 'subject' => $subject]), static fn (EventRecord $record): bool => $record->subject() === $subject));
+    }
+
+    // Compared by bytes in the query, because with one row fetched a newer row that a case-insensitive collation also matches would hide the real one; the plain comparisons keep the index usable.
+    public function newestOfKindAbout(LedgerEventKind $kind, string $subject): ?RecordedEvent
+    {
+        $manager = $this->registry->getManager();
+        assert($manager instanceof EntityManagerInterface);
+        $platform = $manager->getConnection()->getDatabasePlatform();
+        $mapping = new ResultSetMappingBuilder($manager);
+        $mapping->addRootEntityFromClassMetadata(EventRecord::class, 'event');
+        $sql = 'SELECT '.$mapping->generateSelectClause().' FROM ledger_event event'
+            .' WHERE event.kind = :kind AND event.subject = :subject'
+            .' AND '.$this->sameBytes('event.kind', ':kind', $platform).' AND '.$this->sameBytes('event.subject', ':subject', $platform)
+            .' ORDER BY event.position DESC';
+
+        $record = $manager->createNativeQuery($platform->modifyLimitQuery($sql, 1), $mapping)
+            ->setParameters(['kind' => $kind->value, 'subject' => $subject])
+            ->getOneOrNullResult();
+
+        return $record instanceof EventRecord ? $this->eventOf($record) : null;
     }
 
     public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
@@ -157,17 +183,28 @@ final readonly class DoctrineLedger implements Ledger
      */
     private function eventsOf(array $records): RecordedEvents
     {
-        $events = [];
-        foreach ($records as $record) {
-            $kind = $record->kind();
-            if (!$kind instanceof LedgerEventKind) {
-                continue;
-            }
+        return new RecordedEvents(array_values(array_filter(array_map($this->eventOf(...), array_values($records)))));
+    }
 
-            $events[] = new RecordedEvent($record->id(), new LedgerEvent($kind, $record->payload(), $record->subject()), $record->recordedAt());
+    // Chosen by platform, because the supported engines have no common spelling of a byte comparison. MySQL converts both sides to utf8mb4 first, because a column may store another character set than the connection sends.
+    private function sameBytes(string $column, string $parameter, AbstractPlatform $platform): string
+    {
+        return match (true) {
+            $platform instanceof SQLitePlatform => $column.' COLLATE BINARY = '.$parameter,
+            $platform instanceof PostgreSQLPlatform => $column.' COLLATE "C" = '.$parameter,
+            $platform instanceof AbstractMySQLPlatform => 'CAST(CONVERT('.$column.' USING utf8mb4) AS BINARY) = CAST(CONVERT('.$parameter.' USING utf8mb4) AS BINARY)',
+            default => throw NotSupported::new('newestOfKindAbout'),
+        };
+    }
+
+    private function eventOf(EventRecord $record): ?RecordedEvent
+    {
+        $kind = $record->kind();
+        if (!$kind instanceof LedgerEventKind) {
+            return null;
         }
 
-        return new RecordedEvents($events);
+        return new RecordedEvent($record->id(), new LedgerEvent($kind, $record->payload(), $record->subject()), $record->recordedAt());
     }
 
     // The id takes its time from the same moment, so the id of an event carries when it was stored.

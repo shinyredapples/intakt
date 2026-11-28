@@ -57,6 +57,12 @@ final class InMemoryLedger implements Ledger
     }
 
     #[Override]
+    public function newestOfKindAbout(LedgerEventKind $kind, string $subject): ?RecordedEvent
+    {
+        return array_last([...$this->readOfKindAbout($kind, $subject)]);
+    }
+
+    #[Override]
     public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
     {
         return new RecordedEvents([]);
