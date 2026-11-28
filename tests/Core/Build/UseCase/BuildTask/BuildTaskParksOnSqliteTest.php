@@ -33,6 +33,7 @@ use Intakt\Core\Build\UseCase\BuildTask\BuildTaskCommand;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskInput;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
+use Intakt\Core\Build\UseCase\BuildTask\EndedStep;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
@@ -89,6 +90,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(BuildTaskInput::class)]
 #[UsesClass(BuildTaskRequest::class)]
 #[UsesClass(BuildRun::class)]
+#[UsesClass(EndedStep::class)]
 #[UsesClass(ParkedTasks::class)]
 #[UsesClass(PushRemoteCheck::class)]
 #[UsesClass(ParkedTaskRecord::class)]
@@ -151,10 +153,10 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $run = 1 === preg_match('/"run":"([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})"/', $payloads[0] ?? '', $match) ? $match[1] : 'no run';
         self::assertSame(
             [
-                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"task","outcome":"passed","failure":null}'],
-                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"mirror","outcome":"passed","failure":null}'],
-                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"clone","outcome":"passed","failure":null}'],
-                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"build_job","outcome":"asked","failure":null}'],
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"task","outcome":"passed","failure":null,"stop_cause":null}'],
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"mirror","outcome":"passed","failure":null,"stop_cause":null}'],
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"clone","outcome":"passed","failure":null,"stop_cause":null}'],
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"build_job","outcome":"asked","failure":null,"stop_cause":null}'],
                 ['task_parked', '{"project":"alpha","task":"7","run":"'.$run.'"}'],
             ],
             array_map(array_values(...), $this->connection()->fetchAllAssociative('SELECT kind, payload FROM ledger_event ORDER BY position')),
@@ -189,7 +191,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertStringContainsString('missing: Must keep working.', $this->question());
         $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
         self::assertIsString($payload);
-        self::assertStringContainsString('"step":"build_job","outcome":"asked","failure":null}', $payload);
+        self::assertStringContainsString('"step":"build_job","outcome":"asked","failure":null,"stop_cause":null}', $payload);
     }
 
     public function testABugTaskWithAnEmptyPartIsParkedWithAQuestionNamingIt(): void

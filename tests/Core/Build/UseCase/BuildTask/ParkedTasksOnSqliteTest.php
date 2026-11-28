@@ -11,10 +11,10 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Build\Contract\BuildStep;
-use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
+use Intakt\Core\Build\UseCase\BuildTask\EndedStep;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTaskNotCleared;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
@@ -45,6 +45,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(ParkedTaskNotCleared::class)]
 #[UsesClass(BuildQuestion::class)]
 #[UsesClass(BuildRun::class)]
+#[UsesClass(EndedStep::class)]
 #[UsesClass(DoctrineLedger::class)]
 #[UsesClass(EventRecord::class)]
 final class ParkedTasksOnSqliteTest extends KernelTestCase
@@ -74,7 +75,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         );
         self::assertSame(
             [
-                ['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"run-1","step":"build_job","outcome":"asked","failure":null}'],
+                ['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"run-1","step":"build_job","outcome":"asked","failure":null,"stop_cause":null}'],
                 ['kind' => 'task_parked', 'payload' => '{"project":"sample","task":"42","run":"run-1"}'],
             ],
             $this->ledgerRows(),
@@ -135,7 +136,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         self::assertSame([['Which name?', self::NEWER_RUN]], $this->parkedQuestionsWithRuns());
         self::assertSame(
             [
-                ['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"'.self::OLDER_RUN.'","step":"build_job","outcome":"asked","failure":null}'],
+                ['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"'.self::OLDER_RUN.'","step":"build_job","outcome":"asked","failure":null,"stop_cause":null}'],
                 ['kind' => 'task_parked', 'payload' => '{"project":"sample","task":"42","run":"'.self::OLDER_RUN.'"}'],
             ],
             array_slice($this->ledgerRows(), -2),
@@ -168,7 +169,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         self::assertFalse($this->connection()->isTransactionActive());
         self::assertSame(
             [
-                ['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"'.self::NEWER_RUN.'","step":"build_job","outcome":"asked","failure":null}'],
+                ['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","run":"'.self::NEWER_RUN.'","step":"build_job","outcome":"asked","failure":null,"stop_cause":null}'],
                 ['kind' => 'task_parked', 'payload' => '{"project":"sample","task":"42","run":"'.self::NEWER_RUN.'"}'],
             ],
             array_slice($this->ledgerRows(), -2),
@@ -401,7 +402,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
 
     private function appendTaskStep(BuildRun $run): void
     {
-        $appended = $this->ledger()->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload(BuildStep::Task, BuildStepOutcome::Passed, null)));
+        $appended = $this->ledger()->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload(EndedStep::of(BuildStep::Task, null))));
         self::assertTrue($appended->succeeded(), (string) $appended->failure);
     }
 
