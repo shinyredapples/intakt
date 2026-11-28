@@ -93,7 +93,7 @@ final class TierPlatformRankingTest extends TestCase
     {
         $own = new ResolvedModel(Provider::ClaudeCode, 'big');
         $substitute = new ResolvedModel(Provider::Codex, 'big');
-        $resolver = $this->createStub(TierResolver::class);
+        $resolver = self::createStub(TierResolver::class);
         $resolver->method('hasSubstitutes')->willReturn($withSubstitute);
         $resolver->method('configured')->willReturn($own);
         $resolver->method('resolve')->willReturn($own);

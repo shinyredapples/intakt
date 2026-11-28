@@ -124,14 +124,10 @@ final class AccountFailoverPlatformRankingTest extends TestCase
     public function testAfterTheOnlyRankedAccountIsLimitedTheWaitSkipsAnAccountStillAtItsCeiling(): void
     {
         $this->both(Account::DEFAULT, $this->usage(10.0, 5), $this->usage(95.0, 2));
-        $limited = false;
-        $cooldowns = $this->createStub(AccountCooldowns::class);
-        $cooldowns->method('secondsUntilFree')->willReturnCallback(static function (Account $account) use (&$limited): int {
-            return 'team' === $account->name && $limited ? 120 : 0;
-        });
-        $refusing = MockPlatformFactory::createPlatform(function () use (&$limited): never {
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('secondsUntilFree')->willReturnCallback(fn (Account $account): int => 'team' === $account->name && in_array('team', $this->called, true) ? 120 : 0);
+        $refusing = MockPlatformFactory::createPlatform(function (): never {
             $this->called[] = 'team';
-            $limited = true;
 
             throw new RateLimitExceededException(120);
         });
@@ -169,7 +165,7 @@ final class AccountFailoverPlatformRankingTest extends TestCase
 
     private function teamCoolingFor(int $seconds): AccountCooldowns
     {
-        $cooldowns = $this->createStub(AccountCooldowns::class);
+        $cooldowns = self::createStub(AccountCooldowns::class);
         $cooldowns->method('secondsUntilFree')->willReturnCallback(static fn (Account $account): int => 'team' === $account->name ? $seconds : 0);
 
         return $cooldowns;
