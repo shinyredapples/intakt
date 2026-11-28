@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\GitHubForge;
 
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\GitHubForge\Contract\KeyedComment;
 use Intakt\Plugin\GitHubForge\Domain\IssueComment;
 use Intakt\Plugin\GitHubForge\Domain\TaskIssue;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueComments;
@@ -18,6 +19,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(GitHubTaskComments::class)]
 #[UsesClass(GitHubIssueComments::class)]
 #[UsesClass(IssueComment::class)]
+#[UsesClass(KeyedComment::class)]
 #[UsesClass(TaskIssue::class)]
 final class GitHubTaskCommentsTest extends TestCase
 {
@@ -125,6 +127,6 @@ final class GitHubTaskCommentsTest extends TestCase
 
     private function postOnce(ScriptedIssue $issue, string $key): void
     {
-        new GitHubTaskComments($issue->comments())->postOnce(ScriptedIssue::PROJECT, ScriptedIssue::NUMBER, self::TEXT, $key);
+        new GitHubTaskComments($issue->comments())->postOnce(ScriptedIssue::PROJECT, ScriptedIssue::NUMBER, new KeyedComment(self::TEXT, $key));
     }
 }

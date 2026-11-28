@@ -6,7 +6,7 @@ namespace Intakt\Core\Build\UseCase\SizeTask;
 
 use Intakt\Core\Build\Contract\SizingRequest;
 
-// What a later sizing of the same task reads from a `task_sized` line: the text it was of, and the run that parked the task, if it did.
+// Only the text's hash and the parking run of a `task_sized` line, because that is all a later sizing of the task decides on: whether to size again, and whose question to remove.
 final readonly class RecordedSizing
 {
     private function __construct(

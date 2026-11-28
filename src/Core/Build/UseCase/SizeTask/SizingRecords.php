@@ -45,12 +45,12 @@ final readonly class SizingRecords
     /**
      * @throws TaskNotSized
      */
-    public function record(SizingRequest $request, SizingOutcome $outcome, ?SizingVerdict $verdict, string $run): void
+    public function record(SizingRequest $request, ?SizingVerdict $verdict, string $run): void
     {
         $payload = json_encode([
             'project' => $request->project,
             'task' => (string) $request->task,
-            'outcome' => $outcome->value,
+            'outcome' => SizingOutcome::of($verdict)->value,
             'missing' => array_map(static fn (ReadinessGap $gap): string => $gap->value, $verdict->missing ?? []),
             'size' => $verdict?->size->value,
             'estimated_lines' => $verdict?->estimated_lines,

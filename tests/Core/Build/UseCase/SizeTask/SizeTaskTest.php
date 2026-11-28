@@ -28,6 +28,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
+use Intakt\Plugin\GitHubForge\Contract\KeyedComment;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubForge\Domain\IssueComment;
@@ -46,6 +47,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(TaskNotSized::class)]
 #[CoversClass(SizingOutcome::class)]
 #[CoversClass(RecordedSizing::class)]
+#[UsesClass(KeyedComment::class)]
 #[UsesClass(GitHubTaskComments::class)]
 #[UsesClass(GitHubIssueComments::class)]
 #[UsesClass(IssueComment::class)]
@@ -283,7 +285,7 @@ final class SizeTaskTest extends TestCase
         self::assertSame(SizingOutcome::Parked, $sizing->run(ScriptedIssue::PROJECT, ScriptedIssue::NUMBER));
         self::assertCount(1, $issue->posted());
         self::assertStringStartsWith('This task is not ready to build. It lacks: an acceptance condition.', $issue->posted()[0]);
-        self::assertSame(1, (int) $fixture->parked->fetchOne('SELECT COUNT(*) FROM build_parked_task'));
+        self::assertCount(1, $fixture->parked->fetchFirstColumn('SELECT run FROM build_parked_task'));
         self::assertSame(['parked'], array_column($this->sizings($fixture), 'outcome'));
     }
 
@@ -375,7 +377,7 @@ final class SizeTaskTest extends TestCase
         $fixture->issue->rewrittenAs(SampleIssue::BODY);
 
         self::assertSame(SizingOutcome::Ready, $sizing->run('alpha', 7));
-        self::assertSame(0, (int) $fixture->parked->fetchOne('SELECT COUNT(*) FROM build_parked_task'));
+        self::assertSame([], $fixture->parked->fetchFirstColumn('SELECT run FROM build_parked_task'));
         self::assertSame(SizingOutcome::AlreadySized, $sizing->run('alpha', 7));
     }
 
@@ -394,7 +396,7 @@ final class SizeTaskTest extends TestCase
     private function vendorAnswering(?SizingVerdict ...$verdicts): SizingVendor
     {
         $vendor = self::createStub(SizingVendor::class);
-        $vendor->method('size')->willReturnOnConsecutiveCalls(...$verdicts);
+        $vendor->method('size')->willReturnOnConsecutiveCalls(...array_values($verdicts));
 
         return $vendor;
     }

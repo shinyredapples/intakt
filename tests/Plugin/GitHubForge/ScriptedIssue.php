@@ -41,7 +41,7 @@ final class ScriptedIssue
     /** @var array<string, mixed> */
     public array $storedOtherwise = [];
 
-    // The status GitHub answers to a post it stored all the same, as it can with a 502.
+    // Answered after the comment is kept, because GitHub can store a comment and still answer 502.
     public ?int $answerToAStoredPost = null;
 
     public static function task(): TaskIssue

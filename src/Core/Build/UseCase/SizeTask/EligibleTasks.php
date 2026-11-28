@@ -87,17 +87,6 @@ final readonly class EligibleTasks
         return $vouched ? null : sprintf('the label "%s" was not applied by an account with write access', $label);
     }
 
-    /**
-     * @return list<string>
-     */
-    private function sorted(IssueLabels $labels): array
-    {
-        $names = [...$labels];
-        sort($names);
-
-        return $names;
-    }
-
     // Remembered for this read only, because the author is often the last editor and the one who applied the label, and each ask is a forge call.
     /**
      * @return Closure(string): bool
@@ -109,5 +98,16 @@ final readonly class EligibleTasks
         return function (string $account) use ($project, &$answers): bool {
             return $answers[$account] ??= $this->accounts->steers($project, $account);
         };
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function sorted(IssueLabels $labels): array
+    {
+        $names = [...$labels];
+        sort($names);
+
+        return $names;
     }
 }

@@ -6,7 +6,6 @@ namespace Intakt\Core\Build\UseCase\SizeTask;
 
 use Intakt\Core\Build\Contract\ReadinessGap;
 use Intakt\Core\Build\Contract\SizingRequest;
-use Intakt\Core\Build\Contract\SizingVerdict;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTaskNotCleared;
@@ -15,6 +14,7 @@ use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\GitHubForge\Contract\KeyedComment;
 use Intakt\Plugin\GitHubForge\Contract\TaskComments;
 use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
@@ -97,32 +97,26 @@ final readonly class SizeTask
         }
 
         $verdict = $this->vendor->size($request);
-        $outcome = $this->outcomeOf($verdict);
+        $outcome = SizingOutcome::of($verdict);
+        $missing = $verdict->missing ?? [];
 
-        match ($outcome) {
-            SizingOutcome::Parked => $this->parkedAndAsked($run, $request, $verdict->missing ?? []),
-            SizingOutcome::Ready => $this->releasedFromItsReadinessQuestion($run, $latest),
-            default => null,
-        };
+        if (SizingOutcome::Parked === $outcome && [] !== $missing) {
+            $this->parkedAndAsked($run, $request, $missing);
+        }
+
+        if (SizingOutcome::Ready === $outcome) {
+            $this->releasedFromItsReadinessQuestion($run, $latest);
+        }
+
         // After the parking and the comment, so a record says parked only once the task is parked and asked, and ready only once the earlier readiness question is gone.
-        $this->records->record($request, $outcome, $verdict, $run->id);
+        $this->records->record($request, $verdict, $run->id);
 
         return $outcome;
     }
 
-    // A verdict that is not ready names a gap, because the agent refuses one with nothing missing.
-    private function outcomeOf(?SizingVerdict $verdict): SizingOutcome
-    {
-        return match (true) {
-            !$verdict instanceof SizingVerdict => SizingOutcome::Invalid,
-            $verdict->ready => SizingOutcome::Ready,
-            default => SizingOutcome::Parked,
-        };
-    }
-
     // Parked before the comment, because a comment before a failed park would ask about a task that is not parked. The comment is keyed by the hash of the sized text, because the forge can store a comment and still answer as failed: the retry then finds it and posts no second one, while an edited text that still lacks the same item gets its own comment.
     /**
-     * @param list<ReadinessGap> $missing
+     * @param non-empty-list<ReadinessGap> $missing
      *
      * @throws TaskNotSized
      */
@@ -137,7 +131,7 @@ final readonly class SizeTask
         }
 
         try {
-            $this->comments->postOnce($run->project, $run->task, $question->asComment(), 'sizing-'.SizingRecords::textOf($request));
+            $this->comments->postOnce($run->project, $run->task, new KeyedComment($question->asComment(), 'sizing-'.SizingRecords::textOf($request)));
         } catch (ForgeReadFailed|ForgeWriteFailed|ForgeRateLimited $failure) {
             throw TaskNotSized::notCommented($run->project, $run->task, $failure->getMessage());
         }

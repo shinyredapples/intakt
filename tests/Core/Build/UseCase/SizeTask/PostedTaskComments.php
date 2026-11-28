@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Build\UseCase\SizeTask;
 
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\GitHubForge\Contract\KeyedComment;
 use Intakt\Plugin\GitHubForge\Contract\TaskComments;
 use Override;
 
@@ -22,19 +23,18 @@ final class PostedTaskComments implements TaskComments
      */
     public array $keys = [];
 
-    // A post the forge refuses: nothing is stored.
     public ?ForgeWriteFailed $failure = null;
 
     public ?ForgeReadFailed $unreadable = null;
 
     #[Override]
-    public function postOnce(string $project, int $number, string $body, string $key): void
+    public function postOnce(string $project, int $number, KeyedComment $comment): void
     {
         if ($this->unreadable instanceof ForgeReadFailed) {
             throw $this->unreadable;
         }
 
-        if (in_array($key, $this->keys, true)) {
+        if (in_array($comment->key, $this->keys, true)) {
             return;
         }
 
@@ -42,7 +42,7 @@ final class PostedTaskComments implements TaskComments
             throw $this->failure;
         }
 
-        $this->posted[] = [$project, $number, $body];
-        $this->keys[] = $key;
+        $this->posted[] = [$project, $number, $comment->body];
+        $this->keys[] = $comment->key;
     }
 }
