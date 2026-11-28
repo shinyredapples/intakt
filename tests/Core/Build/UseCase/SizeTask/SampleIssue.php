@@ -48,7 +48,7 @@ final class SampleIssue implements IssueReads, IssueHistories
     #[Override]
     public function readOpen(string $project, int $number): ?ListedIssue
     {
-        return null === $this->failure ? $this->open : throw $this->failure;
+        return $this->failure instanceof ForgeReadFailed ? throw $this->failure : $this->open;
     }
 
     #[Override]

@@ -20,7 +20,7 @@ final class PostedTaskComments implements TaskComments
     #[Override]
     public function post(string $project, int $number, string $body): void
     {
-        if (null !== $this->failure) {
+        if ($this->failure instanceof ForgeWriteFailed) {
             throw $this->failure;
         }
 
