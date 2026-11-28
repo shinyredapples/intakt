@@ -164,7 +164,7 @@ final readonly class IgnoredFilesGate implements Gate
             restore_error_handler();
         }
 
-        return $lossless ? $decoded : null;
+        return $lossless && false !== $decoded ? $decoded : null;
     }
 
     // Because git drops the carriage return before each line break of a .gitignore and its ident clean conversion collapses the `$Id: <object id> $` it wrote to `$Id$`, neither changes the rules; any other `$Id: ... $` text is a rule edit.
