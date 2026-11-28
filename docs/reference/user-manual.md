@@ -491,7 +491,7 @@ The `ignored` gate of `bin/check` (also with `--fast`) fails when git tracks a f
 
 To fix it, either:
 
-1. untrack the file and keep it on disk: `git rm --cached <path>`, then commit; or
+1. untrack the file and keep it on disk: `git --literal-pathspecs rm --cached -- <path>`, then commit. `--literal-pathspecs` makes git take the name as it is: without it, a name such as `build[1].tmp` is a pattern that also untracks `build1.tmp`; or
 2. keep it tracked with a negated rule `!<path>` in `.gitignore`. This works only when no parent folder is excluded: under a folder rule such as `/.evidence/`, change the rule to `/.evidence/*` and add `!/.evidence/<file>`.
 
 A path with a line break (also a trailing one), another control character, a Unicode line or paragraph separator, an invisible format character such as the right-to-left override, bytes that are not valid UTF-8, or a leading `"` is shown quoted as git quotes it, for example `"report-\377.tmp"`.

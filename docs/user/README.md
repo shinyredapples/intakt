@@ -69,7 +69,7 @@ Text that is not a comment does not count: a string, a line indented under a YAM
 
 A comment in the form `TODO(#123): <reason>` that names an issue is allowed ([examples and exceptions](../reference/user-manual.md#when-the-left-undone-gate-reports-a-todo-comment-a-skipped-test-or-a-not-implemented-throw)).
 
-The `ignored` check of `bin/check` refuses a tracked file that `.gitignore` excludes. Untrack it with `git rm --cached <path>`, or keep it with a negated rule in `.gitignore` ([how](../reference/user-manual.md#when-the-ignored-gate-reports-a-tracked-file-that-gitignore-excludes)).
+The `ignored` check of `bin/check` refuses a tracked file that `.gitignore` excludes. Untrack it with `git --literal-pathspecs rm --cached -- <path>` (the option keeps a name such as `build[1].tmp` from matching other files), or keep it with a negated rule in `.gitignore` ([how](../reference/user-manual.md#when-the-ignored-gate-reports-a-tracked-file-that-gitignore-excludes)).
 
 One rule to know before your first build: for a project with a `github` entry, the `--remote` of `intakt:build:task` must be that configured GitHub repository's `https://github.com/<owner>/<name>` address, or the command refuses before it does anything ([the `intakt:build:task` options](../reference/user-manual.md#building-one-task)).
 
