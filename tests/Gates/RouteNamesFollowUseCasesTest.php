@@ -168,6 +168,20 @@ final class RouteNamesFollowUseCasesTest extends TestCase
         self::assertSame([], $rule->findingsIn($routes));
     }
 
+    public function testTheControllerClassesToReflectAreTheIntaktClassesTheRoutesResolveTo(): void
+    {
+        $routes = $this->routes([
+            'dashboard_routecasing' => 'Intakt\Core\Dashboard\UseCase\Routecasing\FixtureController::__invoke',
+            'dashboard_play_demo' => 'demo.play::__invoke',
+            'dashboard_play_demo_again' => '\\'.strtolower(PlayDemoController::class),
+            '_wdt' => 'web_profiler.controller.profiler::toolbarAction',
+        ]);
+
+        $classes = new RouteNamesFollowUseCases(['demo.play' => PlayDemoController::class])->ownControllerClassesIn($routes);
+
+        self::assertSame(['Intakt\Core\Dashboard\UseCase\Routecasing\FixtureController', PlayDemoController::class], $classes);
+    }
+
     public function testAControllerInAnotherCaseThanAnyKnownClassIsRejected(): void
     {
         $routes = $this->routes(['dashboard_wrong' => 'intakt\Core\Dashboard\UseCase\RouteCaseProbe\RouteCaseProbeController::__invoke']);

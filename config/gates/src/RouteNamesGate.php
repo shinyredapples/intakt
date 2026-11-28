@@ -14,18 +14,20 @@ final class RouteNamesGate implements RunsTheChangesCode
     // Because the shipped routes are the ones a user reaches; the dev and test environments only add other vendors' tools.
     private const string ENVIRONMENT = 'prod';
 
-    private const string OWN_NAMESPACE = 'intakt\\';
+    // Because Symfony serves a controller from the class PHP has loaded, which the kernel may load while it boots under any spelling, only the booted console knows the declared one.
+    private const string REFLECT_AT_SHUTDOWN = <<<'PHP'
+        <?php
 
-    // Because Symfony serves a service from the class PHP loads, whose declared spelling only reflection inside the tree knows.
-    private const string REFLECT = <<<'PHP'
-        require $argv[1];
-        $declared = [];
-        foreach (json_decode((string) file_get_contents($argv[2]), true, 512, JSON_THROW_ON_ERROR) as $class) {
-            if (class_exists($class)) {
-                $declared[] = new ReflectionClass($class)->getName();
+        register_shutdown_function(static function (): void {
+            $declared = [];
+            foreach (json_decode((string) file_get_contents(%s), true, 512, JSON_THROW_ON_ERROR) as $class) {
+                if (class_exists($class)) {
+                    $declared[] = new ReflectionClass($class)->getName();
+                }
             }
-        }
-        echo json_encode($declared, JSON_THROW_ON_ERROR);
+            file_put_contents(%s, json_encode($declared, JSON_THROW_ON_ERROR));
+        });
+
         PHP;
 
     private const array OPTIONS = ['--format=json', '--env='.self::ENVIRONMENT, '--no-ansi', '--no-interaction'];
@@ -37,9 +39,7 @@ final class RouteNamesGate implements RunsTheChangesCode
 
     public function run(Workspace $workspace): GateResult
     {
-        $console = $workspace->root.'/bin/console';
-
-        if (!is_file($console)) {
+        if (!is_file($workspace->root.'/bin/console')) {
             return GateResult::failedBecause($this->name(), 'bin/console not found, so the routes cannot be read');
         }
 
@@ -49,36 +49,50 @@ final class RouteNamesGate implements RunsTheChangesCode
             return GateResult::failedBecause($this->name(), 'no temporary cache directory could be created, so the routes cannot be read');
         }
 
-        // Because a warmed prod container is never compiled again, it can hold routes the tree no longer has; each run builds the kernel in a cache of its own.
-        $environment = ['APP_CACHE_DIR' => $cache->path, 'APP_BUILD_DIR' => $cache->path, 'APP_DEBUG' => false, 'SHELL_VERBOSITY' => false];
-
         try {
-            $listing = $workspace->command([PHP_BINARY, $console, 'debug:router', ...self::OPTIONS], $environment);
-            // Because a route may name its controller by service ID, the services' classes say which use case serves it.
-            $services = $workspace->command([PHP_BINARY, $console, 'debug:container', ...self::OPTIONS], $environment);
-            // Because Symfony serves a route from a hidden service (an ID starting with a dot) too, and --show-hidden lists only those.
-            $hiddenServices = $workspace->command([PHP_BINARY, $console, 'debug:container', '--show-hidden', ...self::OPTIONS], $environment);
+            $outcome = $this->outcomeIn($workspace, $cache);
         } finally {
             $cache->discard();
         }
 
+        return is_string($outcome) ? GateResult::failedBecause($this->name(), $outcome) : GateResult::withFindings($this->name(), $outcome);
+    }
+
+    /**
+     * @return list<string>|string
+     */
+    private function outcomeIn(Workspace $workspace, ScratchDirectory $cache): array|string
+    {
+        $console = $workspace->root.'/bin/console';
+        // Because a warmed prod container is never compiled again, it can hold routes the tree no longer has; each run builds the kernel in a cache of its own.
+        $environment = ['APP_CACHE_DIR' => $cache->path, 'APP_BUILD_DIR' => $cache->path, 'APP_DEBUG' => false, 'SHELL_VERBOSITY' => false];
+
+        $listing = $workspace->command([PHP_BINARY, $console, 'debug:router', ...self::OPTIONS], $environment);
+
         if (!$listing->succeeded()) {
-            return GateResult::failedBecause($this->name(), 'debug:router exited with '.$listing->exitCode.': '.$listing->firstErrorLine());
+            return 'debug:router exited with '.$listing->exitCode.': '.$listing->firstErrorLine();
         }
 
         $routes = $this->routesFrom($listing->output);
 
         if (!$routes instanceof RouteCollection) {
-            return GateResult::failedBecause($this->name(), 'debug:router printed no route list in JSON, so the routes cannot be read');
+            return 'debug:router printed no route list in JSON, so the routes cannot be read';
         }
 
-        $rule = $this->ruleFrom($workspace, $services, $hiddenServices);
+        $classOfService = $this->classOfServiceIn($workspace, $console, $environment);
 
-        if (is_string($rule)) {
-            return GateResult::failedBecause($this->name(), $rule);
+        if (is_string($classOfService)) {
+            return $classOfService;
         }
 
-        return GateResult::withFindings($this->name(), $rule->findingsIn($routes));
+        $controllers = new RouteNamesFollowUseCases($classOfService)->ownControllerClassesIn($routes);
+        $reflectedClasses = $this->reflectedClassesOf($workspace, $controllers, $environment);
+
+        if (null === $reflectedClasses) {
+            return 'the controllers\' classes could not be reflected in the booted console, so their declared spelling cannot be read';
+        }
+
+        return new RouteNamesFollowUseCases($classOfService, $reflectedClasses)->findingsIn($routes);
     }
 
     private function routesFrom(string $json): ?RouteCollection
@@ -111,28 +125,28 @@ final class RouteNamesGate implements RunsTheChangesCode
         }
     }
 
-    // Because the rule needs the services' classes as Symfony serves them, a failure names what could not be read.
-    private function ruleFrom(Workspace $workspace, ProcessResult ...$listings): RouteNamesFollowUseCases|string
+    /**
+     * @param array<string, string|false> $environment
+     *
+     * @return array<string, string>|string
+     */
+    private function classOfServiceIn(Workspace $workspace, string $console, array $environment): array|string
     {
+        $listings = [
+            // Because a route may name its controller by service ID, the services' classes say which use case serves it.
+            $workspace->command([PHP_BINARY, $console, 'debug:container', ...self::OPTIONS], $environment),
+            // Because Symfony serves a route from a hidden service (an ID starting with a dot) too, and --show-hidden lists only those.
+            $workspace->command([PHP_BINARY, $console, 'debug:container', '--show-hidden', ...self::OPTIONS], $environment),
+        ];
+
         foreach ($listings as $listed) {
             if (!$listed->succeeded()) {
                 return 'debug:container exited with '.$listed->exitCode.': '.$listed->firstErrorLine();
             }
         }
 
-        $classOfService = $this->classOfServiceFrom(...array_map(static fn (ProcessResult $listed): string => $listed->output, $listings));
-
-        if (null === $classOfService) {
-            return 'debug:container printed no service list in JSON, so controllers named by service ID cannot be read';
-        }
-
-        $reflectedClasses = $this->reflectedClassesOf($workspace, $classOfService);
-
-        if (null === $reflectedClasses) {
-            return 'the services\' classes could not be reflected, so their declared spelling cannot be read';
-        }
-
-        return new RouteNamesFollowUseCases($classOfService, $reflectedClasses);
+        return $this->classOfServiceFrom(...array_map(static fn (ProcessResult $listed): string => $listed->output, $listings))
+            ?? 'debug:container printed no service list in JSON, so controllers named by service ID cannot be read';
     }
 
     /**
@@ -201,16 +215,16 @@ final class RouteNamesGate implements RunsTheChangesCode
     }
 
     /**
-     * @param array<string, string> $classOfService
+     * @param list<string>                $controllers
+     * @param array<string, string|false> $environment
      *
      * @return list<string>|null
      */
-    private function reflectedClassesOf(Workspace $workspace, array $classOfService): ?array
+    private function reflectedClassesOf(Workspace $workspace, array $controllers, array $environment): ?array
     {
-        $candidates = array_values(array_unique(array_filter(
-            array_map(static fn (string $class): string => ltrim($class, '\\'), $classOfService),
-            static fn (string $class): bool => 0 === strncasecmp($class, self::OWN_NAMESPACE, strlen(self::OWN_NAMESPACE)),
-        )));
+        if ([] === $controllers) {
+            return [];
+        }
 
         $scratch = ScratchDirectory::create('intakt-route-classes');
 
@@ -219,15 +233,17 @@ final class RouteNamesGate implements RunsTheChangesCode
         }
 
         try {
-            // Because many class names exceed what one command line argument may hold, they go through a file.
+            // Because many class names exceed what one command line argument may hold, they go through a file, and the answer goes to a file so nothing the console prints can mix into it.
             $list = $scratch->path.'/classes.json';
-            file_put_contents($list, json_encode($candidates, JSON_THROW_ON_ERROR));
-            $reflected = $workspace->command([PHP_BINARY, '-r', self::REFLECT, '--', $workspace->root.'/vendor/autoload.php', $list]);
+            $answer = $scratch->path.'/declared.json';
+            $hook = $scratch->path.'/reflect.php';
+            file_put_contents($list, json_encode($controllers, JSON_THROW_ON_ERROR));
+            file_put_contents($hook, sprintf(self::REFLECT_AT_SHUTDOWN, var_export($list, true), var_export($answer, true)));
+            $booted = $workspace->command([PHP_BINARY, '-d', 'auto_prepend_file='.$hook, $workspace->root.'/bin/console', 'debug:router', ...self::OPTIONS], $environment);
+            $declared = $booted->succeeded() && is_file($answer) ? $this->decoded((string) file_get_contents($answer)) : null;
         } finally {
             $scratch->discard();
         }
-
-        $declared = $reflected->succeeded() ? $this->decoded($reflected->output) : null;
 
         if (!is_array($declared) || !array_is_list($declared)) {
             return null;

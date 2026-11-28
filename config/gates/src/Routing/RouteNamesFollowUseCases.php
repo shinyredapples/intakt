@@ -27,7 +27,7 @@ final readonly class RouteNamesFollowUseCases
     {
         $declaredClasses = [];
 
-        // Because a service definition may spell its class in another case than the class declares, the reflected spelling comes last and wins.
+        // Because a service definition or a route may spell its class in another case than the class declares, the reflected spelling comes last and wins.
         foreach ([...array_values($classOfService), ...$reflectedClasses] as $class) {
             $class = ltrim($class, '\\');
             $declaredClasses[strtolower($class)] = $class;
@@ -44,20 +44,8 @@ final readonly class RouteNamesFollowUseCases
         $findings = [];
 
         foreach ($routes as $name => $route) {
-            $controller = $this->controllerClassOf($route);
-
-            if (null === $controller) {
-                continue;
-            }
-
-            $controller = $this->declaredClassOf($controller);
-
-            // Because PHP class names ignore case, Symfony serves intakt\... just like Intakt\...
-            if (0 !== strncasecmp($controller, self::OWN_NAMESPACE, strlen(self::OWN_NAMESPACE))) {
-                continue;
-            }
-
-            $finding = $this->findingFor($name, $controller);
+            $controller = $this->ownControllerOf($route);
+            $finding = null === $controller ? null : $this->findingFor($name, $controller);
 
             if (null !== $finding) {
                 $findings[] = $finding;
@@ -65,6 +53,38 @@ final readonly class RouteNamesFollowUseCases
         }
 
         return $findings;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function ownControllerClassesIn(RouteCollection $routes): array
+    {
+        $classes = [];
+
+        foreach ($routes as $route) {
+            $controller = $this->ownControllerOf($route);
+
+            if (null !== $controller) {
+                $classes[strtolower($controller)] = $controller;
+            }
+        }
+
+        return array_values($classes);
+    }
+
+    private function ownControllerOf(Route $route): ?string
+    {
+        $controller = $this->controllerClassOf($route);
+
+        if (null === $controller) {
+            return null;
+        }
+
+        $controller = $this->declaredClassOf($controller);
+
+        // Because PHP class names ignore case, Symfony serves intakt\... just like Intakt\...
+        return 0 === strncasecmp($controller, self::OWN_NAMESPACE, strlen(self::OWN_NAMESPACE)) ? $controller : null;
     }
 
     private function controllerClassOf(Route $route): ?string
