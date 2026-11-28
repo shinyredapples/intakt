@@ -166,7 +166,7 @@ final class ShowLanesControllerTest extends DashboardPageTestCase
 
         self::assertCount(1, $banner);
         self::assertSame(
-            sprintf('New work is paused because the disk is low on free space. The disk of %s has 1.9 GiB free, below the floor of 2 GiB (disk.min_free_bytes). Work already running goes on, and new work starts again by itself once space is back.', NearestFolder::of(self::getContainer()->getParameter(GitServices::MIRRORS_DIRECTORY))),
+            sprintf('New work is paused because the disk is low on free space. The disk of %s has 1.9 GiB free, below the floor of 2 GiB (disk.min_free_bytes). Work already running goes on. This line goes away by itself once space is back; a step that was refused meanwhile must be run again.', NearestFolder::of(self::getContainer()->getParameter(GitServices::MIRRORS_DIRECTORY))),
             $banner->filter('p')->text(),
         );
     }

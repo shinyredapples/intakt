@@ -31,7 +31,7 @@ final class HeldForSpaceTest extends TestCase
         self::assertSame([
             'short' => 'New work paused: the disk is low on space',
             'title' => 'New work is paused because the disk is low on free space.',
-            'text' => 'The disk of /data has 1.2 GiB free, below the floor of 2 GiB (disk.min_free_bytes). Work already running goes on, and new work starts again by itself once space is back.',
+            'text' => 'The disk of /data has 1.2 GiB free, below the floor of 2 GiB (disk.min_free_bytes). Work already running goes on. This line goes away by itself once space is back; a step that was refused meanwhile must be run again.',
             'broken' => false,
         ], $held);
     }
@@ -41,7 +41,7 @@ final class HeldForSpaceTest extends TestCase
         $held = $this->heldFor(new DiskHold(DiskFloor::Inodes, '/data', 5_000, 100_000))->now();
 
         self::assertSame(
-            ['New work is paused because the disk is low on free file slots (inodes).', 'The disk of /data has 5,000 free file slots, below the floor of 100,000 (disk.min_free_inodes). Work already running goes on, and new work starts again by itself once space is back.'],
+            ['New work is paused because the disk is low on free file slots (inodes).', 'The disk of /data has 5,000 free file slots, below the floor of 100,000 (disk.min_free_inodes). Work already running goes on. This line goes away by itself once space is back; a step that was refused meanwhile must be run again.'],
             [$held['title'] ?? null, $held['text'] ?? null],
         );
     }
@@ -101,6 +101,38 @@ final class HeldForSpaceTest extends TestCase
         $disk->method('holdAt')->willThrowException(new ProcessTimedOutException(new Process(['df'])->setTimeout(10), ProcessTimedOutException::TYPE_GENERAL));
 
         self::assertStringStartsWith(sprintf('The free space of %s cannot be read: df timed out after 10 seconds.', sys_get_temp_dir()), new HeldForSpace($disk, sys_get_temp_dir())->now()['text'] ?? '');
+    }
+
+    public function testRoundingThatMakesTheReadingAndTheFloorEqualShowsExactBytes(): void
+    {
+        $held = $this->heldFor(new DiskHold(DiskFloor::Bytes, '/data', 2_046, 2_047))->now();
+
+        self::assertStringStartsWith('The disk of /data has 2,046 bytes free, below the floor of 2,047 bytes', $held['text'] ?? '');
+    }
+
+    public function testOneByteReadsInTheSingular(): void
+    {
+        $held = $this->heldFor(new DiskHold(DiskFloor::Bytes, '/data', 1, 2_147_483_648))->now();
+
+        self::assertStringStartsWith('The disk of /data has 1 byte free', $held['text'] ?? '');
+    }
+
+    public function testAMirrorOnADiskOfItsOwnBelowTheFloorIsShownEvenWhenTheMirrorsFolderIsFine(): void
+    {
+        $root = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        $mirror = $root.'/alpha.git';
+        mkdir($mirror, 0o777, true);
+        $disk = self::createStub(DiskSpace::class);
+        $disk->method('holdAt')->willReturnCallback(static fn (string $folder): ?DiskHold => $folder === $mirror ? new DiskHold(DiskFloor::Bytes, $folder, 0, 1_000) : null);
+
+        try {
+            $held = new HeldForSpace($disk, $root)->now();
+        } finally {
+            rmdir($mirror);
+            rmdir($root);
+        }
+
+        self::assertStringContainsString('The disk of '.$mirror.' has 0 bytes free', $held['text'] ?? '');
     }
 
     private function heldFor(?DiskHold $hold): HeldForSpace

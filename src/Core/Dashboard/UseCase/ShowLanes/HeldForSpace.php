@@ -18,7 +18,7 @@ final readonly class HeldForSpace
 {
     private const array UNITS = ['bytes', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'];
 
-    private const string RESUMES = 'Work already running goes on, and new work starts again by itself once space is back.';
+    private const string RESUMES = 'Work already running goes on. This line goes away by itself once space is back; a step that was refused meanwhile must be run again.';
 
     public function __construct(
         private DiskSpace $disk,
@@ -33,17 +33,36 @@ final readonly class HeldForSpace
      */
     public function now(): ?array
     {
-        $folder = NearestFolder::of($this->mirrorsDirectory);
+        foreach ($this->folders() as $folder) {
+            try {
+                $hold = $this->disk->holdAt($folder);
+            } catch (FreeSpaceUnreadable $unreadable) {
+                return $this->unreadable($unreadable);
+            } catch (ProcessTimedOutException $timedOut) {
+                return $this->unreadable(new FreeSpaceUnreadable($folder, sprintf('df timed out after %s seconds', $timedOut->getExceededTimeout())));
+            }
 
-        try {
-            $hold = $this->disk->holdAt($folder);
-        } catch (FreeSpaceUnreadable $unreadable) {
-            return $this->unreadable($unreadable);
-        } catch (ProcessTimedOutException $timedOut) {
-            return $this->unreadable(new FreeSpaceUnreadable($folder, sprintf('df timed out after %s seconds', $timedOut->getExceededTimeout())));
+            if ($hold instanceof DiskHold) {
+                return $this->held($hold);
+            }
         }
 
-        return $hold instanceof DiskHold ? $this->held($hold) : null;
+        return null;
+    }
+
+    /**
+     * The mirrors folder and each mirror in it, because a mirror can sit on a disk of its own and UpdateMirror measures that one.
+     *
+     * @return list<string>
+     */
+    private function folders(): array
+    {
+        $folders = [NearestFolder::of($this->mirrorsDirectory)];
+        foreach (glob($this->mirrorsDirectory.'/*', GLOB_ONLYDIR) ?: [] as $mirror) {
+            $folders[] = $mirror;
+        }
+
+        return $folders;
     }
 
     /**
@@ -65,12 +84,7 @@ final readonly class HeldForSpace
     private function held(DiskHold $hold): array
     {
         return match ($hold->floor) {
-            DiskFloor::Bytes => [
-                'short' => 'New work paused: the disk is low on space',
-                'title' => 'New work is paused because the disk is low on free space.',
-                'text' => sprintf('The disk of %s has %s free, below the floor of %s (disk.min_free_bytes). %s', $hold->folder, $this->bytes($hold->free), $this->bytes($hold->minimum), self::RESUMES),
-                'broken' => false,
-            ],
+            DiskFloor::Bytes => $this->heldBytes($hold),
             DiskFloor::Inodes => [
                 'short' => 'New work paused: the disk is low on file slots',
                 'title' => 'New work is paused because the disk is low on free file slots (inodes).',
@@ -78,6 +92,39 @@ final readonly class HeldForSpace
                 'broken' => false,
             ],
         };
+    }
+
+    /**
+     * @return array{short: string, title: string, text: string, broken: bool}
+     */
+    private function heldBytes(DiskHold $hold): array
+    {
+        [$free, $minimum] = $this->bytePair($hold->free, $hold->minimum);
+
+        return [
+            'short' => 'New work paused: the disk is low on space',
+            'title' => 'New work is paused because the disk is low on free space.',
+            'text' => sprintf('The disk of %s has %s free, below the floor of %s (disk.min_free_bytes). %s', $hold->folder, $free, $minimum, self::RESUMES),
+            'broken' => false,
+        ];
+    }
+
+    /**
+     * @return array{string, string}
+     */
+    private function bytePair(int $free, int $minimum): array
+    {
+        $pair = [$this->bytes($free), $this->bytes($minimum)];
+        if ($pair[0] === $pair[1]) {
+            return [$this->exactBytes($free), $this->exactBytes($minimum)];
+        }
+
+        return $pair;
+    }
+
+    private function exactBytes(int $bytes): string
+    {
+        return number_format($bytes).(1 === $bytes ? ' byte' : ' bytes');
     }
 
     private function bytes(int $bytes): string
@@ -91,6 +138,10 @@ final readonly class HeldForSpace
 
         // Rounded down, so a reading one byte below its floor never reads as equal to it.
         $number = number_format(floor($size * 10) / 10, 0 === $unit ? 0 : 1);
+
+        if (0 === $unit) {
+            return $this->exactBytes($bytes);
+        }
 
         return (str_ends_with($number, '.0') ? substr($number, 0, -2) : $number).' '.self::UNITS[$unit];
     }
