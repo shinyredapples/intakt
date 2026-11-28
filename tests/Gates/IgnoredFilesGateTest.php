@@ -172,6 +172,121 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertStringContainsString('"\"two\\\\nlines.tmp\": tracked although .gitignore excludes it', $report);
     }
 
+    public function testAValidUtf8PathWithATabIsQuotedTheWayGitQuotesIt(): void
+    {
+        $sandbox = $this->startedChange("*.tmp\n");
+        $sandbox->write("caf\u{e9}\tx.tmp", "report\n");
+        $sandbox->git('add', '--force', "caf\u{e9}\tx.tmp");
+        $sandbox->commitAll('chore: add a report');
+
+        $report = $sandbox->gateResult(new IgnoredFilesGate())->toFullJson();
+
+        self::assertStringContainsString('"\"caf\\\\303\\\\251\\\\tx.tmp\": tracked although .gitignore excludes it', $report);
+    }
+
+    public function testAPathWithAUnicodeNextLineIsQuotedTheWayGitQuotesIt(): void
+    {
+        $sandbox = $this->startedChange("*.tmp\n");
+        $sandbox->write("r-\u{85}.tmp", "report\n");
+        $sandbox->git('add', '--force', "r-\u{85}.tmp");
+        $sandbox->commitAll('chore: add a report');
+
+        $report = $sandbox->gateResult(new IgnoredFilesGate())->toFullJson();
+
+        self::assertStringContainsString('"\"r-\\\\302\\\\205.tmp\": tracked although .gitignore excludes it', $report);
+    }
+
+    public function testAValidUtf8PathWithoutAControlCharacterStaysAsItIs(): void
+    {
+        $sandbox = $this->startedChange("*.tmp\n");
+        $sandbox->write("caf\u{e9}.tmp", "report\n");
+        $sandbox->git('add', '--force', "caf\u{e9}.tmp");
+        $sandbox->commitAll('chore: add a report');
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertStringContainsString("caf\u{e9}.tmp: tracked although .gitignore excludes it", $run->findingsOf('ignored'));
+    }
+
+    public function testAnUntrackedNestedGitignoreThatNegatesTheRuleStillFailsTheGate(): void
+    {
+        $sandbox = $this->startedChange("*.log\n");
+        $sandbox->write('logs/build.log', "log\n");
+        $sandbox->git('add', '--force', 'logs/build.log');
+        $sandbox->commitAll('chore: add a log');
+        $sandbox->write('logs/.gitignore', "!build.log\n");
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertTrue($run->failed('ignored'), $run->output());
+        self::assertStringContainsString('logs/.gitignore: untracked .gitignore above tracked files; add or remove it', $run->findingsOf('ignored'));
+    }
+
+    public function testAnUntrackedGitignoreThatIgnoresItselfStillFailsTheGate(): void
+    {
+        $sandbox = $this->startedChange("*.log\n");
+        $sandbox->write('logs/build.log', "log\n");
+        $sandbox->git('add', '--force', 'logs/build.log');
+        $sandbox->commitAll('chore: add a log');
+        $sandbox->write('logs/.gitignore', "!build.log\n.gitignore\n");
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertStringContainsString('logs/.gitignore: untracked .gitignore above tracked files', $run->findingsOf('ignored'));
+    }
+
+    public function testAnUntrackedGitignoreWithNoTrackedFileBelowItPassesTheGate(): void
+    {
+        $sandbox = $this->startedChange("/vendor/\n");
+        $sandbox->write('src/Report.php', "<?php\n");
+        $sandbox->commitAll('feat: add a report');
+        $sandbox->write('vendor/acme/tool/.gitignore', "!*\n");
+        $sandbox->write('.idea/.gitignore', "/workspace.xml\n");
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertTrue($run->passed('ignored'), $run->output());
+    }
+
+    public function testAnAssumeUnchangedGitignoreEmptiedInTheWorkingTreeFailsTheGate(): void
+    {
+        $sandbox = $this->startedChange("*.log\n");
+        $sandbox->write('build.log', "log\n");
+        $sandbox->git('add', '--force', 'build.log');
+        $sandbox->commitAll('chore: add a log');
+        $sandbox->git('update-index', '--assume-unchanged', '.gitignore');
+        $sandbox->write('.gitignore', '');
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertTrue($run->failed('ignored'), $run->output());
+        self::assertStringContainsString('.gitignore: marked assume-unchanged or skip-worktree; clear the mark', $run->findingsOf('ignored'));
+    }
+
+    public function testASkipWorktreeGitignoreFailsTheGate(): void
+    {
+        $sandbox = $this->startedChange("*.log\n");
+        $sandbox->git('update-index', '--skip-worktree', '.gitignore');
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertStringContainsString('.gitignore: marked assume-unchanged or skip-worktree', $run->findingsOf('ignored'));
+    }
+
+    public function testAnIgnoredGitignoreWithUnstagedChangesGivesExactlyOneFinding(): void
+    {
+        $sandbox = $this->startedChange("docs/.gitignore\n");
+        $sandbox->write('docs/.gitignore', "*.log\n");
+        $sandbox->git('add', '--force', 'docs/.gitignore');
+        $sandbox->commitAll('docs: ignore logs');
+        $sandbox->write('docs/.gitignore', "*.tmp\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+        $findings = json_decode($result->toFullJson(), true, flags: \JSON_THROW_ON_ERROR)['findings'];
+
+        self::assertSame(['docs/.gitignore: working-tree .gitignore differs from the index; stage or revert it so the gate judges the rules that will be committed; tracked although .gitignore excludes it; run git rm --cached on it, or add a negated rule to .gitignore'], $findings);
+    }
+
     public function testAFileExcludedOnlyByARepositoryLocalExcludesFileDoesNotFailTheGate(): void
     {
         $sandbox = $this->startedChange("/.evidence/\n");

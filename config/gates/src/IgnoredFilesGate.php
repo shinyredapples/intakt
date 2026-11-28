@@ -12,6 +12,21 @@ final readonly class IgnoredFilesGate implements Gate
     // Because ls-files reads the working-tree .gitignore files, an unstaged edit could hide a path the committed rules exclude.
     private const array UNSTAGED_RULES = ['diff', '--name-only', '-z', '--', ':(glob)**/.gitignore'];
 
+    // Because git diff skips entries marked assume-unchanged or skip-worktree and never sees untracked files, those rule files are listed with their tags; no exclude applies, so a .gitignore that ignores itself is listed too.
+    private const array RULE_FILES = ['ls-files', '-z', '-v', '--cached', '--others', '--', ':(glob)**/.gitignore'];
+
+    private const string UNTRACKED_TAG = '?';
+
+    private const string SKIP_WORKTREE_TAG = 'S';
+
+    private const string DIFFERS = 'working-tree .gitignore differs from the index; stage or revert it so the gate judges the rules that will be committed';
+
+    private const string MARKED = 'marked assume-unchanged or skip-worktree; clear the mark (git update-index --no-assume-unchanged --no-skip-worktree) so the gate can compare it with the index';
+
+    private const string UNTRACKED = 'untracked .gitignore above tracked files; add or remove it so the gate judges the rules that will be committed';
+
+    private const string TRACKED = 'tracked although .gitignore excludes it; run git rm --cached on it, or add a negated rule to .gitignore';
+
     private const array ESCAPES = ["\x07" => '\a', "\x08" => '\b', "\t" => '\t', "\n" => '\n', "\x0B" => '\v', "\x0C" => '\f', "\r" => '\r', '"' => '\"', '\\' => '\\\\'];
 
     public function name(): string
@@ -37,9 +52,45 @@ final readonly class IgnoredFilesGate implements Gate
             return GateResult::failedBecause($this->name(), 'git diff failed: '.$rules->firstErrorLine());
         }
 
-        $changedRules = $this->paths($rules->output);
-        $trackedAndIgnored = $this->paths($listing->output);
-        $findings = [...array_map($this->unstagedRulesFinding(...), $changedRules), ...array_map($this->trackedFinding(...), $trackedAndIgnored)];
+        $ruleFiles = $workspace->gitWithPathspecMagic(self::RULE_FILES);
+
+        if (!$ruleFiles->succeeded()) {
+            return GateResult::failedBecause($this->name(), 'git ls-files failed: '.$ruleFiles->firstErrorLine());
+        }
+
+        $tagged = $this->taggedPaths($ruleFiles->output);
+        $untracked = array_keys(array_filter($tagged, static fn (string $tag): bool => self::UNTRACKED_TAG === $tag));
+        $shadowing = $this->rulesAboveTrackedFiles($workspace, array_map(strval(...), $untracked));
+
+        if ($shadowing instanceof GateResult) {
+            return $shadowing;
+        }
+
+        $reasons = [];
+
+        foreach ($this->paths($rules->output) as $path) {
+            $reasons[$path][] = self::DIFFERS;
+        }
+
+        foreach ($tagged as $path => $tag) {
+            if (self::SKIP_WORKTREE_TAG === $tag || ctype_lower($tag)) {
+                $reasons[$path][] = self::MARKED;
+            }
+        }
+
+        foreach ($shadowing as $path) {
+            $reasons[$path][] = self::UNTRACKED;
+        }
+
+        foreach ($this->paths($listing->output) as $path) {
+            $reasons[$path][] = self::TRACKED;
+        }
+
+        $findings = [];
+
+        foreach ($reasons as $path => $pathReasons) {
+            $findings[] = $this->quoted((string) $path).': '.implode('; ', array_unique($pathReasons));
+        }
 
         return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
     }
@@ -52,20 +103,52 @@ final readonly class IgnoredFilesGate implements Gate
         return array_values(array_unique(array_filter(explode("\0", $output), static fn (string $path): bool => '' !== $path)));
     }
 
-    private function unstagedRulesFinding(string $path): string
+    /**
+     * @return array<string, string>
+     */
+    private function taggedPaths(string $output): array
     {
-        return $this->quoted($path).': working-tree .gitignore differs from the index; stage or revert it so the gate judges the rules that will be committed';
+        $tagged = [];
+
+        foreach ($this->paths($output) as $entry) {
+            $tagged[substr($entry, 2)] = $entry[0];
+        }
+
+        return $tagged;
     }
 
-    private function trackedFinding(string $path): string
+    /**
+     * @param list<string> $untracked
+     *
+     * @return list<string>|GateResult
+     */
+    private function rulesAboveTrackedFiles(Workspace $workspace, array $untracked): array|GateResult
     {
-        return $this->quoted($path).': tracked although .gitignore excludes it; run git rm --cached on it, or add a negated rule to .gitignore';
+        if ([] === $untracked) {
+            return [];
+        }
+
+        $pathspecs = array_map(fn (string $path): string => '' === $this->directoryOf($path) ? '.' : $this->directoryOf($path), $untracked);
+        $tracked = $workspace->git(['ls-files', '-z', '--cached', '--', ...$pathspecs]);
+
+        if (!$tracked->succeeded()) {
+            return GateResult::failedBecause($this->name(), 'git ls-files failed: '.$tracked->firstErrorLine());
+        }
+
+        $trackedPaths = $this->paths($tracked->output);
+
+        return array_values(array_filter($untracked, fn (string $path): bool => array_any($trackedPaths, fn (string $trackedPath): bool => str_starts_with($trackedPath, $this->directoryOf($path)))));
+    }
+
+    private function directoryOf(string $rulePath): string
+    {
+        return substr($rulePath, 0, -\strlen('.gitignore'));
     }
 
     // Because a finding must name a file the reader can untrack, a path JSON cannot carry losslessly is quoted the way git quotes it.
     private function quoted(string $path): string
     {
-        if (0 === preg_match('/[\x00-\x1F\x7F]/u', $path)) {
+        if (0 === preg_match('/\p{Cc}/u', $path)) {
             return $path;
         }
 
