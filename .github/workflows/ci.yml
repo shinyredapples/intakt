@@ -114,7 +114,7 @@ jobs:
   # as uid 1000, the same steps on either kind of runner; no step runs the change's code as root or with the Docker socket.
   check:
     needs: main
-    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) }}
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.ref_protected)) }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 20
     steps:
@@ -240,7 +240,7 @@ jobs:
   # request instead of the next nightly run. The steps and container options are those of the journeys job of journeys.yml.
   journeys:
     needs: main
-    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) }}
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.ref_protected)) }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     # Every journey at 300 seconds plus the image build.
     timeout-minutes: 40
@@ -317,7 +317,7 @@ jobs:
   # misses is caught by the nightly full run on main or by the next direct push or release commit.
   changes:
     needs: main
-    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) }}
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.ref_protected)) }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 5
     outputs:
@@ -380,7 +380,7 @@ jobs:
   # reports every engine, each in its own log group.
   persistence:
     needs: changes
-    if: ${{ !cancelled() && !failure() && needs.changes.result == 'success' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) }}
+    if: ${{ !cancelled() && !failure() && needs.changes.result == 'success' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.ref_protected)) }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 20
     env:
@@ -465,7 +465,7 @@ jobs:
   # is a full machine reset and a build. The full history is fetched for the upgrade check's base commit.
   image:
     needs: main
-    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) }}
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.ref_protected)) }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 35
     steps:
@@ -526,7 +526,7 @@ jobs:
   # request or push run skips it, so it never blocks a merge. A cancel by hand makes failure() false.
   nightly-failed:
     needs: [check, journeys, changes, persistence, image]
-    if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && github.ref_protected
     # GitHub's image has gh.
     runs-on: ubuntu-24.04
     timeout-minutes: 10

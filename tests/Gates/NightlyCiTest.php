@@ -82,7 +82,7 @@ final class NightlyCiTest extends SandboxTestCase
         $job = $this->workflow()['jobs']['nightly-failed'];
 
         self::assertSame(['check', 'journeys', 'changes', 'persistence', 'image'], $job['needs'] ?? null);
-        self::assertSame("failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'", $job['if'] ?? null);
+        self::assertSame("failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && github.ref_protected", $job['if'] ?? null);
         self::assertSame('.github/ci/nightly-failed-issue.sh "$RUN_LINK"', $job['steps'][1]['run'] ?? null);
     }
 
@@ -107,6 +107,8 @@ final class NightlyCiTest extends SandboxTestCase
     {
         yield 'a topic branch' => ['refs/heads/topic', false];
         yield 'main' => ['refs/heads/main', true];
+        // Actions compares strings without regard to case; only the protected default branch passes github.ref_protected.
+        yield 'a case variant of main' => ['refs/heads/MAIN', false];
     }
 
     #[DataProvider('dispatchRefs')]
@@ -119,7 +121,8 @@ final class NightlyCiTest extends SandboxTestCase
             "needs.changes.result == 'success'" => 'true',
             'github.event.pull_request.head.repo.full_name == github.repository' => 'false',
             "github.event_name != 'pull_request'" => 'true',
-            "github.ref == 'refs/heads/main'" => 'refs/heads/main' === $ref ? 'true' : 'false',
+            "github.ref == 'refs/heads/main'" => strcasecmp('refs/heads/main', $ref) === 0 ? 'true' : 'false',
+            'github.ref_protected' => 'refs/heads/main' === $ref ? 'true' : 'false',
         ];
 
         foreach (['check', 'journeys', 'changes', 'persistence', 'image'] as $name) {
