@@ -37,6 +37,10 @@ else
     if [ -n "$(git rev-list --min-parents=2 --max-count=1 "$head" --not "$base" 2> /dev/null)" ]; then
         refuse 'the bundle holds a merge commit, and no merge of main was asked'
     fi
+    # Git refuses to bundle a commit whose objects it cannot traverse, so walk them as the bundle does.
+    if ! git rev-list --objects "$head" --not "$base" > /dev/null 2>&1; then
+        refuse 'the bundle holds a commit git would not write'
+    fi
 fi
 
 # A link is not handed back, because build.sh copies PR.md only when it is a regular file.
