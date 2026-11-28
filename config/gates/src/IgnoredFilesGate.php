@@ -74,20 +74,6 @@ final readonly class IgnoredFilesGate implements Gate
             |> array_values(...);
     }
 
-    // Because the hardened call hashes without the repository's attributes (a clean filter it names would run), a checkout that eol=crlf or core.autocrlf converted hashes differently from its clean blob; git drops the carriage return before each line break of a .gitignore, so such a file carries the same rules.
-    private function sameRulesIgnoringCarriageReturns(Workspace $workspace, string $path, string $blob): bool
-    {
-        $result = $workspace->git(['cat-file', 'blob', $blob]);
-
-        if (!$result->succeeded()) {
-            throw new ScopeFailure('git cat-file failed: '.$result->firstErrorLine());
-        }
-
-        $workingTree = file_get_contents($workspace->root.'/'.$path);
-
-        return false !== $workingTree && str_replace("\r\n", "\n", $workingTree) === str_replace("\r\n", "\n", $result->output);
-    }
-
     // Because git reads no .gitignore that is a symbolic link, neither here nor in CI, a tracked link carries no rules to compare; only stage 0, so a conflicted file is not compared three times.
     /**
      * @return array<string, string>
@@ -128,6 +114,20 @@ final readonly class IgnoredFilesGate implements Gate
         }
 
         return array_combine($paths, explode("\n", rtrim($result->output, "\n")));
+    }
+
+    // Because the hardened call hashes without the repository's attributes (a clean filter it names would run), a checkout that eol=crlf or core.autocrlf converted hashes differently from its clean blob; git drops the carriage return before each line break of a .gitignore, so such a file carries the same rules.
+    private function sameRulesIgnoringCarriageReturns(Workspace $workspace, string $path, string $blob): bool
+    {
+        $result = $workspace->git(['cat-file', 'blob', $blob]);
+
+        if (!$result->succeeded()) {
+            throw new ScopeFailure('git cat-file failed: '.$result->firstErrorLine());
+        }
+
+        $workingTree = file_get_contents($workspace->root.'/'.$path);
+
+        return false !== $workingTree && str_replace("\r\n", "\n", $workingTree) === str_replace("\r\n", "\n", $result->output);
     }
 
     // Because the full report must name a file the reader can untrack, a path JSON would mangle (not UTF-8), a line break or control would split or hide (C0, DEL, C1 such as U+0085, U+2028, U+2029) or a format character would reorder (U+202E) is quoted as git quotes it; \z, not $, so a trailing newline counts.
