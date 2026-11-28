@@ -48,7 +48,7 @@ final readonly class SizingFixture
         $this->kept = $kept ?? $this->ledger;
         $this->parked = ParkedTaskTable::inMemory();
         $this->comments = new PostedTaskComments();
-        $this->parts = new FiledParts();
+        $this->parts = new FiledParts($this->kept);
         $this->splitLedger = new KindRefusingLedger($this->kept);
         $this->issue = new SampleIssue($number);
     }

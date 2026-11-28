@@ -19,4 +19,7 @@ interface TaskParts
      */
     #[NoDiscard('the number is what later parts wait for')]
     public function fileOnce(string $project, PartIssue $part): int;
+
+    // Whether a filing of a part of this project kept this issue number, known from that moment on, because a split that stopped before its end has no other record of the parts it filed, and an edit can remove a part's marker.
+    public function isFiledPart(string $project, int $issue): bool;
 }

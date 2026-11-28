@@ -42,6 +42,12 @@ final readonly class GitHubTaskParts implements TaskParts
         return $this->created->whileHeld($place, $part, fn (): int => $this->filedOnce($place, $part));
     }
 
+    #[Override]
+    public function isFiledPart(string $project, int $issue): bool
+    {
+        return $this->created->holds($project, $issue);
+    }
+
     /**
      * @throws ForgeReadFailed
      * @throws ForgeWriteFailed
@@ -59,6 +65,9 @@ final readonly class GitHubTaskParts implements TaskParts
         $found = $this->filedBefore($path, $part);
 
         if (null !== $found) {
+            // Kept now, because the create that stored this part lost its answer, and the number is what tells the part from a task once an edit removes its marker.
+            $this->created->keep($place, $part, $found);
+
             return $found;
         }
 

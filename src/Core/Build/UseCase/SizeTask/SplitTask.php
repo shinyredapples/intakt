@@ -46,10 +46,10 @@ final readonly class SplitTask
         return SplitPlan::of($request, $recorded) ?? throw TaskNotSized::planUnreadable($request->project, $request->task);
     }
 
-    // Also by the split records, because an edit can remove a part's marker and a part is never split again; a record that names the task's number in another project does not count.
+    // Also by the forge's record of each filed part and by the split records, because an edit can remove a part's marker and a part is never split again, also while its split is unfinished; a record that names the task's number in another project does not count.
     public function isPart(SizingRequest $request): bool
     {
-        if (SplitPlan::carriesAMarker($request)) {
+        if (SplitPlan::carriesAMarker($request) || $this->parts->isFiledPart($request->project, $request->task)) {
             return true;
         }
 

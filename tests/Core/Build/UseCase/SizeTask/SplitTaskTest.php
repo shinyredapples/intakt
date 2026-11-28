@@ -138,8 +138,8 @@ final class SplitTaskTest extends TestCase
         (void) $fixture->sizing($this->vendor())->run('alpha', 7);
 
         self::assertSame([['alpha', 7, 'This task was split into #100, #101, #102. It stays open as their umbrella.']], $fixture->comments->posted);
-        self::assertSame([LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], $fixture->ledger->kinds());
-        self::assertSame(['project' => 'alpha', 'task' => '7', 'parts' => [100, 101, 102]], array_diff_key($fixture->ledger->payloads()[1], ['run' => true]));
+        self::assertSame([LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], self::kindsOfTheSplitIn($fixture));
+        self::assertSame(['project' => 'alpha', 'task' => '7', 'parts' => [100, 101, 102]], array_diff_key(array_last($fixture->ledger->payloads()), ['run' => true]));
     }
 
     public function testASplitTaskIsNeverSplitOrSizedAgainAlsoAfterAnEdit(): void
@@ -151,7 +151,7 @@ final class SplitTaskTest extends TestCase
         $outcome = $fixture->sizing($this->vendor())->run('alpha', 7);
 
         self::assertSame([SizingOutcome::AlreadySized, 1, 3], [$outcome, $this->calls, count($fixture->parts->filed)]);
-        self::assertSame([LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], $fixture->ledger->kinds());
+        self::assertSame([LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], self::kindsOfTheSplitIn($fixture));
     }
 
     public function testAPartSizedAsSplitIsKeptWholeAndRecordedAsReady(): void
@@ -204,7 +204,7 @@ final class SplitTaskTest extends TestCase
         self::assertStringNotContainsString('Waits for', $fixture->parts->filed[0]['body']);
         self::assertStringEndsWith('Waits for #100', $fixture->parts->filed[1]['body']);
         self::assertCount(1, $fixture->comments->posted);
-        self::assertSame([LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], $fixture->ledger->kinds());
+        self::assertSame([LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], self::kindsOfTheSplitIn($fixture));
     }
 
     public function testAPlanOnRecordThatCannotBeReadStopsTheSizingWithoutACall(): void
@@ -231,7 +231,7 @@ final class SplitTaskTest extends TestCase
 
         self::assertSame([SizingOutcome::Split, 1], [$outcome, $this->calls]);
         self::assertSame(['Read the cart', 'Show the total', 'Show the empty cart'], $fixture->parts->titles());
-        self::assertSame([LedgerEventKind::TaskSized, LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], $fixture->ledger->kinds());
+        self::assertSame([LedgerEventKind::TaskSized, LedgerEventKind::TaskSplitPlanned, LedgerEventKind::TaskSplit], self::kindsOfTheSplitIn($fixture));
     }
 
     public function testAPartSizedAsSplitBeforeIsNotSizedAgain(): void
@@ -282,6 +282,29 @@ final class SplitTaskTest extends TestCase
 
         self::assertSame([SizingOutcome::Ready, []], [$outcome, $fixture->parts->filed]);
         self::assertSame([LedgerEventKind::TaskSplit, LedgerEventKind::TaskSized], $fixture->ledger->kinds());
+    }
+
+    public function testAPartOfAnUnfinishedSplitWhoseMarkerAnEditRemovedIsKeptWhole(): void
+    {
+        $parent = $this->fixture();
+        $filed = $this->firstPartOfASplitStoppedAtItsSecond($parent);
+        $part = new SizingFixture(self::createStub(ManagerRegistry::class), $parent->ledger, $filed['number']);
+        $part->issue->rewrittenAs(str_replace($filed['marker'], '', $filed['body']));
+
+        $outcome = $part->sizing($this->vendor())->run('alpha', $filed['number']);
+
+        self::assertSame([SizingOutcome::Ready, []], [$outcome, $part->parts->filed]);
+    }
+
+    public function testATaskWithTheNumberOfAPartOfAnUnfinishedSplitInAnotherProjectIsSplit(): void
+    {
+        $parent = $this->fixture();
+        $filed = $this->firstPartOfASplitStoppedAtItsSecond($parent);
+        $other = new SizingFixture(self::createStub(ManagerRegistry::class), $parent->ledger, $filed['number']);
+
+        $outcome = $other->sizing($this->vendor())->run('widget', $filed['number']);
+
+        self::assertSame([SizingOutcome::Split, 3], [$outcome, count($other->parts->filed)]);
     }
 
     public function testATaskWithTheNumberOfAPartInAnotherProjectIsSplit(): void
@@ -344,6 +367,32 @@ final class SplitTaskTest extends TestCase
         $payload = ['project' => 'alpha', 'task' => '7', 'outcome' => 'ready', 'missing' => [], 'size' => 'split', 'estimated_lines' => 1200, 'text' => $text, 'run' => 'r0'];
 
         return new LedgerEvent(LedgerEventKind::TaskSized, json_encode($payload, JSON_THROW_ON_ERROR), SizingRecords::keyOf('alpha', 7));
+    }
+
+    /**
+     * @return array{number: int, title: string, body: string, marker: string, labels: list<string>}
+     */
+    private function firstPartOfASplitStoppedAtItsSecond(SizingFixture $parent): array
+    {
+        $parent->parts->answerLostFor = 2;
+
+        try {
+            (void) $parent->sizing($this->vendor())->run('alpha', 7);
+            self::fail('A split whose second part was not filed was reported as done.');
+        } catch (TaskNotSized $stopped) {
+            self::assertStringContainsString('part 2 was not filed', $stopped->getMessage());
+        }
+
+        return $parent->parts->filed[0];
+    }
+
+    // Without the forge's own lines of each filed part, which the forge's tests cover.
+    /**
+     * @return list<LedgerEventKind>
+     */
+    private static function kindsOfTheSplitIn(SizingFixture $fixture): array
+    {
+        return array_values(array_filter($fixture->ledger->kinds(), static fn (LedgerEventKind $kind): bool => LedgerEventKind::PartIssueCreated !== $kind));
     }
 
     private function fixture(): SizingFixture

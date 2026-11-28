@@ -51,6 +51,7 @@ use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\AI\Platform\PlatformInterface;
@@ -133,6 +134,7 @@ final class SizingASampleTaskTest extends KernelTestCase
     }
 
     // On the persistent ledger, so the order and the payloads are the ones the database keeps and reads back.
+    #[Group('persistence')]
     public function testASampleTaskOfTheSplitSizeIsSplitAndItsPlanPartsAndTokensAreRecorded(): void
     {
         $registry = self::getContainer()->get('doctrine');
@@ -146,10 +148,11 @@ final class SizingASampleTaskTest extends KernelTestCase
 
         self::assertSame(SizingOutcome::Split, $outcome);
         $records = array_map(static fn (RecordedEvent $recorded): array => [$recorded->event->kind->value, self::payloadOf($recorded)], [...$ledger->readInOrder()]);
-        self::assertSame(['usage_recorded', 'usage_recorded', 'task_split_planned', 'task_split'], array_column($records, 0));
+        self::assertSame(['usage_recorded', 'usage_recorded', 'task_split_planned', 'part_issue_created', 'part_issue_created', 'task_split'], array_column($records, 0));
         self::assertSame(['started', '12'], [$records[0][1]['phase'] ?? null, $records[0][1]['task'] ?? null]);
         self::assertSame(['project' => 'sample', 'task' => '12', 'size' => 'split', 'estimated_lines' => 900, 'parts' => $parts, 'labels' => ['ready']], array_diff_key($records[2][1], ['text' => true, 'run' => true]));
-        self::assertSame(['project' => 'sample', 'task' => '12', 'parts' => [100, 101]], array_diff_key($records[3][1], ['run' => true]));
+        self::assertSame(['project' => 'sample', 'task' => '12', 'parts' => [100, 101]], array_diff_key($records[5][1], ['run' => true]));
+        self::assertSame([['project' => 'sample', 'issue' => 100], ['project' => 'sample', 'issue' => 101]], [$records[3][1], $records[4][1]]);
         self::assertSame([[100, 'Read the cart', ['ready']], [101, 'Show the total', ['ready']]], array_map(static fn (array $part): array => [$part['number'], $part['title'], $part['labels']], $fixture->parts->filed));
         self::assertStringEndsWith('Waits for #100', $fixture->parts->filed[1]['body']);
         self::assertSame([['sample', 12, 'This task was split into #100, #101. It stays open as their umbrella.']], $fixture->comments->posted);
