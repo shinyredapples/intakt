@@ -66,23 +66,12 @@ final readonly class IgnoredFilesGate implements Gate
         // Because ls-files reads the working-tree rules, an unstaged edit could hide a tracked file that CI, judging the committed rules, rejects; blob ids, not stat data, so an edit that keeps size and mtime still counts.
         $staged = $this->stagedRuleFiles($workspace);
         $present = array_filter(array_keys($staged), static fn (string $path): bool => is_file($workspace->root.'/'.$path) && !is_link($workspace->root.'/'.$path));
-        $compared = array_values(array_filter($present, static fn (string $path): bool => null !== $staged[$path]));
-        $hashes = $this->workingTreeBlobs($workspace, $compared);
-        $encodings = $this->stagedWorkingTreeEncodings($workspace, $compared);
+        $matching = $this->filesMatchingTheirBlobs($workspace, array_filter(array_intersect_key($staged, array_flip($present)), static fn (?string $blob): bool => null !== $blob));
 
-        $differing = [];
-        foreach ($staged as $path => $blob) {
-            // Because a file with a working-tree-encoding is checked out in that charset, its bytes matching the UTF-8 blob are not the rules CI reads.
-            $same = null === $blob
-                ? !in_array($path, $present, true)
-                : isset($hashes[$path]) && ((null === ($encodings[$path] ?? null) && $hashes[$path] === $blob) || $this->sameRulesAfterCheckoutConversion($workspace, $path, $blob, $encodings[$path] ?? null));
-
-            if (!$same) {
-                $differing[] = $path;
-            }
-        }
-
-        return $differing;
+        return array_values(array_filter(
+            array_keys($staged),
+            static fn (string $path): bool => null === $staged[$path] ? in_array($path, $present, true) : !in_array($path, $matching, true),
+        ));
     }
 
     /**
@@ -108,16 +97,36 @@ final readonly class IgnoredFilesGate implements Gate
     }
 
     /**
+     * @param array<string, string> $blobs
+     *
+     * @return list<string>
+     */
+    private function filesMatchingTheirBlobs(Workspace $workspace, array $blobs): array
+    {
+        // Because a file with a working-tree-encoding is checked out in that charset, its bytes matching the UTF-8 blob are not the rules CI reads.
+        $paths = array_keys($blobs);
+
+        if ([] === $paths) {
+            return [];
+        }
+
+        $hashes = $this->workingTreeBlobs($workspace, $paths);
+        $encodings = $this->stagedWorkingTreeEncodings($workspace, $paths);
+
+        return array_values(array_filter(
+            $paths,
+            fn (string $path): bool => (!isset($encodings[$path]) && $hashes[$path] === $blobs[$path])
+                || $this->sameRulesAfterCheckoutConversion($workspace, $blobs[$path], $this->workingTreeRules($workspace, $path, $encodings[$path] ?? null)),
+        ));
+    }
+
+    /**
      * @param list<string> $paths
      *
      * @return array<string, string>
      */
     private function workingTreeBlobs(Workspace $workspace, array $paths): array
     {
-        if ([] === $paths) {
-            return [];
-        }
-
         $result = $workspace->git(['hash-object', '--', ...$paths]);
 
         if (!$result->succeeded()) {
@@ -130,33 +139,37 @@ final readonly class IgnoredFilesGate implements Gate
     /**
      * @param list<string> $paths
      *
-     * @return array<string, ?string>
+     * @return array<string, string>
      */
     private function stagedWorkingTreeEncodings(Workspace $workspace, array $paths): array
     {
-        // Because check-attr only reports and runs no filter, and --cached reads the staged attributes (those CI checks out with) past the hardened empty attribute source.
-        if ([] === $paths) {
-            return [];
-        }
-
+        // Because check-attr only reports and runs no filter, and --cached reads the staged attributes (those CI checks out with) past the hardened empty attribute source; \G, so each record starts where the last ended, since a path holds no NUL.
         $result = $workspace->git(['check-attr', '--cached', '-z', 'working-tree-encoding', '--', ...$paths]);
 
         if (!$result->succeeded()) {
             throw new ScopeFailure('git check-attr failed: '.$result->firstErrorLine());
         }
 
-        $encodings = [];
-        foreach (array_chunk(explode("\0", $result->output), 3) as $record) {
-            if (3 === count($record)) {
-                $encodings[$record[0]] = in_array($record[2], ['unspecified', 'unset', 'set'], true) ? null : $record[2];
-            }
+        preg_match_all('/\G([^\0]*)\0working-tree-encoding\0([^\0]*)\0/', $result->output, $records);
+
+        return array_combine($records[1], $records[2])
+            |> (static fn (array $values): array => array_filter($values, static fn (string $value): bool => !in_array($value, ['unspecified', 'unset', 'set'], true)));
+    }
+
+    // Because a file git could not read, or one not valid in its charset, holds no rules CI would read.
+    private function workingTreeRules(Workspace $workspace, string $path, ?string $encoding): ?string
+    {
+        $text = file_get_contents($workspace->root.'/'.$path);
+
+        if (false === $text) {
+            return null;
         }
 
-        return $encodings;
+        return null === $encoding ? $text : $this->decoded($text, $encoding);
     }
 
     // Because the hardened call hashes without the repository's attributes (a clean filter it names would run), a checkout that working-tree-encoding, eol=crlf, core.autocrlf or ident converted hashes differently from its clean blob; the working tree is decoded and both sides are cleaned as git cleans those conversions.
-    private function sameRulesAfterCheckoutConversion(Workspace $workspace, string $path, string $blob, ?string $encoding): bool
+    private function sameRulesAfterCheckoutConversion(Workspace $workspace, string $blob, ?string $workingTreeRules): bool
     {
         $result = $workspace->git(['cat-file', 'blob', $blob]);
 
@@ -164,10 +177,7 @@ final readonly class IgnoredFilesGate implements Gate
             throw new ScopeFailure('git cat-file failed: '.$result->firstErrorLine());
         }
 
-        $workingTree = file_get_contents($workspace->root.'/'.$path);
-        $decoded = false === $workingTree ? null : (null === $encoding ? $workingTree : $this->decoded($workingTree, $encoding));
-
-        return null !== $decoded && $this->cleaned($decoded) === $this->cleaned($result->output);
+        return null !== $workingTreeRules && $this->cleaned($workingTreeRules) === $this->cleaned($result->output);
     }
 
     // Because git stores the file as UTF-8 and checks it out in the named charset with iconv, writing UTF-16LE-BOM (its own name, matched without case and with or without the dash) as a byte order mark and UTF-16LE; an unknown charset, an invalid byte, a missing mark or a decode that does not encode back to the same bytes leaves the file differing, since git reads the raw bytes as rules.
