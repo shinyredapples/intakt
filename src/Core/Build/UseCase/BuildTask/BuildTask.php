@@ -208,14 +208,14 @@ final readonly class BuildTask
             return $outcome;
         }
 
-        // What the job hands back stays untrusted until the hand-back check, so only its verdict and its stop cause reach the ledger, both Intakt's own words.
+        // What the job hands back stays untrusted until the hand-back check, so only its verdict, its stop cause and the usage its isolated reader checked reach the ledger.
         if (!$outcome->built()) {
-            return EndedStep::of(BuildStep::BuildJob, $outcome->verdict->reason(), $outcome->stopCause);
+            return EndedStep::ofBuildJob($outcome->verdict->reason(), $outcome);
         }
 
         $notCleared = $this->unpark($run);
 
-        return null === $notCleared ? $outcome : EndedStep::of(BuildStep::BuildJob, $notCleared, $outcome->stopCause);
+        return null === $notCleared ? $outcome : EndedStep::ofBuildJob($notCleared, $outcome);
     }
 
     /**
@@ -302,9 +302,9 @@ final readonly class BuildTask
     private function park(BuildRun $run, ListedIssue $task, AskedQuestion $asked): BuildTaskOutcome
     {
         try {
-            $this->parkedTasks->park($run, $asked->question, $asked->stopCause);
+            $this->parkedTasks->park($run, $asked->question, $asked->job);
         } catch (TaskNotParked $notParked) {
-            $this->record($run, EndedStep::of(BuildStep::BuildJob, $notParked->getMessage(), $asked->stopCause));
+            $this->record($run, $asked->job instanceof BuildJobOutcome ? EndedStep::ofBuildJob($notParked->getMessage(), $asked->job) : EndedStep::of(BuildStep::BuildJob, $notParked->getMessage()));
 
             return new BuildTaskOutcome(BuildStep::BuildJob, $notParked->getMessage(), $task);
         }
@@ -312,14 +312,18 @@ final readonly class BuildTask
         return new BuildTaskOutcome(BuildStep::BuildJob, null, $task);
     }
 
-    // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed; a job that built after a stop still names its cause.
+    // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed; a job that built after a stop still names its cause, and its usage.
     private function endOf(BuildStep $step, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null $result): EndedStep
     {
         if ($result instanceof EndedStep) {
             return $result;
         }
 
-        return EndedStep::of($step, is_string($result) ? $result : null, $result instanceof BuildJobOutcome ? $result->stopCause : null);
+        if ($result instanceof BuildJobOutcome) {
+            return EndedStep::ofBuildJob(null, $result);
+        }
+
+        return EndedStep::of($step, is_string($result) ? $result : null);
     }
 
     // The title on the first line and the body after it, as BuilderPrompt asks the builder to write them; fixed words for a text without a title, because the forge opens no pull request without one.

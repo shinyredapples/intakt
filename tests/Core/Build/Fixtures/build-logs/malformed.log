@@ -1,0 +1,2 @@
+{"type":"result","subtype":"success","is_error":false,"num_turns":3,"result":"done","usage":{"input_tokens":-500,"output_tokens":"lots","cache_read_input_tokens":0,"cache_creation_input_tokens":0}}
+claude exited with 0

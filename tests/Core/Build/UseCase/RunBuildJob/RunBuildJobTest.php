@@ -17,6 +17,10 @@ use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\Domain\SessionLog;
+use Intakt\Core\Build\Domain\SessionUsage;
+use Intakt\Core\Build\Domain\BuildUsage;
+use Intakt\Core\Build\Domain\UsageReading;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
@@ -24,6 +28,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobEndFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
+use Intakt\Core\Build\UseCase\RunBuildJob\IsolatedSessionLog;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
@@ -62,6 +67,11 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(RecordedBuildStops::class)]
 #[CoversClass(BuildJobEndFailed::class)]
 #[UsesClass(BuildLimits::class)]
+#[UsesClass(IsolatedSessionLog::class)]
+#[UsesClass(SessionLog::class)]
+#[UsesClass(SessionUsage::class)]
+#[UsesClass(BuildUsage::class)]
+#[UsesClass(UsageReading::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
@@ -119,6 +129,35 @@ final class RunBuildJobTest extends TestCase
         self::assertSame('BUNDLE', $outcome->bundle);
         self::assertSame("feat: x\n", $outcome->pullRequestText);
         self::assertSame("log\n", $outcome->log);
+    }
+
+    public function testTheUsageOfTheCliResultInTheBuildLogIsCarriedInTheOutcome(): void
+    {
+        $log = "claude starts\n".'{"type":"result","subtype":"success","is_error":false,"num_turns":4,"result":"done","usage":{"input_tokens":5,"output_tokens":6,"cache_read_input_tokens":7,"cache_creation_input_tokens":8}}'."\nclaude exited with 0\n";
+
+        $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n", 'build.log' => $log]))->run($this->job());
+
+        self::assertEquals(SessionUsage::read(new BuildUsage(5, 6, 7, 8)), $outcome->usage);
+        self::assertSame($log, $outcome->log);
+    }
+
+    public function testAKilledJobWithoutACliResultCarriesAUsageThatWasNotReported(): void
+    {
+        $outcome = $this->runBuilds(OutputFiles::of(['build.log' => "claude cut after 3000 seconds, its commits are kept\n"]), end: new JobEnd(JobCause::MemoryKilled, 137))->run($this->job());
+
+        self::assertSame(BuildVerdict::MemoryKilled, $outcome->verdict);
+        self::assertSame(UsageReading::NotReported, $outcome->usage?->reading);
+    }
+
+    public function testAnOutputTheRunnerRefusedCarriesNoUsage(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobOutputRefused::unlisted());
+
+        $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+
+        self::assertSame(BuildVerdict::NoResult, $outcome->verdict);
+        self::assertNull($outcome->usage);
     }
 
     public function testTheTiersModelAndTheBranchReachTheBuildScript(): void
@@ -757,6 +796,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, $this->gate ?? new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $this->script, $this->precheck, $this->promptFolder ?? $this->folder.'/prompts', $this->stops, new BuildLimits(1, 1, 1, 1));
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, $this->gate ?? new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $this->script, $this->precheck, $this->promptFolder ?? $this->folder.'/prompts', $this->stops, new BuildLimits(1, 1, 1, 1), new IsolatedSessionLog(__DIR__.'/../../../../../vendor/autoload.php'));
     }
 }

@@ -5,17 +5,16 @@ declare(strict_types=1);
 namespace Intakt\Core\Build\UseCase\BuildTask;
 
 use Intakt\Core\Build\Domain\BuildQuestion;
-use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\RegressionRuns;
 
-// The question a build ends with and the cause its session was stopped for, if any, because the parked or refused row of the build job names both.
+// The question a build ends with and the job that asked it, if any, because the parked or refused row of the build job names the job's stop cause and usage beside it.
 final readonly class AskedQuestion
 {
     public function __construct(
         public BuildQuestion $question,
-        public ?BuildStopCause $stopCause = null,
+        public ?BuildJobOutcome $job = null,
     ) {
     }
 
@@ -25,6 +24,6 @@ final readonly class AskedQuestion
             return new self($result);
         }
 
-        return $result instanceof BuildJobOutcome && $result->question instanceof BuildQuestion ? new self($result->question, $result->stopCause) : null;
+        return $result instanceof BuildJobOutcome && $result->question instanceof BuildQuestion ? new self($result->question, $result) : null;
     }
 }

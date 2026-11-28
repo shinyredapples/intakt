@@ -53,6 +53,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobEndFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
+use Intakt\Core\Build\UseCase\RunBuildJob\IsolatedSessionLog;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BranchPush;
 use Intakt\Core\Git\Contract\BuildCheckout;
@@ -152,6 +153,9 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
 
     private const string QUESTION = '{"question":"PLANT-question: keep the old flag?","choices":["keep it","drop it"],"recommendation":"drop it"}';
 
+    // An empty build.log holds no CLI result, so the job's usage is unknown and never zero.
+    private const string NOT_REPORTED = '"usage":{"reading":"not_reported","input_tokens":null,"output_tokens":null,"cache_read_input_tokens":null,"cache_creation_input_tokens":null}';
+
     private string $folder = '';
 
     private RecordedBuildStops $stops;
@@ -170,10 +174,10 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $run = 1 === preg_match('/"run":"([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})"/', $payloads[0] ?? '', $match) ? $match[1] : 'no run';
         self::assertSame(
             [
-                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"task","outcome":"passed","failure":null,"stop_cause":null}'],
-                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"mirror","outcome":"passed","failure":null,"stop_cause":null}'],
-                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"clone","outcome":"passed","failure":null,"stop_cause":null}'],
-                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"build_job","outcome":"asked","failure":null,"stop_cause":null}'],
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"task","outcome":"passed","failure":null,"stop_cause":null,"usage":null}'],
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"mirror","outcome":"passed","failure":null,"stop_cause":null,"usage":null}'],
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"clone","outcome":"passed","failure":null,"stop_cause":null,"usage":null}'],
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"build_job","outcome":"asked","failure":null,"stop_cause":null,'.self::NOT_REPORTED.'}'],
                 ['task_parked', '{"project":"alpha","task":"7","run":"'.$run.'"}'],
             ],
             array_map(array_values(...), $this->connection()->fetchAllAssociative('SELECT kind, payload FROM ledger_event ORDER BY position')),
@@ -208,7 +212,19 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertStringContainsString('missing: Must keep working.', $this->question());
         $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
         self::assertIsString($payload);
-        self::assertStringContainsString('"step":"build_job","outcome":"asked","failure":null,"stop_cause":null}', $payload);
+        self::assertStringContainsString('"step":"build_job","outcome":"asked","failure":null,"stop_cause":null,"usage":null}', $payload);
+    }
+
+    public function testTheUsageInTheSessionLogIsStoredInTheBuildJobLedgerRow(): void
+    {
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::LOG, "PLANT-noise\n".'{"type":"result","subtype":"success","is_error":false,"num_turns":3,"result":"asked","usage":{"input_tokens":1200,"output_tokens":340,"cache_read_input_tokens":56000,"cache_creation_input_tokens":7800}}'."\nclaude exited with 0\n");
+
+        (void) $this->buildTask()->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
+
+        $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
+        self::assertIsString($payload);
+        self::assertStringEndsWith('"step":"build_job","outcome":"asked","failure":null,"stop_cause":null,"usage":{"reading":"read","input_tokens":1200,"output_tokens":340,"cache_read_input_tokens":56000,"cache_creation_input_tokens":7800}}', $payload);
+        self::assertStringNotContainsString('PLANT', $payload);
     }
 
     public function testABugTaskWithAnEmptyPartIsParkedWithAQuestionNamingIt(): void
@@ -259,7 +275,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertSame([BuildStep::BuildJob, BuildVerdict::NoCommits->reason()], [$outcome->last, $outcome->failure]);
         $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
         self::assertIsString($payload);
-        self::assertStringEndsWith('"step":"build_job","outcome":"failed","failure":"'.BuildVerdict::NoCommits->reason().'","stop_cause":"'.$cause->value.'"}', $payload);
+        self::assertStringEndsWith('"step":"build_job","outcome":"failed","failure":"'.BuildVerdict::NoCommits->reason().'","stop_cause":"'.$cause->value.'",'.self::NOT_REPORTED.'}', $payload);
     }
 
     public function testAStoppedBuildJobWhoseEndEventIsNotRecordedIsStoredWithItsStopCauseInTheFailedRow(): void
@@ -277,7 +293,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertSame(BuildStep::BuildJob, $outcome->last);
         $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
         self::assertIsString($payload);
-        self::assertStringEndsWith('"step":"build_job","outcome":"failed","failure":"The ledger did not record the job event \"job_ended\": the database is locked","stop_cause":"runaway_ceiling"}', $payload);
+        self::assertStringEndsWith('"step":"build_job","outcome":"failed","failure":"The ledger did not record the job event \"job_ended\": the database is locked","stop_cause":"runaway_ceiling","usage":null}', $payload);
     }
 
     public function testAStoppedBuildJobThatAsksAQuestionKeepsItsStopCauseInTheBuildJobLedgerRow(): void
@@ -349,7 +365,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner ?? new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, self::PRECHECK, $this->folder.'/prompts', $this->stops, new BuildLimits(1, 1, 1, 1));
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner ?? new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, self::PRECHECK, $this->folder.'/prompts', $this->stops, new BuildLimits(1, 1, 1, 1), new IsolatedSessionLog(__DIR__.'/../../../../../vendor/autoload.php'));
         $files = new HandBackFile($checkout, new Filesystem(), $this->folder.'/hand-backs');
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);

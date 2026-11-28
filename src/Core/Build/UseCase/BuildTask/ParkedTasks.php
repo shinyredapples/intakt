@@ -13,8 +13,8 @@ use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Build\Domain\BuildQuestion;
-use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -41,7 +41,7 @@ final readonly class ParkedTasks
     /**
      * @throws TaskNotParked
      */
-    public function park(BuildRun $run, BuildQuestion $question, ?BuildStopCause $stopCause): void
+    public function park(BuildRun $run, BuildQuestion $question, ?BuildJobOutcome $job): void
     {
         // Refused before any write, because inside a caller's transaction the commit only releases a savepoint and the caller could still take the question back.
         if ($this->connection->isTransactionActive()) {
@@ -50,7 +50,7 @@ final readonly class ParkedTasks
 
         $record = new ParkedTaskRecord($run->project, $run->task, $question, $this->clock->now()->setTimezone(new DateTimeZone('UTC')), $run->id);
 
-        if ($this->storedWithItsAskedStep($record, $run, $stopCause)) {
+        if ($this->storedWithItsAskedStep($record, $run, $job)) {
             return;
         }
 
@@ -78,12 +78,12 @@ final readonly class ParkedTasks
         }
     }
 
-    private function storedWithItsAskedStep(ParkedTaskRecord $record, BuildRun $run, ?BuildStopCause $stopCause): bool
+    private function storedWithItsAskedStep(ParkedTaskRecord $record, BuildRun $run, ?BuildJobOutcome $job): bool
     {
         try {
             for ($attempt = 1; $attempt <= self::ATTEMPTS; ++$attempt) {
                 if ($this->startedWithTheRow($record, $run)) {
-                    return $this->endedWithTheEvents($run, $stopCause);
+                    return $this->endedWithTheEvents($run, $job);
                 }
             }
         } catch (Exception) {
@@ -123,9 +123,9 @@ final readonly class ParkedTasks
     /**
      * @throws Exception
      */
-    private function endedWithTheEvents(BuildRun $run, ?BuildStopCause $stopCause): bool
+    private function endedWithTheEvents(BuildRun $run, ?BuildJobOutcome $job): bool
     {
-        if (!$this->appended(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload(new EndedStep(BuildStep::BuildJob, BuildStepOutcome::Asked, null, $stopCause))))) {
+        if (!$this->appended(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload(new EndedStep(BuildStep::BuildJob, BuildStepOutcome::Asked, null, $job?->stopCause, $job?->usage))))) {
             return false;
         }
 
