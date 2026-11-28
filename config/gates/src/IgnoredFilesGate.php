@@ -66,7 +66,7 @@ final readonly class IgnoredFilesGate implements Gate
             return '\\'.self::C_ESCAPES[$byte];
         }
 
-        $code = ord($byte);
+        $code = ord($byte[0]);
 
         return $code < 0x20 || $code > 0x7E ? sprintf('\\%03o', $code) : $byte;
     }
