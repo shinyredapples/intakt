@@ -18,9 +18,11 @@ use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\Decisions;
+use Intakt\Core\Build\Contract\SplitUmbrellas;
 use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
+use Intakt\Core\Build\Contract\UmbrellaTasks;
 use Intakt\Core\Build\Domain\BugPart;
 use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuilderPrompt;
@@ -45,6 +47,7 @@ use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
+use Intakt\Core\Build\UseCase\BuildTask\TaskAdmission;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobEndFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -93,6 +96,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 // On the install's own database, because the parked row and the asked step share its transaction while the earlier steps go through the same ledger; a stopped job's row is read back from the same table.
 #[Group('persistence')]
 #[CoversClass(BuildTask::class)]
+#[UsesClass(TaskAdmission::class)]
 #[CoversClass(BuildTaskOutcome::class)]
 #[CoversClass(BuildTaskCommand::class)]
 #[UsesClass(BuildTaskInput::class)]
@@ -144,6 +148,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 final class BuildTaskParksOnSqliteTest extends KernelTestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/build.sh';
+    private const string PRECHECK = __DIR__.'/../../../../../docker/job/precheck.sh';
 
     private const string QUESTION = '{"question":"PLANT-question: keep the old flag?","choices":["keep it","drop it"],"recommendation":"drop it"}';
 
@@ -344,12 +349,14 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner ?? new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts', $this->stops, new BuildLimits(1, 1, 1, 1));
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner ?? new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, self::PRECHECK, $this->folder.'/prompts', $this->stops, new BuildLimits(1, 1, 1, 1));
         $files = new HandBackFile($checkout, new Filesystem(), $this->folder.'/hand-backs');
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);
+        $umbrellas = self::createStub(SplitUmbrellas::class);
+        $umbrellas->method('of')->willReturn(new UmbrellaTasks());
 
-        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($checkout, self::createStub(PullRequestTextRound::class)), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()));
+        return new BuildTask(new TaskAdmission($reads, $umbrellas), $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($checkout, self::createStub(PullRequestTextRound::class)), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()));
     }
 
     private function question(): string

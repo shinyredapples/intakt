@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubWorkSource\Domain;
 
+use Intakt\Core\Build\Contract\UmbrellaTasks;
 use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
 
 // Eligible, then ready, then ordered, because docs/design/05-architecture/03-choosing-work.md fixes that sequence.
@@ -11,6 +12,7 @@ final readonly class IntakeRules
 {
     public function __construct(
         private string $eligibilityLabel,
+        private UmbrellaTasks $umbrellas = new UmbrellaTasks(),
     ) {
     }
 
@@ -127,6 +129,11 @@ final readonly class IntakeRules
      */
     private function holdReason(QueuedIssue $task, array $open, array $failures): ?string
     {
+        // Held, not left out, so the queue shows why the task stays open; first, because no other reason ever releases an umbrella.
+        if ($this->umbrellas->contains($task->number())) {
+            return 'split into parts, which are built in its place';
+        }
+
         if (isset($failures[$task->number()])) {
             return 'failed for good: '.$failures[$task->number()];
         }

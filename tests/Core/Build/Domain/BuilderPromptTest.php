@@ -136,6 +136,16 @@ final class BuilderPromptTest extends TestCase
         }
     }
 
+    public function testAFirstBuildAndAReworkAreToldToRunTheirOwnCheckBeforeTheyEndWithPullRequestText(): void
+    {
+        foreach ([new BuildBrief($this->plant(1), new Decisions(), null), $this->rework()] as $brief) {
+            $prompt = $this->promptFor($brief);
+
+            self::assertStringContainsString('Before you end with PR.md, run "sh '.BuilderPrompt::PRECHECK.'" in the checkout.', $prompt);
+            self::assertStringContainsString('run it again until it prints "precheck clean"', $prompt);
+        }
+    }
+
     public function testAReworkWithoutFindingsOrCiLogGetsNeitherFence(): void
     {
         $brief = new BuildBrief($this->plant(1), new Decisions(), new Rework([], null, $this->plant(31)));
