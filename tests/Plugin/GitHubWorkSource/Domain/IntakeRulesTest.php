@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubWorkSource\Domain;
 
+use Intakt\Core\Build\Contract\UmbrellaTasks;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
@@ -31,6 +32,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(HeldIssue::class)]
 #[UsesClass(IssueReferences::class)]
 #[UsesClass(ItemReading::class)]
+#[UsesClass(UmbrellaTasks::class)]
 final class IntakeRulesTest extends TestCase
 {
     // Named apart from the others, because `tom` (triage) and `mallory` (read) stand for the accounts whose word must not count.
@@ -358,6 +360,22 @@ final class IntakeRulesTest extends TestCase
     public function testAnOutsidersPullRequestWithoutAClosingKeywordIsNoWaitWhenOnlyTheHistoryTheRuleAsksForIsRead(): void
     {
         self::assertSame([1], $this->readyOf($this->readAsTheRuleAsks(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50']), Issues::pullRequest(50, 'A refactoring.', 'mallory'))));
+    }
+
+    public function testATaskWithARecordedSplitPlanIsNotOfferedForABuildAndItsPartsAre(): void
+    {
+        $plan = new IntakeRules('intakt', new UmbrellaTasks(7))->planOf([$this->row(Issues::task(7)), $this->row(Issues::task(100)), $this->row(Issues::task(101))], []);
+
+        self::assertSame([100, 101], $this->numbers($plan->ready));
+        self::assertSame([7], $this->numbers(array_map(static fn (HeldIssue $held): QueuedIssue => $held->issue, $plan->held)));
+        self::assertSame('split into parts, which are built in its place', $plan->held[0]->reason);
+    }
+
+    public function testATaskWithARecordedSplitPlanThatFailedForGoodIsHeldAsTheUmbrella(): void
+    {
+        $plan = new IntakeRules('intakt', new UmbrellaTasks(7))->planOf([$this->row(Issues::task(7))], [7 => 'the build gave up']);
+
+        self::assertSame('split into parts, which are built in its place', $plan->held[0]->reason);
     }
 
     public function testATaskCandidateAPullRequestClosingATaskAndAPullRequestACandidateWaitsForNeedTheirHistory(): void

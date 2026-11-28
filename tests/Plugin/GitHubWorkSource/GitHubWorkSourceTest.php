@@ -13,6 +13,7 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Build\Infrastructure\RecordedSplitUmbrellas;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -54,6 +55,7 @@ use Intakt\Plugin\WorkSource\Contract\WorkPick;
 use Intakt\Plugin\WorkSource\Contract\WorkQueue;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Plugin\GitHubForge\RecordedIssueApi;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -1088,7 +1090,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
             return in_array($account, $this->writers, true);
         });
-        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new EligibilityLabels(new ProjectEligibilityLabel('alpha', $this->eligibilityLabel)), new IssueReferences(), $this->logger);
+        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new EligibilityLabels(new ProjectEligibilityLabel('alpha', $this->eligibilityLabel)), new IssueReferences(), $this->logger, new RecordedSplitUmbrellas(new InMemoryLedger()));
 
         return new GitHubWorkSource($listing, $histories, $accounts, new IssueReferences(), $this->store, new PullRequestsOfTasks($this->branches, $histories, $accounts, new IssueReferences()), $this->logger);
     }

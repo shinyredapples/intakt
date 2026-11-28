@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
+use Intakt\Core\Build\Contract\SplitUmbrellas;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
@@ -40,6 +41,7 @@ final readonly class CompleteListing
         private EligibilityLabels $labels,
         private IssueReferences $references,
         private LoggerInterface $logger,
+        private SplitUmbrellas $umbrellas,
     ) {
     }
 
@@ -79,7 +81,7 @@ final readonly class CompleteListing
     // Each project names its own eligibility label, so a project beside another loop builds only what carries its label; a project without a watch section has no label to build by, so nothing is listed for it.
     private function rulesOf(string $project): IntakeRules
     {
-        return new IntakeRules($this->labels->of($project));
+        return new IntakeRules($this->labels->of($project), $this->umbrellas->of($project));
     }
 
     // An unchanged listing is answered from the stored rows, and so is the history of an item whose update time stands; the rest is taken from the listing, because the milestone due date changes without moving it.
