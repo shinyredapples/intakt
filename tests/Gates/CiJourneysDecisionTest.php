@@ -153,7 +153,6 @@ final class CiJourneysDecisionTest extends SandboxTestCase
         $builds = array_values(array_filter($action['runs']['steps'], static fn (array $step): bool => str_contains($step['run'] ?? '', 'DOCKERHUB_LOGIN_FAILED')));
         self::assertCount(1, $builds);
 
-        // The load and the failed-login check are two steps; run them in order as the action does.
         return ($steps[0]['run'] ?? '')."\n".($builds[0]['run'] ?? '');
     }
 }

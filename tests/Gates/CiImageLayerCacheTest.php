@@ -98,7 +98,7 @@ final class CiImageLayerCacheTest extends SandboxTestCase
         self::assertStringNotContainsString('continue-on-error', (string) file_get_contents(self::ACTION));
     }
 
-    /** @param array<string, string> $context values for an `if:` of `<name> != '<value>'` terms joined by `&&` */
+    /** @param array<string, string> $context */
     private function holds(string $condition, array $context): bool
     {
         foreach (explode(' && ', trim($condition)) as $term) {
