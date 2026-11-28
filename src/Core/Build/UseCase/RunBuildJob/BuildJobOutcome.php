@@ -6,6 +6,7 @@ namespace Intakt\Core\Build\UseCase\RunBuildJob;
 
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\BuildStopCause;
+use Intakt\Core\Build\Domain\SessionUsage;
 
 // Untrusted, because the builder wrote both: the hand-back check reads the bundle before anything trusts it.
 final readonly class BuildJobOutcome
@@ -18,6 +19,8 @@ final readonly class BuildJobOutcome
         public ?BuildQuestion $question = null,
         // Beside the verdict, because a stopped session still bundles what it committed and its hand-back goes through the same check as any cut session's.
         public ?BuildStopCause $stopCause = null,
+        // Null only when the runner refused the output, because then no log was read.
+        public ?SessionUsage $usage = null,
     ) {
     }
 
@@ -29,5 +32,10 @@ final readonly class BuildJobOutcome
     public function stoppedFor(?BuildStopCause $cause): self
     {
         return clone($this, ['stopCause' => $cause]);
+    }
+
+    public function withUsage(SessionUsage $usage): self
+    {
+        return clone($this, ['usage' => $usage]);
     }
 }

@@ -91,6 +91,7 @@ final readonly class RunBuildJob
         private string $promptFolder,
         private RecordedBuildStops $stops,
         public BuildLimits $limits,
+        private IsolatedSessionLog $sessionLog,
     ) {
         // Checked as given, because the compiled container would turn a YAML true into a one-second limit before a typed parameter saw it.
         if (!is_int($toolTimeLimitSeconds)) {
@@ -225,7 +226,8 @@ final readonly class RunBuildJob
             return new BuildJobOutcome(BuildVerdict::NoResult, log: self::REFUSED_OUTPUT);
         }
 
-        return $this->outcomeOf($result);
+        // Read whatever the verdict, because a session cut, killed or ended without a bundle still spent its tokens.
+        return $this->outcomeOf($result)->withUsage($this->sessionLog->usageIn($result->output->contents(self::LOG) ?? ''));
     }
 
     // A failed removal is dropped only here, because the job-end failure carries the stop cause the row must keep, and the prompt is a scratch file.

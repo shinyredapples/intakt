@@ -22,6 +22,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
+use Intakt\Core\Build\UseCase\RunBuildJob\IsolatedSessionLog;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobCommand;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobInput;
@@ -311,6 +312,7 @@ final class RunBuildJobCommandTest extends TestCase
             $this->folder.'/prompts',
             new RecordedBuildStops(),
             new BuildLimits(1, 1, 1, 1),
+            new IsolatedSessionLog(__DIR__.'/../../../../../vendor/autoload.php'),
         ), new Filesystem()));
         $tester = new CommandTester($application->find('intakt:build:run'));
         $tester->execute([
