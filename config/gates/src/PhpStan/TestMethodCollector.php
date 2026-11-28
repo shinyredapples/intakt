@@ -43,7 +43,7 @@ final readonly class TestMethodCollector implements Collector
         return $this->isBoundHere($node, $scope, $method) && $this->names->isMisnamedTest($method) ? $this->location($node, $scope, $method) : null;
     }
 
-    // PHPStan also visits a trait method under each alias a class gives it, which TraitAliasCollector reports at the alias, and a class that takes the name from another trait with insteadof no longer runs this declaration under it
+    // because PHPStan also visits a trait method under each alias, which TraitAliasCollector reports at the alias, and a class that takes the name from another trait with insteadof no longer runs this declaration under it
     private function isBoundHere(InClassMethodNode $node, Scope $scope, ReflectionMethod $method): bool
     {
         $trait = $scope->getTraitReflection()?->getNativeReflection();

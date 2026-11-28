@@ -109,7 +109,7 @@ final readonly class TraitAliasCollector implements Collector
         return $bound->getFileName() === $declared->getFileName() && $bound->getStartLine() === $declared->getStartLine() ? $bound : null;
     }
 
-    // PHP resolves an alias without a trait name against every trait the declaring class or trait uses
+    // because PHP resolves an alias without a trait name against every trait the declaring class or trait uses
     private function traitDeclaring(Alias $alias, ClassReflection $declarer): ?ClassReflection
     {
         $method = $alias->method->toString();
