@@ -176,7 +176,7 @@ final class RankedReviewOnStoredReadingsTest extends KernelTestCase
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);
         $servers = self::createStub(ReviewServerAccesses::class);
-        $servers->method("forRound")->willReturn(new ReviewServerAccess("intakt-review", "http://localhost:7780/mcp/review", "round-credential", new ReviewTools("read_file")));
+        $servers->method('forRound')->willReturn(new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', 'round-credential', new ReviewTools('read_file')));
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $clock, $servers);
 
         return new AccountLimitedVendor($vendor, $resolver, $cooldowns);
@@ -187,7 +187,12 @@ final class RankedReviewOnStoredReadingsTest extends KernelTestCase
         return MockPlatformFactory::createPlatform(function () use ($name): TextResult {
             $this->called[] = $name;
             $answer = new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->json());
-            $answer->getMetadata()->add('token_usage', new TokenUsage(promptTokens: 100, completionTokens: 20, totalTokens: 120, model: 'big'));
+            $answer->getMetadata()->add('token_usage', new TokenUsage(
+                promptTokens: 100,
+                completionTokens: 20,
+                totalTokens: 120,
+                model: 'big',
+            ));
 
             return $answer;
         }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);

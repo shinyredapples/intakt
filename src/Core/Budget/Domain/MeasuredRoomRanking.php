@@ -39,7 +39,7 @@ final readonly class MeasuredRoomRanking implements AccountRanking
         $coolingUntil = $this->holds->coolingDownUntil($account);
 
         return match (true) {
-            $coolingUntil instanceof DateTimeImmutable => new LeftOutAccount($account, LeftOutCause::CoolingDown, self::endOfBoth($coolingUntil, $room)),
+            $coolingUntil instanceof DateTimeImmutable => new LeftOutAccount($account, LeftOutCause::CoolingDown, $this->endOfBoth($coolingUntil, $room)),
             UsageWindow::Weekly === $room->atCeiling => new LeftOutAccount($account, LeftOutCause::AtWeeklyCeiling, $room->resetsAt),
             UsageWindow::FiveHour === $room->atCeiling => new LeftOutAccount($account, LeftOutCause::AtShortWindowCeiling, $room->resetsAt),
             default => null,
@@ -47,7 +47,7 @@ final readonly class MeasuredRoomRanking implements AccountRanking
     }
 
     // The later of the hold's end and the reset of a fresh ceiling, because the account starts again only once both have ended; unknown when that ceiling names no reset, since the hold's end alone would promise a start the ceiling still refuses.
-    private static function endOfBoth(DateTimeImmutable $coolingUntil, AccountRoom $room): ?DateTimeImmutable
+    private function endOfBoth(DateTimeImmutable $coolingUntil, AccountRoom $room): ?DateTimeImmutable
     {
         if (!$room->atCeiling instanceof UsageWindow) {
             return $coolingUntil;
