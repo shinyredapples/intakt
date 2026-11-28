@@ -13,6 +13,7 @@ use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -40,7 +41,7 @@ final readonly class ParkedTasks
     /**
      * @throws TaskNotParked
      */
-    public function park(BuildRun $run, BuildQuestion $question): void
+    public function park(BuildRun $run, BuildQuestion $question, ?BuildStopCause $stopCause): void
     {
         // Refused before any write, because inside a caller's transaction the commit only releases a savepoint and the caller could still take the question back.
         if ($this->connection->isTransactionActive()) {
@@ -49,7 +50,7 @@ final readonly class ParkedTasks
 
         $record = new ParkedTaskRecord($run->project, $run->task, $question, $this->clock->now()->setTimezone(new DateTimeZone('UTC')), $run->id);
 
-        if ($this->storedWithItsAskedStep($record, $run)) {
+        if ($this->storedWithItsAskedStep($record, $run, $stopCause)) {
             return;
         }
 
@@ -77,12 +78,12 @@ final readonly class ParkedTasks
         }
     }
 
-    private function storedWithItsAskedStep(ParkedTaskRecord $record, BuildRun $run): bool
+    private function storedWithItsAskedStep(ParkedTaskRecord $record, BuildRun $run, ?BuildStopCause $stopCause): bool
     {
         try {
             for ($attempt = 1; $attempt <= self::ATTEMPTS; ++$attempt) {
                 if ($this->startedWithTheRow($record, $run)) {
-                    return $this->endedWithTheEvents($run);
+                    return $this->endedWithTheEvents($run, $stopCause);
                 }
             }
         } catch (Exception) {
@@ -122,9 +123,9 @@ final readonly class ParkedTasks
     /**
      * @throws Exception
      */
-    private function endedWithTheEvents(BuildRun $run): bool
+    private function endedWithTheEvents(BuildRun $run, ?BuildStopCause $stopCause): bool
     {
-        if (!$this->appended(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload(BuildStep::BuildJob, BuildStepOutcome::Asked, null)))) {
+        if (!$this->appended(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload(new EndedStep(BuildStep::BuildJob, BuildStepOutcome::Asked, null, $stopCause))))) {
             return false;
         }
 

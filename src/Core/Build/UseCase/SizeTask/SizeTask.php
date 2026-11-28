@@ -140,7 +140,7 @@ final readonly class SizeTask
     private function parked(BuildRun $run, BuildQuestion $question): void
     {
         try {
-            $this->parkedTasks->park($run, $question);
+            $this->parkedTasks->park($run, $question, null);
         } catch (TaskNotParked) {
             throw TaskNotSized::notParked($run->project, $run->task);
         }
