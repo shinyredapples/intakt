@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\Domain;
 
+use Intakt\Core\Build\Domain\HtmlBlock;
 use Intakt\Core\Build\Domain\ReadableLines;
 use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Build\Domain\TextPlace;
@@ -11,11 +12,13 @@ use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\RegressionRun;
 use Intakt\Core\HandBack\Contract\RegressionRuns;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RegressionEvidence::class)]
 #[CoversClass(ReadableLines::class)]
+#[CoversClass(HtmlBlock::class)]
 #[UsesClass(RegressionRuns::class)]
 #[UsesClass(RegressionRun::class)]
 #[UsesClass(Paths::class)]
@@ -83,6 +86,116 @@ final class RegressionEvidenceTest extends TestCase
         $body = new RegressionEvidence($this->runs())->addedTo("## Evidence\n\n```\noutput");
 
         self::assertSame("## Evidence\n\n```\noutput\n```\n\n".self::LINES, $body);
+    }
+
+    public function testAnEvidenceHeadingInsideAKindSixBlockIsNotTheEvidenceSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<div>\n## Evidence\n\n- E1: shown");
+
+        self::assertSame("<div>\n## Evidence\n\n- E1: shown\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnEvidenceHeadingAfterTheBlankLineThatEndsAKindSixBlockIsTheEvidenceSection(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<div>\ntext\n\n## Evidence\n\n- E1: shown");
+
+        self::assertSame("<div>\ntext\n\n## Evidence\n\n- E1: shown\n\n".self::LINES, $body);
+    }
+
+    public function testASpanLineOnItsOwnStartsABlockThatHidesAnEvidenceHeading(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<span>\n## Evidence\n\n- E1: shown");
+
+        self::assertSame("<span>\n## Evidence\n\n- E1: shown\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAClosingSpanLineOnItsOwnStartsABlockThatHidesAnEvidenceHeading(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("</span>\n## Evidence\n\n- E1: shown");
+
+        self::assertSame("</span>\n## Evidence\n\n- E1: shown\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testASpanLineDirectlyBelowParagraphTextStartsNoBlock(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("Evidence\n<span>\n---\n\n- E1: shown");
+
+        self::assertSame("Evidence\n<span>\n---\n\n- E1: shown\n\n".self::LINES, $body);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function endTagsOfTheRawBlocks(): iterable
+    {
+        foreach (['pre', 'script', 'style', 'textarea'] as $opening) {
+            foreach (['pre', 'script', 'style', 'textarea'] as $end) {
+                yield $opening.' ended by '.$end => [$opening, $end];
+            }
+        }
+    }
+
+    #[DataProvider('endTagsOfTheRawBlocks')]
+    public function testAnEvidenceHeadingInsideAKindOneBlockIsHiddenUntilAnyOfTheFourEndTags(string $opening, string $end): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo('<'.$opening.">\n## Evidence\n</".$end.">\n## Evidence\n\n- E1: shown");
+
+        $closing = $opening === $end ? '' : "\n</".$opening.'>';
+        self::assertSame('<'.$opening.">\n## Evidence\n</".$end.">\n## Evidence\n\n- E1: shown".$closing."\n\n".self::LINES, $body);
+    }
+
+    public function testATextareaBlockEndedByAPreEndTagGetsItsOwnEndTagBeforeTheResults(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<textarea>\nExample.\n</pre>");
+
+        self::assertSame("<textarea>\nExample.\n</pre>\n</textarea>\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testATextareaClosedByItsOwnEndTagAfterTheBlockEndedGetsNoSecondEndTag(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<textarea>\n</pre>\n</textarea>");
+
+        self::assertSame("<textarea>\n</pre>\n</textarea>\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    public function testAnOpenFenceIsClosedBeforeAnOpenElementsEndTag(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<textarea>\n</pre>\n```\ncode");
+
+        self::assertSame("<textarea>\n</pre>\n```\ncode\n```\n</textarea>\n\n## Evidence\n\n".self::LINES, $body);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function otherBlocks(): iterable
+    {
+        yield 'comment' => ['<!--', '-->'];
+        yield 'processing instruction' => ['<?php', '?>'];
+        yield 'declaration' => ['<!DOCTYPE', '>'];
+        yield 'cdata' => ['<![CDATA[', ']]>'];
+    }
+
+    #[DataProvider('otherBlocks')]
+    public function testAnEvidenceHeadingInsideAKindTwoToFiveBlockIsHiddenUntilItsEndMarker(string $opening, string $end): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo($opening."\n## Evidence\n".$end."\n## Evidence\n\n- E1: shown");
+
+        self::assertSame($opening."\n## Evidence\n".$end."\n## Evidence\n\n- E1: shown\n\n".self::LINES, $body);
+    }
+
+    public function testAKindOneBlockThatEndsOnItsOwnLineHidesNothingAfterIt(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("<pre>x</pre>\n## Evidence\n\n- E1: shown");
+
+        self::assertSame("<pre>x</pre>\n## Evidence\n\n- E1: shown\n\n".self::LINES, $body);
+    }
+
+    public function testAnHtmlBlockOpenerInsideACodeFenceStartsNoBlock(): void
+    {
+        $body = new RegressionEvidence($this->runs())->addedTo("```\n<div>\n```\n## Evidence\n\n- E1: shown");
+
+        self::assertSame("```\n<div>\n```\n## Evidence\n\n- E1: shown\n\n".self::LINES, $body);
     }
 
     public function testAPathThatCouldBreakOutOfACodeSpanIsNotShown(): void

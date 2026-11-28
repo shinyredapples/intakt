@@ -7,7 +7,7 @@ namespace Intakt\Core\Build\Domain;
 use Intakt\Core\HandBack\Contract\RegressionRun;
 use Intakt\Core\HandBack\Contract\RegressionRuns;
 
-// Fixed words and the test paths read from the diff, never the builder's text or a log, because the body goes to the forge as written; ReadableLines finds the headings, and the body is otherwise left alone.
+// Fixed words and the test paths read from the diff, never the builder's text or a log, because the body goes to the forge as written; ReadableLines finds the headings (fences, indented code and HTML blocks hide none), and the body is otherwise left alone.
 final readonly class RegressionEvidence
 {
     private const string SAFE_PATH = '#^[A-Za-z0-9_./@+ -]+$#';
@@ -25,7 +25,7 @@ final readonly class RegressionEvidence
         $readable = ReadableLines::of($lines);
         $headings = $readable->headings;
         $evidence = $this->evidenceIn($headings);
-        $closing = null === $readable->openFence ? '' : "\n".$readable->openFence;
+        $closing = (null === $readable->openFence ? '' : "\n".$readable->openFence).(null === $readable->openElement ? '' : "\n</".$readable->openElement.'>');
 
         if (null === $evidence) {
             return $this->joined(rtrim($body.$closing), "## Evidence\n\n".$this->resultLines(), '');
