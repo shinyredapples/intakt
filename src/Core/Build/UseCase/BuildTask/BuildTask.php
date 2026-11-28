@@ -18,6 +18,7 @@ use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobEndFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BuildCheckout;
@@ -25,8 +26,6 @@ use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\RegressionRuns;
-use Intakt\Core\Job\Contract\DockerEngineFailed;
-use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -214,8 +213,10 @@ final readonly class BuildTask
 
         try {
             $outcome = $this->builds->run($this->jobOf($request, $task));
-        } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|BuildCloneIsNoFolder|JobRefused|DockerEngineFailed|JobEventNotRecorded|IOException $failure) {
+        } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|BuildCloneIsNoFolder|JobRefused|IOException $failure) {
             return $failure->getMessage();
+        } catch (BuildJobEndFailed $failure) {
+            return EndedStep::of(BuildStep::BuildJob, $failure->getMessage(), $failure->stopCause);
         }
 
         if ($outcome->question instanceof BuildQuestion) {
