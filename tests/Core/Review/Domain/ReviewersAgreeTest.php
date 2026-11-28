@@ -266,6 +266,30 @@ final class ReviewersAgreeTest extends TestCase
         ], self::LITERALS));
     }
 
+    public function testFindingsThatDifferOnlyInWhiteSpaceInsideACodeSpanWhoseLineEndsInACyrillicLetterAreNotShared(): void
+    {
+        self::assertFalse($this->agree([
+            $this->changes($this->finding("The literal `z\u{0445}\n\"A B\"` is wrong.")),
+            $this->changes($this->finding("The literal `z\u{0445}\n\"A  B\"` is wrong.")),
+        ], self::LITERALS));
+    }
+
+    public function testFindingsThatDifferOnlyInWhiteSpaceInsideACodeSpanWhoseLineEndsInALatinLetterWithARingAreNotShared(): void
+    {
+        self::assertFalse($this->agree([
+            $this->changes($this->finding("The literal `z\u{00C5}\n\"A B\"` is wrong.")),
+            $this->changes($this->finding("The literal `z\u{00C5}\n\"A  B\"` is wrong.")),
+        ], self::LITERALS));
+    }
+
+    public function testFindingsThatShareACodeSpanWhoseLineEndsInACyrillicLetterAreShared(): void
+    {
+        self::assertTrue($this->agree([
+            $this->changes($this->finding("The literal `z\u{0445}\n\"A B\"` is wrong.")),
+            $this->changes($this->finding("The  literal `z\u{0445}\n\"A B\"` is wrong.")),
+        ], self::LITERALS));
+    }
+
     public function testReviewersWhoAskForChangesWithoutAFindingDoNotAgree(): void
     {
         self::assertFalse($this->agree([$this->changes(), $this->changes()]));
