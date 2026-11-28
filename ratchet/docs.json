@@ -1,4 +1,5 @@
 {
+  "cleanup": "#4053",
   "paragraphs": {
     "README.md": {
       "14b2a816f801eb36": 98,
@@ -71,6 +72,7 @@
       "ffd8809c5fe7ffee": 225
     },
     "docs/architecture/build-allowance.md": {
+      "28d1f16d2a8871ec": 95,
       "81e915d7dafd980a": 181
     },
     "docs/architecture/build-clone.md": {
@@ -86,7 +88,6 @@
       "020e3ea641d8293e": 410,
       "05bed1a7362e4b5d": 100,
       "0f2634d3d1e3f007": 239,
-      "13cf7911440d0dae": 124,
       "1834fbf8ead00822": 543,
       "340239a993926314": 196,
       "57e4c0688620633e": 145,
@@ -95,6 +96,7 @@
       "c144c51cbeaf10d9": 284,
       "d9ca451dbfc6f10b": 411,
       "e69d841600f1e266": 386,
+      "f7582f58bdf0a09d": 140,
       "fe38cabcf23186b0": 878
     },
     "docs/architecture/build-task.md": {
@@ -726,11 +728,11 @@
       "557c96d65191a2d2": 209,
       "58c2e9c7ddb9d82a": 1461,
       "94f4e735af412b3d": 178,
-      "a07030cd5023a54d": 298,
       "a727244c61984256": 343,
       "aad82ca03f376c60": 91,
       "b46d03ace587a6eb": 1356,
       "d82cd4f6f3ac01d2": 90,
+      "de62b3adf0372a91": 301,
       "edbcce6fda62eb05": 494,
       "f1efd75f6f70ca10": 88
     },
@@ -994,6 +996,7 @@
       "556dff5ef765abb4": 154,
       "57561d96d7a29f39": 130,
       "5afe3dbcde32b1d2": 87,
+      "5e09b15391561b50": 140,
       "67495676a0e7bc14": 208,
       "6c8713b5aabf2418": 110,
       "7576a5e98d0ff0f3": 187,
@@ -1013,6 +1016,7 @@
       "cc313ea45953f85d": 103,
       "ccc65c723eecd90a": 161,
       "cd3f13856503ebad": 234,
+      "cd51ee9bcdf84489": 120,
       "cf38b6a2a5e1ef52": 172,
       "d33001be16f3aed3": 277,
       "dcb463451af2d79d": 484,
@@ -1021,7 +1025,6 @@
       "ecf2649c3529fe49": 91,
       "f6b49612afdcfe5e": 168,
       "f724ade3c749ca00": 221,
-      "fd4ef72e73cf62da": 86,
       "fedd95b130697557": 102
     },
     "docs/design/05-architecture/07-reviews.md": {
@@ -1425,6 +1428,7 @@
       "d6b7271db2820aa0": 95,
       "dfc14f6f4f40d31e": 171,
       "e1b24465e17dcf4d": 86,
+      "e3215cc37b12c44f": 92,
       "e56a40ffa5435804": 192
     },
     "docs/guide/checking-a-provider-key.md": {
@@ -1748,7 +1752,7 @@
       "4d9a0ba8fee9159e": 170,
       "7aaaf666949fde64": 262,
       "8099885dbbf51886": 222,
-      "b594b19a55749907": 134,
+      "bf6813065f3bb08c": 181,
       "d1351356c81b3b0b": 154,
       "db8913c2d16d11db": 92,
       "ebc50d5a4b511a8f": 136,
@@ -1780,6 +1784,7 @@
       "037ecbcc33526ce8": 152,
       "05307830ce4ab595": 190,
       "053d56d177ace639": 210,
+      "06082db2063d2a95": 117,
       "06a055c5b6db62ca": 188,
       "06d7c076e82b844d": 222,
       "070b1b0d67c23962": 1556,
@@ -1863,6 +1868,7 @@
       "44193ac5c9dcc578": 162,
       "44e0b80ac1521c2a": 86,
       "45c9cb22c320176e": 169,
+      "4667396222250fa0": 114,
       "46a7b9ca04302a81": 262,
       "48b75e3c848400d6": 89,
       "48c0d3474965cd74": 304,
@@ -1912,12 +1918,14 @@
       "6fa204b6bb45059d": 89,
       "6faf462483ed428e": 278,
       "70847d205490c091": 377,
+      "710e0d4f1afd6924": 101,
       "71b2d42a6e3e286d": 111,
       "7231f718dac62818": 378,
       "7247e7d0b21c18b2": 93,
       "734b577fb92c5329": 502,
       "73d2c60744e512d8": 177,
       "74738ad0a6780841": 266,
+      "769094450154f301": 111,
       "77bdc86b0a6d9a71": 264,
       "7aad081053e458c4": 157,
       "7c866a8897cdf755": 168,
@@ -1937,12 +1945,12 @@
       "860cc15db4afd341": 103,
       "863f1a4c70091506": 206,
       "866ac6f4255af128": 153,
+      "8689b71fee901942": 100,
       "869bc0c5cde14bf4": 332,
       "86b3844e478cf7ab": 216,
       "86d95de375a58bb2": 278,
       "8732c6bc0d8cd5e5": 81,
       "8936b1db5801377e": 118,
-      "8c1ad045567a30dc": 95,
       "8d4128528fc01d6b": 406,
       "8d82a8e81ccba9ed": 85,
       "8ec0dda06d26b7bc": 149,
@@ -1965,7 +1973,6 @@
       "9bc5d65c4844e45d": 257,
       "9d477d4af72558f6": 116,
       "9df34d7b76c5ccf9": 386,
-      "9f2b6d55d91555af": 82,
       "a0cdb9c0a02de023": 800,
       "a0d56cbb3b0fa59c": 252,
       "a23ba222b457ceb9": 266,
@@ -2120,7 +2127,7 @@
   },
   "pages": {
     "docs/guide/a-tour-of-the-dashboard.md": 13878,
-    "docs/guide/accounts-and-costs.md": 2769,
+    "docs/guide/accounts-and-costs.md": 2804,
     "docs/guide/demo-walkthrough.md": 1987,
     "docs/guide/glossary.md": 2246,
     "docs/guide/how-intakt-works.md": 4390,
@@ -2132,6 +2139,6 @@
     "docs/guide/why-the-ai-cant-wreck-your-project.md": 4955,
     "docs/guide/writing-a-good-task.md": 2396,
     "docs/user/08-when-something-goes-wrong.md": 2269,
-    "docs/user/README.md": 1589
+    "docs/user/README.md": 1608
   }
 }
