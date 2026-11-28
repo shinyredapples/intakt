@@ -47,6 +47,17 @@ final readonly class ReadBuildUsageCommand
         return $usage->usage instanceof BuildUsage ? $this->printed($io, $usage->usage) : $this->unread($io, $usage->reading);
     }
 
+    /**
+     * @return array<int|string, int>|null
+     */
+    private function plainFileStatOf(string $path): ?array
+    {
+        clearstatcache(true, $path);
+        $checked = lstat($path);
+
+        return false !== $checked && self::REGULAR_FILE === ($checked['mode'] & self::FILE_TYPE) ? $checked : null;
+    }
+
     // Warnings silenced, because a path that went or turned unreadable after the check gives the command's own error rather than a warning.
     /**
      * @template T
@@ -66,20 +77,7 @@ final readonly class ReadBuildUsageCommand
         }
     }
 
-    /**
-     * @return array<int|string, int>|null
-     */
-    private function plainFileStatOf(string $path): ?array
-    {
-        clearstatcache(true, $path);
-        $checked = lstat($path);
-
-        return false !== $checked && self::REGULAR_FILE === ($checked['mode'] & self::FILE_TYPE) ? $checked : null;
-    }
-
-    // Opened without waiting ('n'), so a named pipe put in the path's place after the check never holds the command before the reader's time limit starts.
-    // Read only when the opened file is the one checked, so a path swapped for a link after the check is not followed to its target.
-    // One byte past the limit is read and no more, so a log that grows after the check still never reaches memory whole.
+    // Opened without waiting ('n') and read only when the opened file is the one checked, at most one byte past the limit, so a pipe, a link or a growing file put in the path's place after the check never holds the command, is never followed and never reaches memory whole.
     /**
      * @param array<int|string, int> $checked
      */

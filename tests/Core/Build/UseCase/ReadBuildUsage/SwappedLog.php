@@ -26,17 +26,8 @@ final class SwappedLog
         $file = $this->fileOf($path);
         unlink($file);
 
-        if (self::PIPE === $this->option('into')) {
-            posix_mkfifo($file, 0o600);
-            // A blocking open of a pipe nobody writes would hang the test instead of failing it, so the attempt is recorded and refused.
-            if (!str_contains($mode, 'n')) {
-                $waits = $this->option('waits');
-                $waits instanceof ReadBytes ? $waits->add(1) : throw new LogicException('No wait counter in the stream context.');
-
-                return false;
-            }
-        } else {
-            symlink((string) $this->option('target'), $file);
+        if (self::PIPE === $this->option('into') ? !$this->pipeOpensWithoutWaiting($file, $mode) : !$this->linked($file)) {
+            return false;
         }
 
         $opened = fopen($file, $mode);
@@ -83,19 +74,41 @@ final class SwappedLog
         return substr($path, strlen(self::PROTOCOL.'://'));
     }
 
-    /**
-     * @return resource
-     */
-    private function handle()
-    {
-        return $this->file ?? throw new LogicException('The log is not open.');
-    }
-
     private function option(string $name): mixed
     {
         /** @var array<string, array<string, mixed>> $options */
         $options = stream_context_get_options($this->context ?? stream_context_get_default());
 
         return $options[self::PROTOCOL][$name] ?? throw new LogicException(sprintf('No "%s" in the stream context.', $name));
+    }
+
+    // A blocking open of a pipe nobody writes would hang the test instead of failing it, so the attempt is recorded and refused.
+    private function pipeOpensWithoutWaiting(string $file, string $mode): bool
+    {
+        posix_mkfifo($file, 0o600);
+
+        if (str_contains($mode, 'n')) {
+            return true;
+        }
+
+        $waits = $this->option('waits');
+        $waits instanceof ReadBytes ? $waits->add(1) : throw new LogicException('No wait counter in the stream context.');
+
+        return false;
+    }
+
+    private function linked(string $file): bool
+    {
+        $target = $this->option('target');
+
+        return symlink(is_string($target) ? $target : throw new LogicException('No link target in the stream context.'), $file);
+    }
+
+    /**
+     * @return resource
+     */
+    private function handle()
+    {
+        return $this->file ?? throw new LogicException('The log is not open.');
     }
 }
