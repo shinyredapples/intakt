@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\ShowTeam;
 
-use Intakt\Core\Ai\Contract\Account;
 use DateTimeImmutable;
 use DateTimeZone;
+use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Budget\Contract\AccountPick;
 use Intakt\Core\Budget\Contract\LeftOutAccount;
 use Symfony\Component\Console\Attribute\AsCommand;
