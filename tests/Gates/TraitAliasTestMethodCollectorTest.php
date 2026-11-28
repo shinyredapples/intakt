@@ -12,6 +12,7 @@ use Intakt\Gates\PhpStan\TestProviderCollector;
 use Intakt\Gates\PhpStan\TraitAliasTestMethodCollector;
 use Intakt\Gates\PhpStan\TraitComposition;
 use Intakt\Gates\PhpStan\TraitMethod;
+use Intakt\Gates\PhpStan\UseBlocks;
 use Intakt\Gates\StaticAnalysisGate;
 use Override;
 use PhpParser\Node;
@@ -27,6 +28,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(TestMethodSentenceRule::class)]
 #[CoversClass(TraitComposition::class)]
 #[CoversClass(TraitMethod::class)]
+#[CoversClass(UseBlocks::class)]
 #[CoversClass(TestProviderCollector::class)]
 #[UsesClass(TestMethodCollector::class)]
 #[UsesClass(PhpUnitTestMethod::class)]

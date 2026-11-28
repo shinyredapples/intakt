@@ -35,8 +35,7 @@ final readonly class TraitAliasTestMethodCollector implements Collector
     {
         $class = $scope->getClassReflection();
 
-        // because PHPUnit runs only the methods of a named TestCase subclass, so an alias elsewhere may name a method test*() freely
-        if (!$class instanceof ClassReflection || $class->isAnonymous() || !in_array(TestCase::class, $class->getParentClassesNames(), true)) {
+        if (!$this->isTestCase($class)) {
             return null;
         }
 
@@ -47,17 +46,22 @@ final readonly class TraitAliasTestMethodCollector implements Collector
         $records = [];
 
         foreach ($this->renamingAliases($node) as $alias) {
-            foreach ($this->namesRunUnder($alias, $owner, $declared) as $name => $identity) {
-                $method = $exposed[strtolower($name)] ?? null;
-
+            foreach ($this->misnamedTestsAmong($class, $exposed, $this->namesRunUnder($alias, $owner, $declared)) as $method) {
                 // keyed by name because a class that renames one method twice still runs its original name once
-                if ($method instanceof TraitMethod && $method->identity() === $identity && $this->isMisnamedTest($class, $method)) {
-                    $records[strtolower($method->name)] ??= [$owner->getFileName() ?? $scope->getFile(), $alias->getStartLine(), $owner->getName(), $class->getName(), $method->name, $this->mayBeProvider($class, $method)];
-                }
+                $records[strtolower($method->name)] ??= [$owner->getFileName() ?? $scope->getFile(), $alias->getStartLine(), $owner->getName(), $class->getName(), $method->name, $this->mayBeProvider($class, $method)];
             }
         }
 
         return [] === $records ? null : array_values($records);
+    }
+
+    /**
+     * @phpstan-assert-if-true ClassReflection $class
+     */
+    private function isTestCase(?ClassReflection $class): bool
+    {
+        // because PHPUnit runs only the methods of a named TestCase subclass, so an alias elsewhere may name a method test*() freely
+        return $class instanceof ClassReflection && !$class->isAnonymous() && in_array(TestCase::class, $class->getParentClassesNames(), true);
     }
 
     /**
@@ -85,11 +89,18 @@ final readonly class TraitAliasTestMethodCollector implements Collector
         return [$method->name => $method->identity(), $alias->method->toString() => $method->before];
     }
 
-    private function isMisnamedTest(ClassReflection $class, TraitMethod $method): bool
+    /**
+     * @param array<string, TraitMethod>  $exposed
+     * @param array<string, list<string>> $names
+     *
+     * @return list<TraitMethod>
+     */
+    private function misnamedTestsAmong(ClassReflection $class, array $exposed, array $names): array
     {
+        $methods = array_map(static fn (string $name, array $identity): ?TraitMethod => ($exposed[strtolower($name)] ?? null)?->identity() === $identity ? $exposed[strtolower($name)] : null, array_keys($names), array_values($names));
         $native = $class->getNativeReflection();
 
-        return $method->isPublic && $native->hasMethod($method->name) && PhpUnitTestMethod::isMarkedOrNamedAsTest($native->getMethod($method->name)) && !TestMethodName::readsAsSentence($method->name);
+        return array_values(array_filter($methods, static fn (?TraitMethod $method): bool => $method instanceof TraitMethod && $method->isPublic() && $native->hasMethod($method->name) && PhpUnitTestMethod::isMarkedOrNamedAsTest($native->getMethod($method->name)) && !TestMethodName::readsAsSentence($method->name)));
     }
 
     private function mayBeProvider(ClassReflection $class, TraitMethod $method): bool
