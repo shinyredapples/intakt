@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
-use Doctrine\DBAL\DriverManager;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -16,6 +15,7 @@ use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
@@ -76,6 +76,7 @@ use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
+use Intakt\Tests\Core\Build\ParkedTaskTable;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
@@ -130,6 +131,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
 #[UsesClass(RecordedBuildStops::class)]
+#[UsesClass(BuildLimits::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
 #[UsesClass(BuildVerdict::class)]
@@ -374,7 +376,7 @@ final class BuildTaskCommandTest extends TestCase
         $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts', new RecordedBuildStops());
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts', new RecordedBuildStops(), new BuildLimits(1, 1, 1, 1));
         $checks = self::createStub(HandBackChecks::class);
         $checks->method('check')->willReturn($this->checked);
         $checkJobs = self::createStub(CheckJobs::class);
@@ -383,8 +385,8 @@ final class BuildTaskCommandTest extends TestCase
         $branches = self::createStub(BranchPush::class);
         $branches->method('push')->willReturn($this->pushed);
 
-        // On a database that cannot be opened, because the parked run's output is proven on the install's own database in BuildTaskParksOnSqliteTest.
-        $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->folder.'/missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
+        // The parked-task table alone, because the parked run's output is proven on the install's own database in BuildTaskParksOnSqliteTest.
+        $parked = new ParkedTasks(ParkedTaskTable::inMemory(), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
 
         $repositories = self::createStub(ConfiguredRepositories::class);
         $repositories->method('nameOf')->willReturn($this->configuredRepository);

@@ -66,7 +66,7 @@ Today only a task's first build starts on the chosen tier, picked from its label
 
 ## Answering a question
 
-When a Developer needs a decision the task doesn't cover, it doesn't guess: it ends its build with a question, the choices and its recommendation, and Intakt checks that the question is well formed. Today that question is only shown by `intakt:build:run`. (Planned:) Intakt posts it on the issue and moves on to other work. Answer on the issue, from any device. Your answer is written into the task as a decision, and the task starts again from there.
+When a Developer needs a decision the task doesn't cover, it doesn't guess: it ends its build with a question, the choices and its recommendation, and Intakt checks that the question is well formed. Today you can read that question on the task's page and in the status; it isn't posted on the issue yet. (Planned:) Intakt posts it on the issue and moves on to other work. Answer on the issue, from any device. Your answer is written into the task as a decision, and the task starts again from there.
 
 ## Changing course
 

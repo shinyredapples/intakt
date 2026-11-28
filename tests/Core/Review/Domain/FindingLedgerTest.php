@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\Domain;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingKind;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Severity;
@@ -41,6 +42,31 @@ final class FindingLedgerTest extends TestCase
         self::assertSame(['F1', 'F2'], array_map(static fn (TrackedFinding $tracked): string => $tracked->id, $all));
         self::assertSame([1, 2, 3], $all[0]->rounds);
         self::assertSame([1, 2, 3], $all[1]->rounds);
+    }
+
+    public function testAFreshFindingKeepsItsTitleAndKindUnderItsLedgerId(): void
+    {
+        $ledger = new FindingLedger();
+        $finding = new Finding(
+            'reviewer-1',
+            Severity::P2,
+            'src/Cart.php',
+            12,
+            null,
+            'A large cart loses its discount.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: Finding::TITLE_EXAMPLE,
+            kind: FindingKind::Logic,
+        );
+
+        $ledger->recordVerdict(1, new Verdict(Decision::Changes, [$finding], [], []));
+
+        foreach ([$ledger->openReportedIn(1)[0], $ledger->openForReviewers()[0]] as $reported) {
+            self::assertSame(['F1', Finding::TITLE_EXAMPLE, FindingKind::Logic], [$reported->id, $reported->title, $reported->kind]);
+        }
     }
 
     public function testAResolvedFindingClosesAndIsNoLongerOpen(): void
