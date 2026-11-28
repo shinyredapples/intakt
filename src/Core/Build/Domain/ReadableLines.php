@@ -38,7 +38,7 @@ final readonly class ReadableLines
     // What closes the fence, the HTML block and the element still open after the last line read, because lines added after them would be read as their content.
     public function closing(): string
     {
-        $closers = array_filter([$this->openFence, $this->html?->closer(), null === $this->openElement ? null : '</'.$this->openElement.'>']);
+        $closers = array_filter([$this->openFence, $this->html?->closer(), null === $this->openElement ? null : '</'.$this->openElement.'>'], static fn (?string $closer): bool => null !== $closer);
 
         return implode('', array_map(static fn (string $closer): string => "\n".$closer, $closers));
     }
@@ -53,17 +53,6 @@ final readonly class ReadableLines
         }
 
         return $next;
-    }
-
-    private function isCode(self $next, string $line): bool
-    {
-        return null !== $this->openFence || null !== $next->openFence || (!$this->html instanceof HtmlBlock && [] === $this->paragraph && $this->isIndented($line));
-    }
-
-    // Up to three spaces and a tab start indented code like four spaces, because a tab moves to the next multiple of four columns.
-    private function isIndented(string $line): bool
-    {
-        return 1 === preg_match('/^(?: {0,3}\t| {4})/', $line);
     }
 
     private function read(int $number, string $line): self
@@ -194,5 +183,16 @@ final readonly class ReadableLines
         }
 
         return $paragraph + [$number => $line];
+    }
+
+    // Up to three spaces and a tab start indented code like four spaces, because a tab moves to the next multiple of four columns.
+    private function isIndented(string $line): bool
+    {
+        return 1 === preg_match('/^(?: {0,3}\t| {4})/', $line);
+    }
+
+    private function isCode(self $next, string $line): bool
+    {
+        return null !== $this->openFence || null !== $next->openFence || (!$this->html instanceof HtmlBlock && [] === $this->paragraph && $this->isIndented($line));
     }
 }
