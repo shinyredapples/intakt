@@ -14,8 +14,8 @@ final readonly class EndedStep
     public function __construct(
         public BuildStep $step,
         public BuildStepOutcome $outcome,
-        public ?string $failure = null,
-        public ?BuildStopCause $stopCause = null,
+        public ?string $failure,
+        public ?BuildStopCause $stopCause,
     ) {
     }
 

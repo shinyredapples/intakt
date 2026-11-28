@@ -38,7 +38,7 @@ final class BuildRunTest extends TestCase
 
     public function testAnAskedStepKeepsItsOutcomeWithoutAFailureOrStopCause(): void
     {
-        $payload = new BuildRun('alpha', 7, self::RUN)->stepPayload(new EndedStep(BuildStep::BuildJob, BuildStepOutcome::Asked));
+        $payload = new BuildRun('alpha', 7, self::RUN)->stepPayload(new EndedStep(BuildStep::BuildJob, BuildStepOutcome::Asked, null, null));
 
         self::assertSame('{"project":"alpha","task":"7","run":"'.self::RUN.'","step":"build_job","outcome":"asked","failure":null,"stop_cause":null}', $payload);
     }
