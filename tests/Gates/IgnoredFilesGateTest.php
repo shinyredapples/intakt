@@ -458,6 +458,57 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertSame([$this->differsFromIndex('sub dir/.gitignore')], $result->findings);
     }
 
+    public function testAGitignoreWhoseIdentKeywordTheCommittedAttributesExpandedPasses(): void
+    {
+        $sandbox = $this->repositoryExpandingTheIdentKeywordInTheRules();
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertStringContainsString('$Id: ', (string) file_get_contents($sandbox->root.'/.gitignore'));
+        self::assertSame('', $sandbox->git('status', '--porcelain')->output, 'the checkout is clean');
+        self::assertSame([], $result->findings);
+    }
+
+    public function testAnUnstagedRuleEditBesideAnExpandedIdentKeywordStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryExpandingTheIdentKeywordInTheRules();
+        $expanded = (string) file_get_contents($sandbox->root.'/.gitignore');
+        $sandbox->write('.gitignore', str_replace('*.log', '*.bak', $expanded));
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testRestoringADifferingRuleFileWithLiteralPathspecsKeepsTheEditOfASimilarlyNamedOne(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('build[1]/.gitignore', "*.log\n");
+        $sandbox->write('build1/.gitignore', "*.tmp\n");
+        $sandbox->commitAll('chore: add the rules');
+        $sandbox->write('build[1]/.gitignore', "*.bak\n");
+        $sandbox->write('build1/.gitignore', "*.trace\n");
+
+        $sandbox->git('--literal-pathspecs', 'restore', '--', 'build[1]/.gitignore');
+
+        self::assertSame("*.trace\n", file_get_contents($sandbox->root.'/build1/.gitignore'));
+        self::assertSame([$this->differsFromIndex('build1/.gitignore')], $sandbox->gateResult(new IgnoredFilesGate())->findings);
+    }
+
+    private function repositoryExpandingTheIdentKeywordInTheRules(): Sandbox
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('.gitattributes', ".gitignore ident\n");
+        $sandbox->write('.gitignore', "# \$Id\$\n*.log\n");
+        $sandbox->commitAll('chore: expand the ident keyword in the rules');
+        unlink($sandbox->root.'/.gitignore');
+        $sandbox->git('checkout', '--', '.gitignore');
+
+        return $sandbox;
+    }
+
     private function repositoryCheckingOutRulesWithCrlf(): Sandbox
     {
         $sandbox = $this->emptySandbox();

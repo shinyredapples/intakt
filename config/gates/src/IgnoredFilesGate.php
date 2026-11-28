@@ -70,16 +70,16 @@ final readonly class IgnoredFilesGate implements Gate
 
         return array_keys($staged)
             |> (static fn (array $paths): array => array_filter($paths, static fn (string $path): bool => ($hashes[$path] ?? null) !== $staged[$path]))
-            |> (fn (array $paths): array => array_filter($paths, fn (string $path): bool => !isset($hashes[$path]) || !$this->sameRulesIgnoringCarriageReturns($workspace, $path, $staged[$path])))
+            |> (fn (array $paths): array => array_filter($paths, fn (string $path): bool => !isset($hashes[$path]) || !$this->sameRulesAfterCheckoutConversion($workspace, $path, $staged[$path])))
             |> array_values(...);
     }
 
-    // Because git reads no .gitignore that is a symbolic link, neither here nor in CI, a tracked link carries no rules to compare; only stage 0, so a conflicted file is not compared three times.
     /**
      * @return array<string, string>
      */
     private function stagedRuleFiles(Workspace $workspace): array
     {
+        // Because git reads no .gitignore that is a symbolic link, neither here nor in CI, a tracked link carries no rules to compare; only stage 0, so a conflicted file is not compared three times.
         $result = $workspace->git(['ls-files', '-s', '-z']);
 
         if (!$result->succeeded()) {
@@ -116,8 +116,8 @@ final readonly class IgnoredFilesGate implements Gate
         return array_combine($paths, explode("\n", rtrim($result->output, "\n")));
     }
 
-    // Because the hardened call hashes without the repository's attributes (a clean filter it names would run), a checkout that eol=crlf or core.autocrlf converted hashes differently from its clean blob; git drops the carriage return before each line break of a .gitignore, so such a file carries the same rules.
-    private function sameRulesIgnoringCarriageReturns(Workspace $workspace, string $path, string $blob): bool
+    // Because the hardened call hashes without the repository's attributes (a clean filter it names would run), a checkout that eol=crlf, core.autocrlf or ident converted hashes differently from its clean blob; both sides are cleaned as git cleans those two conversions.
+    private function sameRulesAfterCheckoutConversion(Workspace $workspace, string $path, string $blob): bool
     {
         $result = $workspace->git(['cat-file', 'blob', $blob]);
 
@@ -127,7 +127,14 @@ final readonly class IgnoredFilesGate implements Gate
 
         $workingTree = file_get_contents($workspace->root.'/'.$path);
 
-        return false !== $workingTree && str_replace("\r\n", "\n", $workingTree) === str_replace("\r\n", "\n", $result->output);
+        return false !== $workingTree && $this->cleaned($workingTree) === $this->cleaned($result->output);
+    }
+
+    // Git drops the carriage return before each line break of a .gitignore, and its ident clean conversion collapses an expanded `$Id: ... $` to `$Id$`.
+    private function cleaned(string $rules): string
+    {
+        return str_replace("\r\n", "\n", $rules)
+            |> (static fn (string $text): string => (string) preg_replace('/\$Id:[^$\n]*\$/', '$Id$', $text));
     }
 
     // Because the full report must name a file the reader can untrack, a path JSON would mangle (not UTF-8), a line break or control would split or hide (C0, DEL, C1 such as U+0085, U+2028, U+2029) or a format character would reorder (U+202E) is quoted as git quotes it; \z, not $, so a trailing newline counts.
