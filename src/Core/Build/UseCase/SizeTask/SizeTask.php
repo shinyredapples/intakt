@@ -43,6 +43,7 @@ final readonly class SizeTask
         private TaskComments $comments,
         private LockFactory $locks,
         private SplitTask $splits,
+        private SmallPoolSplit $smallPool,
     ) {
     }
 
@@ -123,15 +124,58 @@ final readonly class SizeTask
             $this->releasedFromItsReadinessQuestion($run, $latest);
         }
 
-        // A part keeps a split verdict whole, because a part is never split again; its `task_sized` line says ready with size split.
-        if ($verdict instanceof SizingVerdict && SizingOutcome::Ready === $outcome && SizeTier::Split === $verdict->size && !$this->splits->isPart($request)) {
-            return $this->splits->finished($this->splits->planned($run, $request, $verdict));
+        $split = $verdict instanceof SizingVerdict && SizingOutcome::Ready === $outcome ? $this->splitVerdictFor($request, $verdict) : null;
+
+        if ($split instanceof SizingVerdict) {
+            return $this->splits->finished($this->splits->planned($run, $request, $split));
         }
 
         // After the release, so a record says ready only once the earlier readiness question is gone.
         $this->records->record($request, $verdict, $run->id);
 
         return $outcome;
+    }
+
+    // A part keeps a split verdict whole, because a part is never split again; its `task_sized` line says ready with size split.
+    /**
+     * @throws UsageNotRecorded
+     * @throws ProviderRateLimited
+     * @throws ProviderFailedTransiently
+     * @throws VendorAccountOut
+     * @throws VendorAccountBusy
+     * @throws NoProviderLeft
+     * @throws ProviderRejectedTheKey
+     * @throws ProviderUnreachable
+     */
+    private function splitVerdictFor(SizingRequest $request, SizingVerdict $verdict): ?SizingVerdict
+    {
+        if (SizeTier::Split === $verdict->size) {
+            return $this->splits->isPart($request) ? null : $verdict;
+        }
+
+        if (!$this->smallPool->forces($verdict) || $this->splits->isPart($request)) {
+            return null;
+        }
+
+        return $this->partsFor($request);
+    }
+
+    // Asked once, because the first verdict below `split` named no parts; an answer without valid parts keeps the task whole and ready, and never parks it, since the task was already found ready.
+    /**
+     * @throws UsageNotRecorded
+     * @throws ProviderRateLimited
+     * @throws ProviderFailedTransiently
+     * @throws VendorAccountOut
+     * @throws VendorAccountBusy
+     * @throws NoProviderLeft
+     * @throws ProviderRejectedTheKey
+     * @throws ProviderUnreachable
+     */
+    private function partsFor(SizingRequest $request): ?SizingVerdict
+    {
+        $answer = $this->vendor->size($request->askingForParts());
+
+        return true === $answer?->ready && SizeTier::Split === $answer->size ? $answer : null;
     }
 
     // Sized once more, because a verdict recorded before splitting existed has no part lines to split from; reached only without a plan, and never for a part, so it cannot repeat.

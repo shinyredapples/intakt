@@ -6,9 +6,12 @@ namespace Intakt\Tests\Core\Build\UseCase\SizeTask;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\Persistence\ManagerRegistry;
+use Intakt\Core\Ai\Contract\EnabledAccounts;
+use Intakt\Core\Ai\Infrastructure\ConfiguredAccounts;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\SizeTask\EligibleTasks;
 use Intakt\Core\Build\UseCase\SizeTask\SizeTask;
+use Intakt\Core\Build\UseCase\SizeTask\SmallPoolSplit;
 use Intakt\Core\Build\UseCase\SizeTask\SizingRecords;
 use Intakt\Core\Build\UseCase\SizeTask\SplitTask;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -44,6 +47,8 @@ final readonly class SizingFixture
         public InMemoryLedger $ledger = new InMemoryLedger(),
         int $number = 7,
         ?Ledger $kept = null,
+        // Two accounts by default, so only a test of the small pool meets its lower split tier.
+        private EnabledAccounts $accounts = new ConfiguredAccounts(['anthropic' => ['first', 'second']]),
     ) {
         $this->kept = $kept ?? $this->ledger;
         $this->parked = ParkedTaskTable::inMemory();
@@ -63,6 +68,7 @@ final readonly class SizingFixture
             $comments ?? $this->comments,
             new LockFactory(new InMemoryStore()),
             new SplitTask($this->splitLedger, $this->parts, $comments ?? $this->comments),
+            new SmallPoolSplit($this->accounts),
         );
     }
 
