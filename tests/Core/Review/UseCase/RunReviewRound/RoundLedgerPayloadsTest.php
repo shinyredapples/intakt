@@ -702,6 +702,19 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     private function titledAt(string $id, Severity $severity, int $line, string $title, FindingKind $kind): Finding
     {
-        return new Finding($id, $severity, 'src/A.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null, title: $title, kind: $kind);
+        return new Finding(
+            $id,
+            $severity,
+            'src/A.php',
+            $line,
+            null,
+            'Text of '.$id.'.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: $title,
+            kind: $kind,
+        );
     }
 }

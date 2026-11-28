@@ -68,8 +68,34 @@ final class FindingTitleAndKindContractTest extends KernelTestCase
         $round = $fixture->start(1);
         $this->roundId = $round->id()->toRfc4122();
         $findings = [
-            new Finding('A', Severity::P2, 'src/Cart.php', 12, null, 'The total skips the discount.', FixableBy::Builder, false, null, null, title: 'A large cart loses its discount', kind: FindingKind::Logic),
-            new Finding('B', Severity::P1, 'src/Cart.php', 12, null, 'The discount has no test.', FixableBy::Builder, false, null, null, title: 'The discount test is missing', kind: FindingKind::MissingTest),
+            new Finding(
+                'A',
+                Severity::P2,
+                'src/Cart.php',
+                12,
+                null,
+                'The total skips the discount.',
+                FixableBy::Builder,
+                false,
+                null,
+                null,
+                title: 'A large cart loses its discount',
+                kind: FindingKind::Logic,
+            ),
+            new Finding(
+                'B',
+                Severity::P1,
+                'src/Cart.php',
+                12,
+                null,
+                'The discount has no test.',
+                FixableBy::Builder,
+                false,
+                null,
+                null,
+                title: 'The discount test is missing',
+                kind: FindingKind::MissingTest,
+            ),
         ];
         $fixture->deliver($fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
         $fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act)])))(new JudgeRound($this->roundId));
