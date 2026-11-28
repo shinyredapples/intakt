@@ -7,10 +7,6 @@ namespace Intakt\Core\Build\Domain;
 // The seven CommonMark HTML block kinds; kinds 1 to 5 end at their own end marker and kinds 6 and 7 at the next blank line.
 enum HtmlBlock
 {
-    private const string RAW_NAMES = 'pre|script|style|textarea';
-    private const string BLOCK_NAMES = 'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul';
-    private const string ATTRIBUTE = '\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:[^\s"\'=<>`]+|\'[^\']*\'|"[^"]*"))?';
-
     case Raw;
     case Comment;
     case Instruction;
@@ -18,6 +14,9 @@ enum HtmlBlock
     case CData;
     case Block;
     case Tag;
+    private const string RAW_NAMES = 'pre|script|style|textarea';
+    private const string BLOCK_NAMES = 'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul';
+    private const string ATTRIBUTE = '\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:[^\s"\'=<>`]+|\'[^\']*\'|"[^"]*"))?';
 
     public static function opening(string $line): ?self
     {
@@ -53,7 +52,7 @@ enum HtmlBlock
     // Kinds 6 and 7 end at a blank line, which cannot be the line that opened them.
     public function endsOnOpeningLine(): bool
     {
-        return !\in_array($this, [self::Block, self::Tag], true);
+        return !in_array($this, [self::Block, self::Tag], true);
     }
 
     private function start(): string
