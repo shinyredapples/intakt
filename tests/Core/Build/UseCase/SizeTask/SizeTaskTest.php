@@ -417,7 +417,7 @@ final class SizeTaskTest extends TestCase
      */
     private function verdict(array $missing, SizeTier $size, int $lines): SizingVerdict
     {
-        return new SizingVerdict([] === $missing, $missing, $size, $lines, 'Because.');
+        return new SizingVerdict([] === $missing, $missing, $size, $lines, 'Because.', []);
     }
 
     private function vendor(?SizingVerdict $verdict): SizingVendor

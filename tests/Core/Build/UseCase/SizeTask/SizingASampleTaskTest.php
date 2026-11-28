@@ -99,7 +99,7 @@ final class SizingASampleTaskTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
 
-        $outcome = $this->sizing('{"ready":true,"missing":[],"size":"medium","estimated_lines":180,"reason":"One change."}', new SizingFixture(self::createStub(ManagerRegistry::class), $ledger, 12))->run('sample', 12);
+        $outcome = $this->sizing('{"ready":true,"missing":[],"size":"medium","estimated_lines":180,"reason":"One change.","parts":[]}', new SizingFixture(self::createStub(ManagerRegistry::class), $ledger, 12))->run('sample', 12);
 
         self::assertSame(SizingOutcome::Ready, $outcome);
         self::assertSame(
@@ -114,7 +114,7 @@ final class SizingASampleTaskTest extends KernelTestCase
         $ledger = new InMemoryLedger();
         $fixture = new SizingFixture(self::createStub(ManagerRegistry::class), $ledger, 12);
 
-        $outcome = $this->sizing('{"ready":false,"missing":["acceptance_condition"],"size":"small","estimated_lines":25,"reason":"No done condition."}', $fixture)->run('sample', 12);
+        $outcome = $this->sizing('{"ready":false,"missing":["acceptance_condition"],"size":"small","estimated_lines":25,"reason":"No done condition.","parts":[]}', $fixture)->run('sample', 12);
 
         self::assertSame(SizingOutcome::Parked, $outcome);
         self::assertSame(['sample:12'], $fixture->parked->fetchFirstColumn("SELECT project || ':' || task FROM build_parked_task"));
