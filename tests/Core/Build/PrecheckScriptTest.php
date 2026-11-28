@@ -193,6 +193,35 @@ final class PrecheckScriptTest extends TestCase
         self::assertSame(HandBackRefusal::Malformed->reason()."\n", $run->getOutput());
     }
 
+    public function testACommitWithAnObjectWhoseContentDoesNotMatchItsIdIsReportedAsOneGitWouldNotWrite(): void
+    {
+        $this->history->commitFile('built.txt', "built\n", 'feat: build the task');
+        $this->givenThePullRequestText();
+        $object = trim(new Process(['git', 'rev-parse', 'HEAD:built.txt'], $this->history->work, $this->environment($this->base))->mustRun()->getOutput());
+        $other = trim(new Process(['git', 'hash-object', '-w', '--stdin'], $this->history->work, $this->environment($this->base), "other\n")->mustRun()->getOutput());
+        $gitDir = trim(new Process(['git', 'rev-parse', '--absolute-git-dir'], $this->history->work, $this->environment($this->base))->mustRun()->getOutput());
+        $path = $gitDir.'/objects/'.substr($object, 0, 2).'/'.substr($object, 2);
+        new Filesystem()->remove($path);
+        new Filesystem()->copy($gitDir.'/objects/'.substr($other, 0, 2).'/'.substr($other, 2), $path);
+
+        $run = $this->whenThePrecheckRuns();
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertSame(HandBackRefusal::Malformed->reason()."\n", $run->getOutput());
+    }
+
+    public function testABranchRewoundBehindTheSessionsStartPrintsOnlyTheFastForwardLine(): void
+    {
+        $this->base = $this->history->commit('feat: the pushed head');
+        $this->history->startBranch('task', $this->base.'~1');
+        $this->givenThePullRequestText();
+
+        $run = $this->whenThePrecheckRuns();
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertSame(HandBackRefusal::NotFastForward->reason()."\n", $run->getOutput());
+    }
+
     protected function setUp(): void
     {
         $this->history = new BuildHistory();
