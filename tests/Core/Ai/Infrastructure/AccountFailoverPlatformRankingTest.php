@@ -136,6 +136,47 @@ final class AccountFailoverPlatformRankingTest extends TestCase
         self::assertSame([300, 240, 240, 180], [$cooldownAndCeiling, $afterTheCooldown, $holdAndCeiling, $afterTheHold]);
     }
 
+    public function testAnAccountAtBothCeilingsOnFreshReadingsIsFreeAtTheLaterReset(): void
+    {
+        $account = new Account(Provider::ClaudeCode, Account::DEFAULT);
+        $this->readings->record(new WindowReading($account, UsageWindow::Weekly, new Usage(95.0, $this->clock->now()->modify('+300 seconds'))));
+        $this->readings->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(95.0, $this->clock->now()->modify('+600 seconds'))));
+        $platform = new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->answering(Account::DEFAULT)], new NoCooldowns(), $this->clock, new NullLogger(), new NoPinnedProviderCooldowns(), $this->ranking());
+
+        $bothAtCeiling = $platform->secondsUntilFree('big');
+        $this->clock->sleep(300);
+        $afterTheWeeklyReset = $platform->secondsUntilFree('big');
+
+        self::assertSame([600, 300], [$bothAtCeiling, $afterTheWeeklyReset]);
+    }
+
+    public function testACooldownAndAHoldOnAnAccountAtBothCeilingsStillWaitForTheLaterReset(): void
+    {
+        $account = new Account(Provider::ClaudeCode, Account::DEFAULT);
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('secondsUntilFree')->willReturn(60);
+        $platform = new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->answering(Account::DEFAULT)], $cooldowns, $this->clock, new NullLogger(), new NoPinnedProviderCooldowns(), $this->ranking());
+        $this->readings->record(new WindowReading($account, UsageWindow::Weekly, new Usage(95.0, $this->clock->now()->modify('+5 minutes'))));
+        $this->holds->coolDown($account, $this->clock->now()->modify('+2 minutes'));
+        $this->readings->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(95.0, $this->clock->now()->modify('+10 minutes'))));
+
+        $bothAtCeiling = $platform->secondsUntilFree('big');
+        $this->clock->sleep(300);
+
+        self::assertSame([600, 300], [$bothAtCeiling, $platform->secondsUntilFree('big')]);
+    }
+
+    public function testAnAccountCoolingDownAndAtACeilingWaitsBehindAnotherAccountAtASoonerCeiling(): void
+    {
+        $this->readings->record(new WindowReading(new Account(Provider::ClaudeCode, Account::DEFAULT), UsageWindow::Weekly, new Usage(95.0, $this->clock->now()->modify('+300 seconds'))));
+        $this->readings->record(new WindowReading(new Account(Provider::ClaudeCode, 'team'), UsageWindow::Weekly, new Usage(95.0, $this->clock->now()->modify('+120 seconds'))));
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('secondsUntilFree')->willReturnCallback(static fn (Account $account): int => Account::DEFAULT === $account->name ? 60 : 0);
+
+        self::assertSame(120, $this->platform($cooldowns)->secondsUntilFree('big'));
+        self::assertSame([], $this->called);
+    }
+
     public function testACallRefusedForACoolingAccountAtAFreshCeilingCarriesTheLaterEnd(): void
     {
         $this->both(Account::DEFAULT, $this->usage(10.0, 5), $this->usage(95.0, 2));

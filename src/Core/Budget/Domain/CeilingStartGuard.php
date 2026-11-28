@@ -48,13 +48,16 @@ final readonly class CeilingStartGuard
     {
         $uses = $this->currentUsesOf($account);
         $fresh = array_filter($uses, static fn (WindowUse $use): bool => $use->ageInSeconds <= self::TRUSTED_FOR_SECONDS);
-        $atCeiling = $this->windowAtCeiling($fresh, 0.0);
         $trusted = [] !== $uses && count($fresh) === count($uses);
-        $resets = $atCeiling instanceof UsageWindow ? [$uses[$atCeiling->value]->usage->resetsAt] : array_map(static fn (WindowUse $use): ?DateTimeImmutable => $use->usage->resetsAt, $uses);
-        $known = array_filter($resets, static fn (?DateTimeImmutable $resetsAt): bool => $resetsAt instanceof DateTimeImmutable);
+        $holding = $this->lastToResetAtCeiling($fresh);
+        if ($holding instanceof UsageWindow) {
+            return new AccountRoom($holding, $fresh[$holding->value]->usage->resetsAt, $trusted);
+        }
+
+        $known = array_filter(array_map(static fn (WindowUse $use): ?DateTimeImmutable => $use->usage->resetsAt, $uses), static fn (?DateTimeImmutable $resetsAt): bool => $resetsAt instanceof DateTimeImmutable);
         usort($known, static fn (DateTimeImmutable $one, DateTimeImmutable $other): int => $one <=> $other);
 
-        return new AccountRoom($atCeiling, array_first($known), $trusted);
+        return new AccountRoom(null, array_first($known), $trusted);
     }
 
     /**
@@ -71,6 +74,18 @@ final readonly class CeilingStartGuard
         }
 
         return $uses;
+    }
+
+    // With both windows at their ceiling the account is free only at the later reset, and a window without a reset time holds it longest, because when it frees up is unknown.
+    /**
+     * @param array<string, WindowUse> $uses
+     */
+    private function lastToResetAtCeiling(array $uses): ?UsageWindow
+    {
+        $atCeiling = array_filter(UsageWindow::cases(), fn (UsageWindow $window): bool => isset($uses[$window->value]) && $uses[$window->value]->usage->usedPercent >= $this->ceilingOf($window, $uses, 0.0));
+        usort($atCeiling, static fn (UsageWindow $one, UsageWindow $other): int => ($uses[$other->value]->usage->resetsAt?->getTimestamp() ?? PHP_INT_MAX) <=> ($uses[$one->value]->usage->resetsAt?->getTimestamp() ?? PHP_INT_MAX));
+
+        return array_first($atCeiling);
     }
 
     // A reset window starts empty, so its reading says nothing any more; without a reset time, one window's length is when it reset at the latest.
@@ -93,7 +108,6 @@ final readonly class CeilingStartGuard
         return $this->windowAtCeiling($uses, $margin) instanceof UsageWindow;
     }
 
-    // The weekly window first, because it is the one that lasts longer when both are at their ceiling.
     /**
      * @param array<string, WindowUse> $uses
      */
