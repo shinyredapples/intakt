@@ -10,8 +10,17 @@ export function dismissTermTips(page) {
             term.setAttribute(DISMISSED, '');
         }
     });
-    // Leaving the term re-arms it, so the next visit to it shows its tip again.
+    // A tip stays closed until both the focus and the pointer have left its term: a pointer resting on it would otherwise reopen the tip on the next Tab.
     page.addEventListener('focusout', (event) => {
-        event.target?.closest?.(TERM)?.removeAttribute(DISMISSED);
+        const term = event.target?.closest?.(TERM);
+        if (term && !term.matches(':hover')) {
+            term.removeAttribute(DISMISSED);
+        }
+    });
+    page.addEventListener('pointerout', (event) => {
+        const term = event.target?.closest?.(TERM);
+        if (term && !term.contains(event.relatedTarget) && !term.matches(':focus')) {
+            term.removeAttribute(DISMISSED);
+        }
     });
 }

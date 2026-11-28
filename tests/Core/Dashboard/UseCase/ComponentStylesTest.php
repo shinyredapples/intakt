@@ -249,6 +249,20 @@ final class ComponentStylesTest extends WebTestCase
         self::assertMatchesRegularExpression('/scroll-padding-inline:\s*var\(--s8\)/', $rules['.filters'] ?? '');
     }
 
+    public function testFocusScrollsAControlClearOfTheStickyTopBar(): void
+    {
+        $rules = $this->rulesOf($this->componentSheet());
+
+        self::assertMatchesRegularExpression('/scroll-padding-top:\s*calc\(var\(--top\) \+ var\(--s8\)\)/', $rules['html'] ?? '');
+    }
+
+    public function testOnPhonesFocusScrollsAControlClearOfTheFixedBottomBar(): void
+    {
+        $rules = $this->rulesOf($this->phoneBlock());
+
+        self::assertMatchesRegularExpression('/scroll-padding-bottom:\s*calc\(var\(--bar\)/', $rules['html'] ?? '');
+    }
+
     public function testADismissedTermHidesItsTipAfterTheRuleThatShowsItOnFocusAndHover(): void
     {
         $sheet = $this->componentSheet();

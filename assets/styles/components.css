@@ -227,7 +227,7 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   font: 400 var(--t13)/1.4 var(--f-body); pointer-events: none;
 }
 .term:hover .term-tip, .term:focus .term-tip { display: block; }
-/* After the one above, equal in weight, so Escape (assets/term-dismiss.js) closes a tip the focus or the pointer opened. */
+/* After the one above, equal in weight, so Escape (assets/term-dismiss.js) closes the tip of the focused term. */
 .term[data-dismissed] .term-tip { display: none; }
 /* No dotted underline and the text's own size, because the "?" already marks the word as explained and the UI check counts text under 15 px at 390 wide. */
 .term-ask { text-decoration: none; }
@@ -316,6 +316,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .seg button { flex: 1; height: var(--tab-h); }
   .input, .select { height: 48px; }
   /* overflow-x: auto clips on every side, so the padding keeps the 2px focus ring and its 2px offset inside the box; the negative inline margin keeps the chips lined up with the page; the scroll padding stops a focused control, scrolled into view, flush against the edge, where the ring would be cut. */
+  /* The bottom bar is fixed, so focus must scroll a control clear of it as well. */
+  html { scroll-padding-bottom: calc(var(--bar) + env(safe-area-inset-bottom) + var(--s8)); }
   .filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-block: var(--s4); padding-inline: var(--s4); margin-inline: calc(-1 * var(--s4)); scroll-padding-inline: var(--s8); }
   .filters .input { flex: none; min-width: 200px; height: 48px; }
   .filters #history-project { display: block; flex: none; width: auto; max-width: 60%; height: 48px; }
@@ -397,6 +399,8 @@ details[open] > summary .chev { transform: rotate(180deg); }
 [data-rail="collapsed"] .rail .nav .count { position: absolute; top: 0; right: 0; min-width: 18px; height: 18px; padding: 0 var(--s4); }
 .main { display: flex; flex-direction: column; min-width: 0; }
 .topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: var(--s12); height: var(--top); padding: 0 var(--s32); border-bottom: 1px solid var(--hairline); background: var(--page); }
+/* Focus scrolls a control to the nearest edge, which left a chart bar's ring under this sticky bar when Shift+Tab walked up. */
+html { scroll-padding-top: calc(var(--top) + var(--s8)); }
 .topbar .grow { flex: 1; }
 .search-trigger { display: flex; flex: 1; align-items: center; gap: var(--s8); min-width: 0; max-width: 520px; height: 40px; padding: 0 var(--s12); border: 1px solid var(--hairline); border-radius: var(--r-btn); background: var(--raised); color: var(--muted); font: inherit; text-align: left; cursor: text; }
 .search-trigger .ph { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
