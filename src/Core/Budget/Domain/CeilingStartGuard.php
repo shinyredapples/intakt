@@ -129,12 +129,6 @@ final readonly class CeilingStartGuard
         return $release;
     }
 
-    // Same comparison as windowAtCeiling() with no margin, so the reported release is the second decide() first admits.
-    private function heldByPaceAt(WindowUse $short, WindowUse $weekly, DateTimeImmutable $at): bool
-    {
-        return $short->usage->usedPercent >= $this->pacedByWeek($this->ceilings[UsageWindow::FiveHour->value], $weekly, $at);
-    }
-
     private function closedFormPaceRelease(WindowUse $short, WindowUse $weekly, DateTimeImmutable $weekResetsAt): ?DateTimeImmutable
     {
         $weeklyCeiling = $this->ceilings[UsageWindow::Weekly->value];
@@ -153,6 +147,12 @@ final readonly class CeilingStartGuard
         $seconds = (int) floor($neededShare * $week - $elapsed - UsageWindow::FiveHour->seconds()) + 1;
 
         return $now->modify(sprintf('+%d seconds', max(1, $seconds)));
+    }
+
+    // Same comparison as windowAtCeiling() with no margin, so the reported release is the second decide() first admits.
+    private function heldByPaceAt(WindowUse $short, WindowUse $weekly, DateTimeImmutable $at): bool
+    {
+        return $short->usage->usedPercent >= $this->pacedByWeek($this->ceilings[UsageWindow::FiveHour->value], $weekly, $at);
     }
 
     // A reset window starts empty, so its reading says nothing any more; without a reset time, one window's length is when it reset at the latest.
