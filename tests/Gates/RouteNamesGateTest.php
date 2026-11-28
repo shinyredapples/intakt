@@ -44,6 +44,17 @@ final class RouteNamesGateTest extends SandboxTestCase
         self::assertStringContainsString('debug:router exited with 255', $run->findingsOf('routes'));
     }
 
+    public function testAConsoleThatPrintsNoRouteListFailsTheGate(): void
+    {
+        $sandbox = $this->kernelSandbox();
+        $sandbox->write('bin/console', "<?php\necho '[\"not a route\"]';\n");
+
+        $run = $sandbox->check('--only=routes');
+
+        self::assertTrue($run->failed('routes'), $run->output());
+        self::assertStringContainsString('debug:router printed no route list in JSON', $run->findingsOf('routes'));
+    }
+
     public function testATreeWithoutAConsoleFailsTheGate(): void
     {
         $run = $this->emptySandbox()->check('--only=routes');
