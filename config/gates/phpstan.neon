@@ -171,6 +171,10 @@ services:
         tags:
             - phpstan.collector
     -
+        class: Intakt\Gates\PhpStan\TraitAliasCollector
+        tags:
+            - phpstan.collector
+    -
         class: Intakt\Gates\PhpStan\NoServiceLocatorRule
         arguments:
             root: %currentWorkingDirectory%

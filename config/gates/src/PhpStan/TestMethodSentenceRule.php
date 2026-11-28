@@ -31,7 +31,7 @@ final readonly class TestMethodSentenceRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        $collected = array_merge(...array_values($node->get(TestMethodCollector::class)));
+        $collected = [...array_merge(...array_values($node->get(TestMethodCollector::class))), ...$this->aliasedNames($node)];
         $providers = array_merge(...array_values($node->get(TestProviderCollector::class)));
         $findings = [];
 
@@ -43,6 +43,18 @@ final readonly class TestMethodSentenceRule implements Rule
         }
 
         return array_values($findings);
+    }
+
+    /**
+     * @return list<array{string, int, string, string, string, bool}>
+     */
+    private function aliasedNames(CollectedDataNode $node): array
+    {
+        $aliased = array_merge(...array_merge(...array_values($node->get(TraitAliasCollector::class))));
+        // because a trait under tests/ already reports its own name where it declares the method, an original name is judged at the alias only for a trait outside tests/
+        $judgedHere = array_filter($aliased, fn (array $record): bool => !str_starts_with($record[6], $this->root.'/tests/'));
+
+        return array_values(array_map(static fn (array $record): array => array_slice($record, 0, 6), $judgedHere));
     }
 
     /**

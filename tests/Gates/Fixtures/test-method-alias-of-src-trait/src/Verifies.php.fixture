@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+trait Verifies
+{
+    public function verify(): void
+    {
+    }
+
+    public function testRuns(): void
+    {
+    }
+}
