@@ -112,8 +112,8 @@ final class CiJourneysDecisionTest extends SandboxTestCase
         }
 
         $result = $sandbox->runScript(
-            'chmod +x bin/docker .github/ci/build-image.sh; PATH="$PWD/bin:$PATH"; '.$this->loadStep(),
-            ['KEY' => 'intakt-ci-image-abc', 'RUNNER_TEMP' => $sandbox->root.'/tmp', 'DOCKERHUB_LOGIN_FAILED' => $loginFailed ? '1' : ''],
+            'chmod +x bin/docker .github/ci/build-image.sh; PATH="$PWD/bin:$PATH"; '.$this->loadAndBuildSteps(),
+            ['KEY' => 'intakt-ci-image-abc', 'RUNNER_TEMP' => $sandbox->root.'/tmp', 'GITHUB_OUTPUT' => $sandbox->root.'/output', 'DOCKERHUB_LOGIN_FAILED' => $loginFailed ? '1' : ''],
         );
 
         self::assertSame($goesAhead, $result->succeeded(), $result->errors.$result->output);
@@ -144,13 +144,15 @@ final class CiJourneysDecisionTest extends SandboxTestCase
         );
     }
 
-    private function loadStep(): string
+    private function loadAndBuildSteps(): string
     {
         /** @var array{runs: array{steps: list<array{run?: string}>}} $action */
         $action = Yaml::parseFile(__DIR__.'/../../.github/actions/ci-image/action.yml');
         $steps = array_values(array_filter($action['runs']['steps'], static fn (array $step): bool => str_contains($step['run'] ?? '', 'docker load')));
         self::assertCount(1, $steps);
+        $builds = array_values(array_filter($action['runs']['steps'], static fn (array $step): bool => str_contains($step['run'] ?? '', 'DOCKERHUB_LOGIN_FAILED')));
+        self::assertCount(1, $builds);
 
-        return $steps[0]['run'] ?? '';
+        return ($steps[0]['run'] ?? '')."\n".($builds[0]['run'] ?? '');
     }
 }
