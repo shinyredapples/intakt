@@ -364,7 +364,7 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         $sandbox->startRepository();
         $sandbox->git('config', 'core.trustctime', 'false');
         $sandbox->write('.gitignore', "*.log\n");
-        $stamp = time() - 3600;
+        $stamp = 1_700_000_000;
         touch($sandbox->root.'/.gitignore', $stamp);
         $sandbox->commitAll('chore: ignore logs');
         $sandbox->write('.gitignore', "*.tmp\n");

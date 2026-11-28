@@ -21,13 +21,16 @@ final readonly class IgnoredFilesGate implements Gate
         }
 
         try {
-            $findings = [
-                ...array_map(fn (string $path): string => $this->shown($path).': tracked, but .gitignore excludes it', $this->trackedIgnoredPaths($workspace)),
-                ...array_map(fn (string $path): string => $this->shown($path).': '.self::DIFFERING_RULES, $this->ruleFilesDifferingFromTheIndex($workspace)),
-            ];
+            $ignored = $this->trackedIgnoredPaths($workspace);
+            $differing = $this->ruleFilesDifferingFromTheIndex($workspace);
         } catch (ScopeFailure $failure) {
             return GateResult::failedBecause($this->name(), $failure->getMessage());
         }
+
+        $findings = [
+            ...array_map(fn (string $path): string => $this->shown($path).': tracked, but .gitignore excludes it', $ignored),
+            ...array_map(fn (string $path): string => $this->shown($path).': '.self::DIFFERING_RULES, $differing),
+        ];
 
         if ([] === $findings) {
             return GateResult::passed($this->name());
@@ -72,7 +75,7 @@ final readonly class IgnoredFilesGate implements Gate
 
     // Because git reads no .gitignore that is a symbolic link, neither here nor in CI, a tracked link carries no rules to compare; only stage 0, so a conflicted file is not compared three times.
     /**
-     * @return array<string, string> blob id by path
+     * @return array<string, string>
      */
     private function stagedRuleFiles(Workspace $workspace): array
     {
@@ -95,7 +98,7 @@ final readonly class IgnoredFilesGate implements Gate
     /**
      * @param list<string> $paths
      *
-     * @return array<string, string> blob id by path
+     * @return array<string, string>
      */
     private function workingTreeBlobs(Workspace $workspace, array $paths): array
     {
