@@ -48,6 +48,7 @@ use Intakt\Plugin\Vendor\Contract\ProviderUnreachable;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
 use Intakt\Tests\Core\Ai\Infrastructure\NoPinnedProviderCooldowns;
+use Intakt\Tests\Core\Ai\Infrastructure\OwnersOrderRanking;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
@@ -183,7 +184,7 @@ final class AnthropicUnreachableRetryTest extends KernelTestCase
         });
         $capabilities = [Capability::INPUT_MESSAGES, Capability::OUTPUT_TEXT, Capability::OUTPUT_STRUCTURED, Capability::OUTPUT_STREAMING, Capability::TOOL_CALLING];
         $bridge = Factory::createPlatform('test', $http, new ModelCatalog(['big' => ['class' => Claude::class, 'capabilities' => $capabilities]]), eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $accounts = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $bridge], new NoCooldowns(), new MockClock(self::NOW), new NullLogger(), new NoPinnedProviderCooldowns());
+        $accounts = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $bridge], new NoCooldowns(), new MockClock(self::NOW), new NullLogger(), new NoPinnedProviderCooldowns(), new OwnersOrderRanking());
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $accounts]), new NoCooldowns(), new NullLogger());
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));

@@ -1,0 +1,5 @@
+{#- A kind's symbol with its words (FindingKind::inWords()) as text, because a symbol alone says nothing to a screen reader; nothing is drawn when the words are null, for a finding with no kind. -#}
+{%- if words is not null -%}
+{%- set paths = {'Security': 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM12 9v4M12 16v.5', 'Logic': 'M5 9h14M5 15h14M16 4L8 20', 'No test': 'M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3M7.5 15h9', 'Tidy-up': 'M8 8h12v12H8zM4 16V6a2 2 0 012-2h10', 'Other': 'M12 6v6M12 16v.5'} -%}
+<span class="kind-sym"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="{{ paths[words] }}"/></svg><span class="sr-only">{{ words }}: </span></span>
+{%- endif -%}

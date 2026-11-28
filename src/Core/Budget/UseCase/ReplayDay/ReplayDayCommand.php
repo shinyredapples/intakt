@@ -24,7 +24,7 @@ final readonly class ReplayDayCommand
     ) {
     }
 
-    public function __invoke(SymfonyStyle $io, #[Argument('The script: one step per line, a UTC moment such as 2026-11-02T08:00, then read, limit, hold, start or merge with its arguments')] string $script): int
+    public function __invoke(SymfonyStyle $io, #[Argument('The script: one step per line, a UTC moment such as 2026-11-02T08:00, then read, limit, hold, start, merge or rank with its arguments')] string $script): int
     {
         try {
             $this->replay->replay($this->stepsOf($script), new ConsoleLogger($io), static fn (string $line) => $io->writeln(OutputFormatter::escape($line)));

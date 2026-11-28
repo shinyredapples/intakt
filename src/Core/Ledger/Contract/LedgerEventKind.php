@@ -60,4 +60,6 @@ enum LedgerEventKind: string
     case MainHalted = 'main_halted';
     case HaltCleared = 'halt_cleared';
     case OwnerPushNoticed = 'owner_push_noticed';
+    case TaskParked = 'task_parked';
+    case TaskSized = 'task_sized';
 }

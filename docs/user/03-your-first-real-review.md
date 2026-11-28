@@ -67,6 +67,6 @@ If you change your mind, the **Stop** button beside the title asks the running r
 
 ## When the owl is done
 
-The Now box goes, and the owl's card and the things to fix take its place. The card gives the owl's call, such as "Changes needed", with "5 to fix". Below it, the findings stand in three groups, **Urgent**, **Should fix** and **Nice to have**, one row each with its first sentence and its file and line. The rows are the list where your next half hour goes; each one opens its finding's own page.
+The Now box goes, and the owl's card and the things to fix take its place. The card gives the owl's call, such as "Changes needed", with "5 to fix". Below it, the findings stand in three groups, **Urgent**, **Should fix** and **Nice to have**, one row each with its short title (its first sentence for an older finding) and its file and line. The rows are the list where your next half hour goes; each one opens its finding's own page.
 
 Next: [Reading the verdict](04-reading-the-verdict.md)

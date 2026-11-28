@@ -46,6 +46,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Core\Ai\Infrastructure\FailingWhenRead;
 use Intakt\Tests\Core\Ai\Infrastructure\NoPinnedProviderCooldowns;
+use Intakt\Tests\Core\Ai\Infrastructure\OwnersOrderRanking;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
@@ -259,7 +260,7 @@ final class ScriptedRound
 
     private function accountOf(Provider $provider, PlatformInterface $platform): PlatformInterface
     {
-        return new AccountFailoverPlatform($provider, [Account::DEFAULT => $platform], $this->cooldowns, new NativeClock(), new NullLogger(), new NoPinnedProviderCooldowns());
+        return new AccountFailoverPlatform($provider, [Account::DEFAULT => $platform], $this->cooldowns, new NativeClock(), new NullLogger(), new NoPinnedProviderCooldowns(), new OwnersOrderRanking());
     }
 
     private function reviewer(): ReviewerAgent

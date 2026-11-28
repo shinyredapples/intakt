@@ -68,6 +68,18 @@ final class DoctrineHoldsTest extends KernelTestCase
         self::assertTrue($this->holds->isCoolingDown($this->claude('main')));
     }
 
+    public function testACooldownNamesTheEndOfTheLatestHoldStillAhead(): void
+    {
+        $this->cool($this->claude('main'), '+1 hour');
+        $this->cool($this->claude('main'), '+5 hours');
+        $this->cool($this->claude('main'), '+2 hours');
+
+        self::assertEquals($this->later('+5 hours'), $this->holds->coolingDownUntil($this->claude('main')));
+        self::assertNull($this->holds->coolingDownUntil($this->claude('team')));
+        $this->clock->sleep(5 * 3600);
+        self::assertNull($this->holds->coolingDownUntil($this->claude('main')));
+    }
+
     public function testAResetAlreadyPassedCoolsNothingDown(): void
     {
         self::assertSame(ReadingOutcome::ResetAlreadyPassed, $this->holds->coolDown($this->claude('main'), $this->clock->now()));

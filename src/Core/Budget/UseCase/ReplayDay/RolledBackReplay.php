@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
+use Intakt\Core\Budget\Domain\MeasuredRoomRanking;
 use Intakt\Core\Budget\Domain\OutageWatch;
 use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
 use Intakt\Core\Budget\Infrastructure\AccountReadingLock;
@@ -70,9 +71,10 @@ final readonly class RolledBackReplay
         $measured = new DoctrineMeasuredUse($this->entities, $clock, $events, $accountLock);
         $holds = new DoctrineHolds($this->entities, $clock);
         $events->addListener(UsageReadingsStayedAway::class, new DoctrineOutageNotices($this->entities, $this->locks, $logger, $accountLock)->noticeOnce(...));
-        $guard = new BudgetGuard($holds, new CeilingStartGuard($measured, $clock, $this->ceilings), new OutageWatch($measured, $clock, $events), $this->halts);
+        $ceilings = new CeilingStartGuard($measured, $clock, $this->ceilings);
+        $guard = new BudgetGuard($holds, $ceilings, new OutageWatch($measured, $clock, $events), $this->halts);
 
-        return new DayReplay($measured, $holds, $guard);
+        return new DayReplay($measured, $holds, $guard, new MeasuredRoomRanking($holds, $ceilings));
     }
 
     // The clock never steps back, so a reading's age and every reset are what the day would have shown.
