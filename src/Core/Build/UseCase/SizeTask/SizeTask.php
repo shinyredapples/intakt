@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\SizeTask;
 
+use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Core\Build\Contract\ReadinessGap;
 use Intakt\Core\Build\Contract\SizingRequest;
 use Intakt\Core\Build\Contract\SizingVerdict;
@@ -55,7 +56,7 @@ final readonly class SizeTask
             throw TaskNotSized::unreadable($project, $number, $failure->getMessage());
         }
 
-        if (null === $task) {
+        if (!$task instanceof ListedIssue) {
             throw TaskNotSized::unreadable($project, $number, 'it is not an open issue');
         }
 

@@ -100,7 +100,7 @@ final class SymfonyAiSizingVendorTest extends KernelTestCase
         $limited = static fn (): never => throw new RateLimitExceededException(30);
 
         try {
-            (void) $this->vendor($limited, $ledger)->size('alpha', $this->request());
+            $this->vendor($limited, $ledger)->size('alpha', $this->request());
             self::fail('A failed sizing call must stay an error, never a verdict.');
         } catch (ProviderRateLimited $rateLimited) {
             self::assertSame(30, $rateLimited->retryAfterSeconds);
