@@ -29,13 +29,19 @@ final readonly class BuildUsage
      */
     public static function fromCounts(array $counts): ?self
     {
-        [$input, $output, $cacheRead, $cacheCreation] = array_map(static fn (string $name): ?int => self::wholeCount($counts, $name), self::COUNTS);
+        $whole = [];
 
-        if (null === $input || null === $output || null === $cacheRead || null === $cacheCreation) {
-            return null;
+        foreach (self::COUNTS as $name) {
+            $count = self::wholeCount($counts, $name);
+
+            if (null === $count) {
+                return null;
+            }
+
+            $whole[] = $count;
         }
 
-        return new self($input, $output, $cacheRead, $cacheCreation);
+        return new self(...$whole);
     }
 
     public function total(): int
