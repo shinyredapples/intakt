@@ -27,10 +27,21 @@ final class RouteNamesGate implements RunsTheChangesCode
             return GateResult::failedBecause($this->name(), 'bin/console not found, so the routes cannot be read');
         }
 
-        $result = $workspace->command(
-            [PHP_BINARY, $console, 'debug:router', '--format=json', '--env='.self::ENVIRONMENT, '--no-ansi', '--no-interaction'],
-            ['APP_DEBUG' => false, 'SHELL_VERBOSITY' => false],
-        );
+        $cache = ScratchDirectory::create('intakt-routes');
+
+        if (!$cache instanceof ScratchDirectory) {
+            return GateResult::failedBecause($this->name(), 'no temporary cache directory could be created, so the routes cannot be read');
+        }
+
+        try {
+            // Because a warmed prod container is never compiled again, it can hold routes the tree no longer has; each run builds the kernel in a cache of its own.
+            $result = $workspace->command(
+                [PHP_BINARY, $console, 'debug:router', '--format=json', '--env='.self::ENVIRONMENT, '--no-ansi', '--no-interaction'],
+                ['APP_CACHE_DIR' => $cache->path, 'APP_BUILD_DIR' => $cache->path, 'APP_DEBUG' => false, 'SHELL_VERBOSITY' => false],
+            );
+        } finally {
+            $cache->discard();
+        }
 
         if (!$result->succeeded()) {
             return GateResult::failedBecause($this->name(), 'debug:router exited with '.$result->exitCode.': '.$result->firstErrorLine());
@@ -60,11 +71,11 @@ final class RouteNamesGate implements RunsTheChangesCode
         $routes = new RouteCollection();
 
         foreach ($listed as $name => $route) {
-            if (!is_string($name) || !is_array($route) || !is_string($route['path'] ?? null) || !is_array($route['defaults'] ?? [])) {
+            if (!is_string($name) || !is_array($route) || !is_string($route['path'] ?? null) || !is_array($route['defaults'] ?? null)) {
                 return null;
             }
 
-            $routes->add($name, new Route($route['path'], $route['defaults'] ?? []));
+            $routes->add($name, new Route($route['path'], $route['defaults']));
         }
 
         return $routes;

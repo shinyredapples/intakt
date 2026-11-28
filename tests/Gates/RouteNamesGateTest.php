@@ -33,6 +33,31 @@ final class RouteNamesGateTest extends SandboxTestCase
         self::assertTrue($run->passed('routes'), $run->output());
     }
 
+    public function testARouteRenamedAfterAnEarlierRunIsReadFromTheChangedKernel(): void
+    {
+        $sandbox = $this->kernelSandbox();
+        $sandbox->write('src/Kernel.php', $this->kernelNamingTheRouteInItsContainer("'dashboard_play_demo'"));
+        $warmed = $sandbox->check('--only=routes');
+        self::assertTrue($warmed->passed('routes'), $warmed->output());
+        $sandbox->write('src/Kernel.php', $this->kernelNamingTheRouteInItsContainer(self::MISNAMED));
+
+        $run = $sandbox->check('--only=routes');
+
+        self::assertTrue($run->failed('routes'), $run->output());
+        self::assertStringContainsString('so it must be named "dashboard_play_demo"', $run->findingsOf('routes'));
+    }
+
+    public function testARouteListedWithoutItsDefaultsFailsTheGate(): void
+    {
+        $sandbox = $this->kernelSandbox();
+        $sandbox->write('bin/console', "<?php\necho '{\"dashboard_wrong\":{\"path\":\"/probe\",\"defaults\":null}}';\n");
+
+        $run = $sandbox->check('--only=routes');
+
+        self::assertTrue($run->failed('routes'), $run->output());
+        self::assertStringContainsString('debug:router printed no route list in JSON', $run->findingsOf('routes'));
+    }
+
     public function testAConsoleThatCannotListTheRoutesFailsTheGate(): void
     {
         $sandbox = $this->kernelSandbox();
@@ -61,6 +86,15 @@ final class RouteNamesGateTest extends SandboxTestCase
 
         self::assertTrue($run->failed('routes'), $run->output());
         self::assertStringContainsString('bin/console not found', $run->findingsOf('routes'));
+    }
+
+    // Because a route name taken from the compiled container stays in a warmed cache, where one written in configureRoutes is read again on every listing.
+    private function kernelNamingTheRouteInItsContainer(string $name): string
+    {
+        $kernel = (string) file_get_contents(__DIR__.'/Fixtures/'.self::FIXTURE.'/src/Kernel.php.fixture');
+        $kernel =str_replace("'http_method_override' => false]);", "'http_method_override' => false]);\n        \$container->parameters()->set('fixture.route_name', ".$name.');', $kernel);
+
+        return str_replace("\$routes->add('dashboard_show_demo'", "\$routes->add(\$this->getContainer()->getParameter('fixture.route_name')", $kernel);
     }
 
     private function kernelSandbox(): Sandbox

@@ -420,7 +420,7 @@ A route's name says where its controller lives, so the `routes` gate of `bin/che
 - `Route "<name>" is served by <controller>, so it must be named "<expected>" (<module>_<use_case>)`: rename the route to the expected name, or move the controller into the `UseCase/<Name>/` folder the name says. A second action of one controller gets its own use case folder and invokable controller;
 - `Route "<name>" is served by <controller>, which is not in a UseCase/<Name>/ folder directly inside its module`: move the controller into `src/Core/<Module>/UseCase/<Name>/` or `src/Plugin/<Module>/UseCase/<Name>/`; a folder nested deeper, such as `src/Core/Dashboard/Pages/UseCase/ShowDemo/`, does not count.
 
-A tree without `bin/console` fails the gate, and so does a console that cannot list its routes (the finding names the exit code and the first error line). Run `php bin/console debug:router --show-controllers` to see each route's controller.
+The gate builds the kernel in a new temporary cache folder on each run, so a warmed `var/cache/prod` cannot hide a renamed route. A tree without `bin/console` fails the gate, and so does a console that cannot list its routes (the finding names the exit code and the first error line). Run `php bin/console debug:router --show-controllers` to see each route's controller.
 
 ## When `bin/check` reports a magic method
 
