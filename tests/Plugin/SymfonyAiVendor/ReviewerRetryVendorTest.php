@@ -50,6 +50,7 @@ use Intakt\Plugin\Vendor\Contract\ProviderUnreachable;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
 use Intakt\Tests\Core\Ai\Infrastructure\NoPinnedProviderCooldowns;
+use Intakt\Tests\Core\Ai\Infrastructure\OwnersOrderRanking;
 use Intakt\Tests\Core\Review\Contract\RecordedAnswer;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
@@ -342,7 +343,7 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         if ($onAccounts) {
-            $platform = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $platform], new NoCooldowns(), new MockClock(self::NOW), new NullLogger(), new NoPinnedProviderCooldowns());
+            $platform = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $platform], new NoCooldowns(), new MockClock(self::NOW), new NullLogger(), new NoPinnedProviderCooldowns(), new OwnersOrderRanking());
         }
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]), new NoCooldowns(), new NullLogger());
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));

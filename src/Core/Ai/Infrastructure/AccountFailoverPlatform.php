@@ -50,7 +50,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         private ClockInterface $clock,
         private LoggerInterface $logger,
         private PinnedProviderCooldowns $pinnedCooldowns,
-        private ?AccountRanking $ranking = null,
+        private AccountRanking $ranking,
     ) {
         $this->modelWaits = new ModelWaits($provider, array_keys($platforms), $cooldowns, $pinnedCooldowns);
     }
@@ -102,7 +102,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return $this->modelWaits->perAccount($routerProvider);
     }
 
-    // The accounts with no cooldown, ranked by measured room at this start; without a ranking they keep the owner's order.
+    // Only the accounts with no cooldown are ranked, because the ranking reads measured room and holds but not this provider's cooldowns.
     /**
      * @param array<string, int> $waits
      */
@@ -115,7 +115,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             }
         }
 
-        return $this->ranking?->rank($accounts) ?? new RankedAccounts($accounts, []);
+        return $this->ranking->rank($accounts);
     }
 
     /**

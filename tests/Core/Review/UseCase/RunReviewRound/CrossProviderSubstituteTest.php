@@ -54,6 +54,7 @@ use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\FailingWhenRead;
 use Intakt\Tests\Core\Ai\Infrastructure\NoPinnedProviderCooldowns;
+use Intakt\Tests\Core\Ai\Infrastructure\OwnersOrderRanking;
 use Intakt\Tests\Core\Ai\Infrastructure\RecordingCalls;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
@@ -267,7 +268,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
     {
         $substitutes = $substituteProvider instanceof Provider ? [['provider' => $substituteProvider->value, 'model' => RoundFixture::SUBSTITUTE_MODEL]] : [];
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => RoundFixture::MODEL, 'substitutes' => $substitutes]]]], []);
-        $accounts = static fn (Provider $provider, PlatformInterface $platform, AccountCooldownWindows $cooldowns): PlatformInterface => new AccountFailoverPlatform($provider, [Account::DEFAULT => $platform], $cooldowns, new NativeClock(), new NullLogger(), new NoPinnedProviderCooldowns());
+        $accounts = static fn (Provider $provider, PlatformInterface $platform, AccountCooldownWindows $cooldowns): PlatformInterface => new AccountFailoverPlatform($provider, [Account::DEFAULT => $platform], $cooldowns, new NativeClock(), new NullLogger(), new NoPinnedProviderCooldowns(), new OwnersOrderRanking());
         $platforms = new ServiceLocator([
             Provider::Anthropic->value => fn (): PlatformInterface => $accounts(Provider::Anthropic, $this->recording(Provider::Anthropic, $own), $this->cooldowns),
             ($substituteProvider ?? Provider::OpenAi)->value => fn (): PlatformInterface => $accounts($substituteProvider ?? Provider::OpenAi, $this->recording($substituteProvider ?? Provider::OpenAi, $substitute), $this->cooldowns),
