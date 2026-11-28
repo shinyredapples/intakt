@@ -98,6 +98,31 @@ final class UpdateMirrorBelowTheDiskFloorsTest extends TestCase
         self::assertFileDoesNotExist($this->mirrors.'/alpha.git/HEAD');
     }
 
+    public function testAMirrorRemovedWhileItsDiskIsMeasuredIsNotClonedAgainIntoAMirrorsFolderBelowTheFloor(): void
+    {
+        $path = $this->update();
+        $reader = self::createStub(FreeSpaceReader::class);
+        $reader->method('freeInodes')->willReturn(self::INODES);
+        $reader->method('freeBytes')->willReturnCallback(function (string $folder) use ($path): int {
+            if ($folder !== $path) {
+                return 0;
+            }
+
+            new Filesystem()->rename($path, $this->mirrors.'/moved.git');
+
+            return self::BYTES;
+        });
+
+        try {
+            $this->updateReadingThrough($reader);
+            self::fail('The update cloned into staging in a mirrors folder it did not measure.');
+        } catch (MirrorNotUpdated $failed) {
+            self::assertStringContainsString('changed while its disk was measured', $failed->getMessage());
+        }
+
+        self::assertSame(['moved.git'], array_values(array_diff(scandir($this->mirrors), ['.', '..'])));
+    }
+
     public function testAFolderThatIsNoMirrorIsReplacedWhenOnlyThatFolderReadsBelowTheFloor(): void
     {
         new Filesystem()->mkdir($this->mirrors.'/alpha.git');

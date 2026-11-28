@@ -76,6 +76,14 @@ final class GitBuildCheckoutTest extends TestCase
         $this->checkout(new Filesystem())->updateMirror('../alpha', $this->remote->path);
     }
 
+    public function testAProjectNameThatIsNoFolderNameFailsTheMirrorRefreshWithItsReason(): void
+    {
+        $this->expectException(BuildCheckoutFailed::class);
+        $this->expectExceptionMessageIsOrContains('"../alpha" is not a project name that can be a folder name');
+
+        $this->checkout(new Filesystem())->refreshMirror('../alpha', $this->remote->path);
+    }
+
     public function testATaskBranchThatIsMainFailsTheCloneWithItsReason(): void
     {
         $this->checkout(new Filesystem())->updateMirror('alpha', $this->remote->path);

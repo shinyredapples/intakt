@@ -58,9 +58,11 @@ final readonly class UpdateMirror
     public function update(string $project, string $remote): string
     {
         $path = $this->mirrors->pathOf($project);
-        $this->holdBelowTheDiskFloors($path);
+        $mirror = $this->isMirror($path);
+        $this->holdBelowTheDiskFloors($path, $mirror);
+        $this->mustStillBe($path, $mirror);
 
-        return $this->bringUpToDate($project, $remote, $path);
+        return $this->bringUpToDate($project, $remote, $path, $mirror);
     }
 
     // Never held below a disk floor, because it serves work already running, which a floor does not cut.
@@ -75,13 +77,15 @@ final readonly class UpdateMirror
      */
     public function refresh(string $project, string $remote): string
     {
-        return $this->bringUpToDate($project, $remote, $this->mirrors->pathOf($project));
+        $path = $this->mirrors->pathOf($project);
+
+        return $this->bringUpToDate($project, $remote, $path, $this->isMirror($path));
     }
 
-    private function holdBelowTheDiskFloors(string $path): void
+    private function holdBelowTheDiskFloors(string $path, bool $mirror): void
     {
         // Because the floors guard the folder the update writes to: a fetch fills the mirror itself, which may be mounted on a disk of its own, while a first clone or the replacement of a folder that is no mirror goes to staging in the mirrors folder.
-        $folder = NearestFolder::of($this->isMirror($path) ? $path : $this->mirrors->directory);
+        $folder = NearestFolder::of($mirror ? $path : $this->mirrors->directory);
 
         try {
             $hold = $this->disk->holdAt($folder);
@@ -97,11 +101,19 @@ final readonly class UpdateMirror
         }
     }
 
-    private function bringUpToDate(string $project, string $remote, string $path): string
+    private function mustStillBe(string $path, bool $mirror): void
+    {
+        // Because the measured folder follows from that answer: a mirror removed or published during the reading would send the write to a disk that was not measured. The next update measures again.
+        if ($this->isMirror($path) !== $mirror) {
+            throw MirrorNotUpdated::at($path, 'the mirror changed while its disk was measured');
+        }
+    }
+
+    private function bringUpToDate(string $project, string $remote, string $path, bool $mirror): string
     {
         $remote = $this->fromMirrorsDirectory($remote);
 
-        if ($this->isMirror($path)) {
+        if ($mirror) {
             $this->fill($path, $remote);
 
             return $path;
