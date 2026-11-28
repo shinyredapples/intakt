@@ -444,6 +444,77 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
         self::assertSame('tests/Gates/Fixtures/PartialChecks.php:7 intakt.testMethodSentence Test method Intakt\Sample\PartialChecks::testGo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
     }
 
+    public function testAShortAliasThroughAWrapperTraitThatIsNotAnalyzedIsReportedAtTheAliasInTheTestClass(): void
+    {
+        $sandbox = $this->emptySandbox();
+        // because the gate excludes its fixtures folder, a wrapper there stands for an unchanged file a changed-files run leaves out
+        $sandbox->write('tests/Gates/Fixtures/UnanalyzedWrapper.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait UnanalyzedLeaf { public function verify(): void {} }\ntrait UnanalyzedWrapper { use UnanalyzedLeaf; }\n");
+        $sandbox->write('tests/WrappedTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class WrappedTest extends \PHPUnit\Framework\TestCase
+        {
+            use UnanalyzedWrapper { verify as testGo; }
+        }
+        PHP_WRAP);
+        // because the analysis finds a class it does not analyze only once PHP has loaded it
+        require_once $sandbox->root.'/tests/Gates/Fixtures/UnanalyzedWrapper.php';
+
+        self::assertSame('tests/WrappedTest.php:7 intakt.testMethodSentence Test method Intakt\Sample\WrappedTest::testGo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testTwoAliasUseBlocksOnOneLineAreBothComposed(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/TwoUsesTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        trait TwoUsesChecks { public function verify(): void {} }
+
+        final class TwoUsesTest extends \PHPUnit\Framework\TestCase
+        {
+            use TwoUsesChecks { verify as testGo; } use TwoUsesChecks { verify as testTheCheckRuns; }
+        }
+        PHP_WRAP);
+
+        self::assertSame('tests/TwoUsesTest.php:9 intakt.testMethodSentence Test method Intakt\Sample\TwoUsesTest::testGo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testATestMethodTheClassHidesDoesNotMakeAShortPublicAliasAProvider(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/HiddenConsumerTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        use PHPUnit\Framework\Attributes\DataProvider;
+
+        trait HiddenConsumerChecks
+        {
+            #[DataProvider('testData')]
+            public function testItUsesRows(int $row): void {}
+
+            public static function rows(): array { return [[1]]; }
+        }
+
+        final class HiddenConsumerTest extends \PHPUnit\Framework\TestCase
+        {
+            use HiddenConsumerChecks {
+                testItUsesRows as private;
+                testItUsesRows as consume;
+                rows as testData;
+            }
+        }
+        PHP_WRAP);
+
+        self::assertSame('tests/HiddenConsumerTest.php:20 intakt.testMethodSentence Test method Intakt\Sample\HiddenConsumerTest::testData()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
     public function testAShortTestMethodOfATraitUnderSourceUsedWithoutAliasPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('test-method-src-trait-without-alias');

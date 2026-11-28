@@ -17,7 +17,9 @@ use PHPUnit\Framework\Attributes\DataProviderExternal;
 use PHPUnit\Framework\TestCase;
 
 /**
- * @implements Collector<InClassNode, array{references: list<array{string, string, string}>, runs: list<array{string, string, string}>}>
+ * @phpstan-type Providers array{references: list<array{string, string, string, string}>, runs: list<array{string, string, string}>}
+ *
+ * @implements Collector<InClassNode, Providers>
  */
 final readonly class TestProviderCollector implements Collector
 {
@@ -31,7 +33,7 @@ final readonly class TestProviderCollector implements Collector
     }
 
     /**
-     * @return array{references: list<array{string, string, string}>, runs: list<array{string, string, string}>}|null
+     * @return Providers|null
      */
     public function processNode(Node $node, Scope $scope): ?array
     {
@@ -45,7 +47,8 @@ final readonly class TestProviderCollector implements Collector
         $native = $class->getNativeReflection();
         // because PHPUnit ignores a provider attribute on a method it does not run as a test, such as a private helper
         $tests = array_values(array_filter($native->getMethods(), PhpUnitTestMethod::isRun(...)));
-        $references = array_merge(...array_map(fn (ReflectionMethod $test): array => [...$this->providersInTheClass($test, $native), ...$this->externalProviders($test)], $tests));
+        // each reference names the test that makes it, because reflection may call public a test that a trait `use` block hides (upstream/phpstan-trait-alias-drops-visibility/), and the rule drops what the composed trait methods show is not run
+        $references = array_merge(...array_map(fn (ReflectionMethod $test): array => array_map(static fn (array $reference): array => [...$reference, $test->getName()], [...$this->providersInTheClass($test, $native), ...$this->externalProviders($test)]), $tests));
         $runs = $this->staticRuns($tests, $class->getName());
 
         return [] === $references && [] === $runs ? null : ['references' => $references, 'runs' => $runs];

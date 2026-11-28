@@ -34,11 +34,12 @@ final readonly class TestMethodSentenceRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
+        $compositions = $this->compositions($node);
         $collected = [
             ...array_merge(...array_values($node->get(TestMethodCollector::class))),
-            ...$this->aliasedNames($node),
+            ...$this->aliasedNames($node, $compositions),
         ];
-        $providers = array_merge(...array_values($node->get(TestProviderCollector::class)));
+        $providers = $this->providersOfRunTests($node, $compositions);
         $findings = [];
 
         foreach ($collected as [$file, $line, $owner, $class, $method, $mayBeProvider]) {
@@ -52,18 +53,43 @@ final readonly class TestMethodSentenceRule implements Rule
     }
 
     /**
+     * @return array<string, array{class: Place, methods: array<string, ComposedTraitMethod>}>
+     */
+    private function compositions(CollectedDataNode $node): array
+    {
+        return array_map(
+            static fn (array $blocks): array => ['class' => $blocks[0]['class'], 'methods' => new TraitComposition($blocks)->methodsOf($blocks[0]['class'][2])],
+            $this->useBlocksByClass($node),
+        );
+    }
+
+    /**
+     * @return array<string, non-empty-list<UseBlock>>
+     */
+    private function useBlocksByClass(CollectedDataNode $node): array
+    {
+        $blocks = [];
+
+        foreach (array_merge(...array_values($node->get(TraitAliasCollector::class))) as $block) {
+            $blocks[strtolower($block['class'][2])][] = $block;
+        }
+
+        return $blocks;
+    }
+
+    /**
+     * @param array<string, array{class: Place, methods: array<string, ComposedTraitMethod>}> $compositions
+     *
      * @return list<array{string, int, string, string, string, bool}>
      */
-    private function aliasedNames(CollectedDataNode $node): array
+    private function aliasedNames(CollectedDataNode $node, array $compositions): array
     {
         $lines = $this->traitMethodLines($node);
         $names = new SentenceTestName();
         $judged = [];
 
-        foreach ($this->useBlocksByClass($node) as $blocks) {
-            $class = $blocks[0]['class'];
-
-            foreach (new TraitComposition($blocks)->methodsOf($class[2]) as $method) {
+        foreach ($compositions as ['class' => $class, 'methods' => $methods]) {
+            foreach ($methods as $method) {
                 $place = $this->placeOf($method, $class, $lines);
 
                 if (null !== $place && $method->isRunAsTest() && !$names->isSentence($method->name())) {
@@ -87,20 +113,6 @@ final readonly class TestMethodSentenceRule implements Rule
         }
 
         return $lines;
-    }
-
-    /**
-     * @return array<string, non-empty-list<UseBlock>>
-     */
-    private function useBlocksByClass(CollectedDataNode $node): array
-    {
-        $blocks = [];
-
-        foreach (array_merge(...array_values($node->get(TraitAliasCollector::class))) as $block) {
-            $blocks[strtolower($block['class'][2])][] = $block;
-        }
-
-        return $blocks;
     }
 
     // because a name the trait declares is one name to fix in the trait when the trait lives under tests/, and only the alias can be fixed for a trait outside tests/ (one used without any alias is not judged), while an alias declared outside tests/ is fixed in the test class that takes it
@@ -128,13 +140,33 @@ final readonly class TestMethodSentenceRule implements Rule
         return str_starts_with($file, $this->root.'/tests/');
     }
 
+    // because a test the class takes from a trait is run only when the composition of its `use` blocks keeps it public, the same source that decides which alias is judged
     /**
-     * @param list<array{references: list<array{string, string, string}>, runs: list<array{string, string, string}>}> $providers
+     * @param array<string, array{class: Place, methods: array<string, ComposedTraitMethod>}> $compositions
+     *
+     * @return array{references: list<array{string, string, string}>, runs: list<array{string, string, string}>}
+     */
+    private function providersOfRunTests(CollectedDataNode $node, array $compositions): array
+    {
+        $providers = array_merge(...array_values($node->get(TestProviderCollector::class)));
+        $references = array_filter(
+            array_merge(...array_column($providers, 'references')),
+            static fn (array $reference): bool => ($compositions[strtolower($reference[2])]['methods'][strtolower($reference[3])] ?? null)?->isRunAsTest() ?? true,
+        );
+
+        return [
+            'references' => array_map(static fn (array $reference): array => [$reference[0], $reference[1], $reference[2]], array_values($references)),
+            'runs' => array_merge(...array_column($providers, 'runs')),
+        ];
+    }
+
+    /**
+     * @param array{references: list<array{string, string, string}>, runs: list<array{string, string, string}>} $providers
      */
     private function isProvider(string $class, string $method, array $providers): bool
     {
-        $references = $this->ofMethod(array_merge(...array_column($providers, 'references')), $method);
-        $runs = $this->ofMethod(array_merge(...array_column($providers, 'runs')), $method);
+        $references = $this->ofMethod($providers['references'], $method);
+        $runs = $this->ofMethod($providers['runs'], $method);
 
         // because a concrete class that inherits a provider without naming it runs it as a plain test
         return $this->holds(array_column($references, 0), $class) && array_all($runs, fn (array $run): bool => 0 !== strcasecmp($run[0], $class) || $this->holds(array_column($references, 2), $run[2]));

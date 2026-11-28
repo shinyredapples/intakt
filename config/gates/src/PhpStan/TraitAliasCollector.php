@@ -18,7 +18,8 @@ use PHPStan\Reflection\ClassReflection;
 /**
  * @phpstan-type Place array{string, int, string}
  * @phpstan-type MethodFact array{name: string, line: int, visibility: int, abstract: bool, marked: bool, provider: bool}
- * @phpstan-type UsedTrait array{name: string, file: string, methods: list<MethodFact>}
+ * @phpstan-type TakenMethod array{fact: MethodFact, source: Place}
+ * @phpstan-type UsedTrait array{name: string, file: string, methods: list<MethodFact>, taken: list<TakenMethod>}
  * @phpstan-type AliasRecord array{trait: string|null, method: string, name: string|null, visibility: int, line: int}
  * @phpstan-type Exclusion array{trait: string, method: string}
  * @phpstan-type UseBlock array{class: Place, declarer: array{string, string}, statement: string, own: list<string>, traits: list<UsedTrait>, aliases: list<AliasRecord>, exclusions: list<Exclusion>}
@@ -56,7 +57,8 @@ final readonly class TraitAliasCollector implements Collector
         return [
             'class' => [(string) $class->getFileName(), $class->getNativeReflection()->getStartLine(), $class->getName()],
             'declarer' => [(string) $declarer->getFileName(), $declarer->getName()],
-            'statement' => $node->getStartLine().':'.implode(',', array_map(static fn (Name $trait): string => $trait->toString(), $node->traits)),
+            // the file position tells apart two `use` statements on one line, which PHP applies one after the other
+            'statement' => $node->getStartFilePos().':'.$node->getStartLine().':'.implode(',', array_map(static fn (Name $trait): string => $trait->toString(), $node->traits)),
             'own' => array_map(static fn (ReflectionMethod $method): string => strtolower($method->getName()), $this->ownMethods($declarer)),
             'traits' => array_map($this->usedTrait(...), array_values($declarer->getTraits())),
             'aliases' => $this->aliases($node),
@@ -81,11 +83,25 @@ final readonly class TraitAliasCollector implements Collector
      */
     private function usedTrait(ClassReflection $trait): array
     {
+        $own = $this->ownMethods($trait);
+
         return [
             'name' => $trait->getName(),
             'file' => (string) $trait->getFileName(),
-            'methods' => array_map(fn (ReflectionMethod $method): array => $this->fact($trait, $method), $this->ownMethods($trait)),
+            'methods' => array_map(fn (ReflectionMethod $method): array => $this->fact($trait, $method), $own),
+            'taken' => array_map(fn (ReflectionMethod $method): array => $this->takenFact($trait, $method), array_values(array_udiff($trait->getNativeReflection()->getMethods(), $own, static fn (ReflectionMethod $left, ReflectionMethod $right): int => strcasecmp($left->getName(), $right->getName())))),
         ];
+    }
+
+    // because a changed-files run may leave out a wrapper trait's own `use` block, the methods the wrapper takes from its traits are kept as the wrapper exposes them, so the composition still reaches them
+    /**
+     * @return TakenMethod
+     */
+    private function takenFact(ClassReflection $trait, ReflectionMethod $method): array
+    {
+        $declarer = $method->getBetterReflection()->getDeclaringClass();
+
+        return ['fact' => $this->fact($trait, $method), 'source' => [(string) $declarer->getFileName(), (int) $method->getStartLine(), $declarer->getName()]];
     }
 
     /**

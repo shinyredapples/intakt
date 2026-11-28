@@ -87,7 +87,24 @@ final readonly class TraitComposition
             $declared[strtolower($fact['name'])] = new ComposedTraitMethod($fact, [$trait['file'], $fact['line'], $trait['name']]);
         }
 
-        return $declared + $this->takenBy($trait['name'], $path);
+        return $declared + (isset($this->uses[strtolower($trait['name'])]) ? $this->takenBy($trait['name'], $path) : $this->takenAsExposed($trait));
+    }
+
+    // because a wrapper trait whose `use` block a changed-files run did not analyze has no collected block, its taken methods come as the wrapper exposes them, so their names are not lost
+    /**
+     * @param UsedTrait $trait
+     *
+     * @return array<string, ComposedTraitMethod>
+     */
+    private function takenAsExposed(array $trait): array
+    {
+        $taken = [];
+
+        foreach ($trait['taken'] as $method) {
+            $taken[strtolower($method['fact']['name'])] = new ComposedTraitMethod($method['fact'], $method['source']);
+        }
+
+        return $taken;
     }
 
     // because PHP copies a method under each alias even when insteadof excludes its own name, and only a method that is not excluded keeps that name, with the last visibility the block gives it
