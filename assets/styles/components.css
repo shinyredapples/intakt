@@ -306,6 +306,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .conn[hidden], .offline-marker[hidden], .meta .frozen-at[hidden] { display: none; }
 
 @media (max-width: 760px) {
+  /* The tab bar is fixed over the page's foot, so focus has to scroll a control up past it or the bar hides the control's lower edge and its ring. */
+  :root { scroll-padding-bottom: calc(var(--bar) + env(safe-area-inset-bottom) + var(--s8)); }
   .btn, .btn.sm, .linkbtn, .toast button { min-height: 44px; }
   .col-hide { display: none; }
   .icon-btn { width: 44px; height: 44px; }
@@ -314,7 +316,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .seg button { flex: 1; height: var(--tab-h); }
   .input, .select { height: 48px; }
   /* overflow-x: auto clips on every side, so the padding keeps the 2px focus ring and its 2px offset inside the box; the negative inline margin keeps the chips lined up with the page. */
-  .filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-block: var(--s4); padding-inline: var(--s4); margin-inline: calc(-1 * var(--s4)); }
+  /* Focus scrolls a control only to the scrollport's edge, so without the scroll padding a chip met in the middle of the row loses the side of its ring. */
+  .filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-block: var(--s4); padding-inline: var(--s4); scroll-padding-inline: var(--s4); margin-inline: calc(-1 * var(--s4)); }
   .filters .input { flex: none; min-width: 200px; height: 48px; }
   .filters #history-project { display: block; flex: none; width: auto; max-width: 60%; height: 48px; }
   /* The mock stacks a History row's cells on a phone. The headers are clipped like .sr-only rather than removed, so a screen reader still names a stacked cell, also one that reads only "None". A row the project filter or a chip hides keeps display: none, which the row rule would otherwise beat. */
@@ -923,7 +926,8 @@ a.lane:hover { background: var(--tint-2); }
 [data-tour="closed"] .tour-caption { display: none; }
 /* One row of 44 px on a phone: the dots become a bar along its top edge, the line links to the review and Close stays; Pause is for a desk. While it shows, the tab bar is 56 px with 48 px tabs, so the two together stay at 100 px above the safe area. */
 @media (max-width: 760px) {
-  :root:has(.tour-caption):not([data-tour="closed"]) { --bar: 56px; }
+  /* The caption is sticky above the tab bar, so focus keeps a control above its 44 px row as well. */
+  :root:has(.tour-caption):not([data-tour="closed"]) { --bar: 56px; scroll-padding-bottom: calc(var(--bar) + env(safe-area-inset-bottom) + var(--s48) + var(--s8)); }
   :root:has(.tour-caption):not([data-tour="closed"]) .rail .nav { height: 48px; }
   .tour-caption { bottom: calc(var(--bar) + env(safe-area-inset-bottom)); gap: var(--s8); min-height: 44px; padding: 0 0 0 var(--s16); border-top: 0; }
   .tour-caption .tour-dots { position: absolute; top: -1px; left: 0; right: 0; gap: 2px; }
@@ -936,6 +940,8 @@ a.lane:hover { background: var(--tint-2); }
   .tour-caption .tour-review span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .tour-caption [data-tour-pause] { display: none; }
   .tour-caption [data-tour-close] { position: relative; z-index: 1; flex: none; min-width: 44px; }
+  /* Both reach the screen's edge, so a ring drawn outside them would run off it. */
+  .tour-caption .tour-review:focus-visible, .tour-caption [data-tour-close]:focus-visible { outline-offset: -2px; }
 }
 
 /* Trends: stat tiles first, the figure big above its short label; three per row on a phone so the headline figures fill the first screen (issue 3141). */

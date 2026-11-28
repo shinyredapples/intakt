@@ -242,6 +242,34 @@ final class ComponentStylesTest extends WebTestCase
         self::assertMatchesRegularExpression('/margin-inline:\s*calc\(-1 \* var\(--s4\)\)/', $rules['.filters'] ?? '');
     }
 
+    public function testOnPhonesTheFiltersBarScrollsAFocusedControlInWithRoomForItsFocusRing(): void
+    {
+        $rules = $this->rulesOf($this->phoneBlock());
+
+        self::assertMatchesRegularExpression('/scroll-padding-inline:\s*var\(--s4\)/', $rules['.filters'] ?? '');
+    }
+
+    public function testOnPhonesFocusScrollsAControlAboveTheFixedTabBar(): void
+    {
+        $rules = $this->rulesOf($this->phoneBlock());
+
+        self::assertMatchesRegularExpression('/scroll-padding-bottom:\s*calc\(var\(--bar\) \+ env\(safe-area-inset-bottom\) \+ var\(--s8\)\)/', $rules[':root'] ?? '');
+    }
+
+    public function testOnPhonesFocusScrollsAControlAboveTheDemoCaptionToo(): void
+    {
+        $rules = $this->rulesOf($this->tourCaptionPhoneBlock());
+
+        self::assertMatchesRegularExpression('/scroll-padding-bottom:\s*calc\(var\(--bar\) \+ env\(safe-area-inset-bottom\) \+ var\(--s48\) \+ var\(--s8\)\)/', $rules[':root:has(.tour-caption):not([data-tour="closed"])'] ?? '');
+    }
+
+    public function testOnPhonesTheDemoCaptionDrawsTheFocusRingOfItsEdgeToEdgeControlsInsideThem(): void
+    {
+        $rules = $this->rulesOf($this->tourCaptionPhoneBlock());
+
+        self::assertMatchesRegularExpression('/outline-offset:\s*-2px/', $rules['.tour-caption .tour-review:focus-visible, .tour-caption [data-tour-close]:focus-visible'] ?? '');
+    }
+
     public function testNoPaddingMarginOrGapHoldsARawLengthOf4PxOrMore(): void
     {
         preg_match_all('/(?:padding|margin|gap)(?:-[a-z]+)?:\s*([^;}]+)/', (string) preg_replace('~/\*.*?\*/~s', '', $this->componentSheet()), $declarations);
@@ -261,6 +289,13 @@ final class ComponentStylesTest extends WebTestCase
     private function phoneBlock(): string
     {
         preg_match('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->componentSheet(), $phone);
+
+        return $phone[1] ?? '';
+    }
+
+    private function tourCaptionPhoneBlock(): string
+    {
+        preg_match('/@media \(max-width: 760px\) \{\n((?:  \/\*.*?\*\/\n)?  :root:has\(\.tour-caption\).*?)\n\}/s', $this->componentSheet(), $phone);
 
         return $phone[1] ?? '';
     }

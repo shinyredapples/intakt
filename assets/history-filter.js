@@ -30,6 +30,12 @@ export function filterHistory(page, phone) {
             shared.dispatchEvent(new Event('change'));
         }
     });
+    // On a phone the toolbar scrolls sideways, and a browser does not scroll a control it can partly see when it takes focus, so the cut side of its ring would stay hidden; the bar's scroll padding leaves room for the ring.
+    page.addEventListener('focusin', (event) => {
+        if (phone.matches && event.target?.closest?.(TOOLBAR)) {
+            event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        }
+    });
     page.addEventListener('intakt:project-shown', () => narrow(page, phone));
     // The shell's first run on a full load comes before this module, so its choice is read here once.
     narrow(page, phone);

@@ -316,3 +316,30 @@ test('a click or a typed key outside the toolbar changes nothing, and a page wit
     assert.deepEqual(shown(owner, cooled), [true, true]);
     assert.equal(page.none.textContent, '');
 });
+
+function focusableIn(toolbar) {
+    const scrolls = [];
+
+    return { scrolls, closest: (selector) => (selector === '[data-history-filter]' ? toolbar : null), scrollIntoView: (options) => scrolls.push(options) };
+}
+
+test('on a phone a toolbar control taking focus is scrolled fully into the sideways bar', () => {
+    const { page } = historyOfAlphaAndBeta(true);
+    const chip = focusableIn(page.toolbar);
+
+    page.listeners.focusin({ target: chip });
+
+    assert.deepEqual(chip.scrolls, [{ block: 'nearest', inline: 'nearest' }]);
+});
+
+test('on a desktop, or outside the toolbar, focus scrolls nothing', () => {
+    const { page } = historyOfAlphaAndBeta(false);
+    const chip = focusableIn(page.toolbar);
+    const outside = focusableIn(null);
+
+    page.listeners.focusin({ target: chip });
+    historyOfAlphaAndBeta(true).page.listeners.focusin({ target: outside });
+    page.listeners.focusin({ target: null });
+
+    assert.deepEqual([chip.scrolls, outside.scrolls], [[], []]);
+});
