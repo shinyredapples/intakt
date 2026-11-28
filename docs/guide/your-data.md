@@ -42,7 +42,9 @@ In the container image, all of this lives in `/app/var/data`, which you must mou
 
 ## When the disk runs low
 
-Planned: Intakt will pause new work when a disk runs low on space or on files (inodes), so a checkout or a save does not fail half-way. The pause clears on its own once space is back, and work already running is not cut. The two limits are `disk.min_free_bytes` and `disk.min_free_inodes` in the config file. The check exists, but no work step asks it yet.
+Intakt pauses new work when a disk runs low on space or on files (inodes), so a checkout does not fail half-way. Two steps check this before they start: updating a project's copy of the repository and making the folder a build works in. Below a limit they stop with the reason and make nothing, and the next try goes ahead once space is back. Work already running is not cut. The two limits are `disk.min_free_bytes` and `disk.min_free_inodes` in the config file.
+
+Planned: showing the pause on its own, and not counting it as a failure. For now such a stop shows as a failed step.
 
 ## Backing up
 
