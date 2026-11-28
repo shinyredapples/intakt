@@ -149,10 +149,12 @@ final readonly class IgnoredFilesGate implements Gate
         }
 
         try {
-            return mb_convert_encoding($text, 'UTF-8', $encoding);
+            $decoded = mb_convert_encoding($text, 'UTF-8', $encoding);
         } catch (ValueError) {
             return null;
         }
+
+        return false === $decoded ? null : $decoded;
     }
 
     // Because git drops the carriage return before each line break of a .gitignore and its ident clean conversion collapses the `$Id: <object id> $` it wrote to `$Id$`, neither changes the rules; any other `$Id: ... $` text is a rule edit.
