@@ -63,6 +63,7 @@ final readonly class BuildTask
         private Ledger $ledger,
         private PushRemoteCheck $remoteCheck,
         private LockFactory $locks,
+        private TaskTokens $taskTokens,
     ) {
     }
 
@@ -223,14 +224,14 @@ final readonly class BuildTask
             return $outcome;
         }
 
-        // What the job hands back stays untrusted until the hand-back check, so only its verdict and its stop cause reach the ledger, both Intakt's own words.
+        // What the job hands back stays untrusted until the hand-back check, so only its verdict, its stop cause and its tokens reach the ledger, Intakt's own words and a number.
         if (!$outcome->built()) {
-            return EndedStep::of(BuildStep::BuildJob, $outcome->verdict->reason(), $outcome->stopCause);
+            return EndedStep::of(BuildStep::BuildJob, $outcome->verdict->reason(), $outcome->stopCause, $outcome->tokens);
         }
 
         $notCleared = $this->unpark($run);
 
-        return null === $notCleared ? $outcome : EndedStep::of(BuildStep::BuildJob, $notCleared, $outcome->stopCause);
+        return null === $notCleared ? $outcome : EndedStep::of(BuildStep::BuildJob, $notCleared, $outcome->stopCause, $outcome->tokens);
     }
 
     /**
@@ -317,9 +318,9 @@ final readonly class BuildTask
     private function park(BuildRun $run, ListedIssue $task, AskedQuestion $asked): BuildTaskOutcome
     {
         try {
-            $this->parkedTasks->park($run, $asked->question, $asked->stopCause);
+            $this->parkedTasks->park($run, $asked->question, $asked->stopCause, $asked->tokens);
         } catch (TaskNotParked $notParked) {
-            $this->record($run, EndedStep::of(BuildStep::BuildJob, $notParked->getMessage(), $asked->stopCause));
+            $this->record($run, EndedStep::of(BuildStep::BuildJob, $notParked->getMessage(), $asked->stopCause, $asked->tokens));
 
             return new BuildTaskOutcome(BuildStep::BuildJob, $notParked->getMessage(), $task);
         }
@@ -334,7 +335,7 @@ final readonly class BuildTask
             return $result;
         }
 
-        return EndedStep::of($step, is_string($result) ? $result : null, $result instanceof BuildJobOutcome ? $result->stopCause : null);
+        return $result instanceof BuildJobOutcome ? EndedStep::of($step, null, $result->stopCause, $result->tokens) : EndedStep::of($step, is_string($result) ? $result : null);
     }
 
     // The title on the first line and the body after it, as BuilderPrompt asks the builder to write them; fixed words for a text without a title, because the forge opens no pull request without one.
@@ -365,7 +366,7 @@ final readonly class BuildTask
         $choice = $this->routing->tierFor($request->project, BuildFacts::fromLabels($labels, new Paths()));
         $brief = new BuildBrief($task->title."\n\n".$task->body, new Decisions(), null, TaskKind::fromLabels($labels));
 
-        return new BuildJob($request->project, $request->directory, $request->branch, $brief, $choice->tier, $request->image);
+        return new BuildJob($request->project, $request->directory, $request->branch, $brief, $choice->tier, $request->image, $this->taskTokens->usedBy($request->project, $request->issue));
     }
 
     // Cleared once a later build job built, because the question an earlier one asked no longer says where the task stands.

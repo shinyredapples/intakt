@@ -18,6 +18,8 @@ final readonly class BuildJobOutcome
         public ?BuildQuestion $question = null,
         // Beside the verdict, because a stopped session still bundles what it committed and its hand-back goes through the same check as any cut session's.
         public ?BuildStopCause $stopCause = null,
+        // As the watch saw them in the log, so the task's next build counts them toward its per-task total.
+        public int $tokens = 0,
     ) {
     }
 
@@ -29,5 +31,10 @@ final readonly class BuildJobOutcome
     public function stoppedFor(?BuildStopCause $cause): self
     {
         return clone($this, ['stopCause' => $cause]);
+    }
+
+    public function using(int $tokens): self
+    {
+        return clone($this, ['tokens' => $tokens]);
     }
 }

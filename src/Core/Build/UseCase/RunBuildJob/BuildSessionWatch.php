@@ -76,8 +76,7 @@ final class BuildSessionWatch implements JobWatch
         $this->tokens = max($this->tokens, $reading->tokens);
         // A lost log counts as a session at its ceiling, so removing, replacing or locking the log stops the build instead of freezing what the watch sees.
         $sessionTokens = $this->lost ? max($this->tokens, $this->limits->ceilingTokens) : $this->tokens;
-        // The task's earlier continuations are not on the ledger yet, so the session's tokens stand for the task's.
-        $progress = new BuildProgress($sessionTokens, $this->tokens, $reading->contentFingerprint, $reading->failingTests, $reading->checkRunning);
+        $progress = new BuildProgress($sessionTokens, BuildLogEvents::plus($this->job->earlierTaskTokens, $sessionTokens), $reading->contentFingerprint, $reading->failingTests, $reading->checkRunning);
         $this->watch = $this->rule->observe($this->watch, $progress);
         $cause = $this->rule->stopCause($this->watch);
 
@@ -90,10 +89,16 @@ final class BuildSessionWatch implements JobWatch
         return true;
     }
 
-    // The CLI only appends to the log, so a log that is another file, or shorter than what was read, was changed by the builder.
+    // What this session used as far as the log showed it, for the ledger row that adds it to the task's total.
+    public function tokensUsed(): int
+    {
+        return $this->tokens;
+    }
+
+    // The CLI only appends to the log, so a log that is another file, or shorter than what was read, was changed by the builder; a missing one too, because the job's script creates it before anything else runs, long before the first look.
     private function follow(?JobOutputPiece $piece): void
     {
-        $this->lost = $piece instanceof JobOutputPiece ? $this->isAnotherLog($piece) : null !== $this->identity;
+        $this->lost = !$piece instanceof JobOutputPiece || $this->isAnotherLog($piece);
 
         if ($this->lost || !$piece instanceof JobOutputPiece) {
             return;

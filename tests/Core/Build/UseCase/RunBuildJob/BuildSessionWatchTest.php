@@ -71,10 +71,45 @@ final class BuildSessionWatchTest extends TestCase
         self::assertTrue($this->looksAt(new FollowedText(BuildLogLines::usage('m1', 50))));
     }
 
-    public function testALogThatIsNotThereYetStopsNothing(): void
+    public function testALogMissingAtTheFirstLookStopsTheBuildForTheRunawayCeiling(): void
     {
-        self::assertFalse($this->looksAt(new FollowedText(null)));
+        self::assertTrue($this->looksAt(new FollowedText(null)));
+        self::assertSame(BuildStopCause::RunawayCeiling, $this->stops->causeFor($this->job()));
+    }
+
+    public function testABuilderThatRemovesItsLogIsStillStoppedWhenItsRealTokensWouldNeverShow(): void
+    {
         self::assertFalse($this->looksAt(new FollowedText(BuildLogLines::usage('m1', 50))));
+
+        $stopped = false;
+        for ($look = 0; $look < 120 && !$stopped; ++$look) {
+            $stopped = $this->looksAt(new FollowedText(null));
+        }
+
+        self::assertTrue($stopped);
+    }
+
+    public function testTheTaskTotalCountsTheTokensOfTheTasksEarlierBuildJobs(): void
+    {
+        $this->watch = new BuildSessionWatch($this->job(700), new BuildStopRule($this->clock), $this->stops, new BuildLimits(100, 60, 500, 1000));
+
+        self::assertTrue($this->looksAt(new FollowedText(BuildLogLines::usage('m1', 400).BuildLogLines::edit('c1', 'a', 'b'))));
+        self::assertSame(BuildStopCause::PerTaskTotal, $this->stops->causeFor($this->job()));
+    }
+
+    public function testATaskWhoseEarlierAndCurrentTokensStayBelowItsTotalIsNotStopped(): void
+    {
+        $this->watch = new BuildSessionWatch($this->job(500), new BuildStopRule($this->clock), $this->stops, new BuildLimits(100, 60, 500, 1000));
+
+        self::assertFalse($this->looksAt(new FollowedText(BuildLogLines::usage('m1', 400).BuildLogLines::edit('c1', 'a', 'b'))));
+    }
+
+    public function testTheWatchReportsTheHighestTokensTheLogShowedForTheLedgerRow(): void
+    {
+        $this->looksAt(new FollowedText(BuildLogLines::usage('m1', 40)));
+        $this->looksAt(new FollowedText(BuildLogLines::usage('m1', 40).BuildLogLines::usage('m2', 30)));
+
+        self::assertSame(70, $this->watch->tokensUsed());
     }
 
     public function testALineSplitAcrossTwoLooksIsCountedOnceItEnds(): void
@@ -123,8 +158,8 @@ final class BuildSessionWatchTest extends TestCase
         return $this->watch->endsSession($log);
     }
 
-    private function job(): BuildJob
+    private function job(int $earlierTaskTokens = 0): BuildJob
     {
-        return new BuildJob('demo', 'clone', 'task', new BuildBrief('t', new Decisions(), null), Tier::Standard, 'img:1');
+        return new BuildJob('demo', 'clone', 'task', new BuildBrief('t', new Decisions(), null), Tier::Standard, 'img:1', $earlierTaskTokens);
     }
 }

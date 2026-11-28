@@ -204,14 +204,16 @@ final readonly class RunBuildJob
     // Watched while it runs, so a build over its allowance that makes no progress, or reaches a ceiling, has its session ended with the cause recorded; the job's script still bundles what was committed.
     private function outcomeOfRunning(BuildJob $job, JobSpec $spec): BuildJobOutcome
     {
+        $watch = new BuildSessionWatch($job, $this->rule, $this->stops, $this->limits);
+
         try {
-            $result = $this->jobs->run($spec, new BuildSessionWatch($job, $this->rule, $this->stops, $this->limits));
+            $result = $this->jobs->run($spec, $watch);
         } catch (JobOutputRefused) {
             // The reason is fixed because the job's log is part of what was refused, its standard error is the builder's to write, and the runner's message quotes a name the builder chose.
-            return new BuildJobOutcome(BuildVerdict::NoResult, log: self::REFUSED_OUTPUT);
+            return new BuildJobOutcome(BuildVerdict::NoResult, log: self::REFUSED_OUTPUT)->using($watch->tokensUsed());
         }
 
-        return $this->outcomeOf($result);
+        return $this->outcomeOf($result)->using($watch->tokensUsed());
     }
 
     // A failed removal is dropped only here, because the job-end failure carries the stop cause the row must keep, and the prompt is a scratch file.

@@ -44,6 +44,7 @@ use Intakt\Core\Build\UseCase\BuildTask\EndedStep;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
+use Intakt\Core\Build\UseCase\BuildTask\TaskTokens;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
@@ -111,6 +112,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(AskedQuestion::class)]
 #[UsesClass(EndedStep::class)]
 #[UsesClass(ParkedTasks::class)]
+#[UsesClass(TaskTokens::class)]
 #[UsesClass(PushRemoteCheck::class)]
 #[UsesClass(ParkedTaskRecord::class)]
 #[UsesClass(BuildQuestion::class)]
@@ -284,27 +286,26 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
     {
         new Filesystem()->remove([$this->folder.'/output/'.RunBuildJob::QUESTION, $this->folder.'/output/'.RunBuildJob::BUNDLE]);
         $this->limits = $limits;
-        $scripted = new ScriptedJobRunner($this->folder.'/output');
-        $runner = self::createStub(JobRunner::class);
-        // The mock clock moves one interval before each look, so the order of the looks is the test's and nothing waits.
-        $runner->method('run')->willReturnCallback(function (JobSpec $spec, ?JobWatch $watch) use ($scripted, $logs): JobResult {
-            self::assertInstanceOf(JobWatch::class, $watch);
-            foreach ($logs as $log) {
-                $this->clock->sleep($watch->intervalSeconds());
-                if ($watch->endsSession(new FollowedText($log))) {
-                    break;
-                }
-            }
 
-            return $scripted->run($spec);
-        });
-
-        $outcome = $this->buildTask(runner: $runner)->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
+        $outcome = $this->buildTask(runner: $this->watchedRunner($logs))->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
 
         self::assertSame(BuildStep::BuildJob, $outcome->last);
-        $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
-        self::assertIsString($payload);
-        self::assertStringEndsWith('"stop_cause":"'.$cause->value.'"}', $payload);
+        self::assertStringContainsString('"stop_cause":"'.$cause->value.'"', $this->lastStepPayload());
+    }
+
+    public function testATasksSecondBuildJobIsStoppedForThePerTaskTotalByTheTokensItsFirstBuildJobUsed(): void
+    {
+        new Filesystem()->remove([$this->folder.'/output/'.RunBuildJob::QUESTION, $this->folder.'/output/'.RunBuildJob::BUNDLE]);
+        $this->limits = new BuildLimits(100, 60, 500, 600);
+        $request = new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1');
+
+        $first = $this->buildTask(runner: $this->watchedRunner([BuildLogLines::usage('m1', 350).BuildLogLines::edit('c1', 'a', 'b')]))->run($request);
+        self::assertStringEndsWith('"stop_cause":null,"tokens":350}', $this->lastStepPayload());
+
+        $second = $this->buildTask(runner: $this->watchedRunner([BuildLogLines::usage('m1', 300).BuildLogLines::edit('c1', 'a', 'b')]))->run($request);
+
+        self::assertSame([BuildStep::BuildJob, BuildStep::BuildJob], [$first->last, $second->last]);
+        self::assertStringEndsWith('"stop_cause":"per_task_total","tokens":300}', $this->lastStepPayload());
     }
 
     /**
@@ -412,7 +413,38 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);
 
-        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($checkout, self::createStub(PullRequestTextRound::class)), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()));
+        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($checkout, self::createStub(PullRequestTextRound::class)), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)), new LockFactory(new InMemoryStore()), new TaskTokens($this->ledger()));
+    }
+
+    // The mock clock moves one interval before each look, so the order of the looks is the test's and nothing waits.
+    /**
+     * @param list<string> $logs
+     */
+    private function watchedRunner(array $logs): JobRunner
+    {
+        $scripted = new ScriptedJobRunner($this->folder.'/output');
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec, ?JobWatch $watch) use ($scripted, $logs): JobResult {
+            self::assertInstanceOf(JobWatch::class, $watch);
+            foreach ($logs as $log) {
+                $this->clock->sleep($watch->intervalSeconds());
+                if ($watch->endsSession(new FollowedText($log))) {
+                    break;
+                }
+            }
+
+            return $scripted->run($spec);
+        });
+
+        return $runner;
+    }
+
+    private function lastStepPayload(): string
+    {
+        $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
+        self::assertIsString($payload);
+
+        return $payload;
     }
 
     private function question(): string

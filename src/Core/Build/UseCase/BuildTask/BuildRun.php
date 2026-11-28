@@ -22,9 +22,11 @@ final readonly class BuildRun
         return new self($request->project, $request->issue, Uuid::v4()->toRfc4122());
     }
 
-    // Because the task's title and body and a parked question are untrusted text, the payload names the task by its number only.
+    // Because the task's title and body and a parked question are untrusted text, the payload names the task by its number only; the tokens only for a step that used any, so every other row keeps its shape.
     public function stepPayload(EndedStep $ended): string
     {
+        $tokens = $ended->tokens > 0 ? ['tokens' => $ended->tokens] : [];
+
         return json_encode([
             'project' => $this->project,
             'task' => (string) $this->task,
@@ -33,6 +35,7 @@ final readonly class BuildRun
             'outcome' => $ended->outcome->value,
             'failure' => $ended->failure,
             'stop_cause' => $ended->stopCause?->value,
+            ...$tokens,
         ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 

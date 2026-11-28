@@ -16,11 +16,13 @@ final readonly class EndedStep
         public BuildStepOutcome $outcome,
         public ?string $failure,
         public ?BuildStopCause $stopCause,
+        // The tokens a build job used, so the task's next build job counts them toward its per-task total.
+        public int $tokens = 0,
     ) {
     }
 
-    public static function of(BuildStep $step, ?string $failure, ?BuildStopCause $stopCause = null): self
+    public static function of(BuildStep $step, ?string $failure, ?BuildStopCause $stopCause = null, int $tokens = 0): self
     {
-        return new self($step, null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed, $failure, $stopCause);
+        return new self($step, null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed, $failure, $stopCause, $tokens);
     }
 }

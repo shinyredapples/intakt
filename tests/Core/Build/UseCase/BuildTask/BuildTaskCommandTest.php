@@ -31,6 +31,7 @@ use Intakt\Core\Build\UseCase\BuildTask\EndedStep;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
+use Intakt\Core\Build\UseCase\BuildTask\TaskTokens;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
@@ -116,6 +117,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(PullRequestTextVerdict::class)]
 #[UsesClass(PushStep::class)]
 #[UsesClass(ParkedTasks::class)]
+#[UsesClass(TaskTokens::class)]
 #[UsesClass(PushRemoteCheck::class)]
 #[UsesClass(PushRemoteRefused::class)]
 #[UsesClass(BranchPushRequest::class)]
@@ -402,7 +404,7 @@ final class BuildTaskCommandTest extends TestCase
         $mirror = self::createStub(BuildCheckout::class);
         $mirror->method('mirrorOf')->willReturn($this->folder);
 
-        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($mirror, $texts), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck($repositories), new LockFactory(new InMemoryStore()));
+        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, new NoRegressionTests(), new NullLogger()), new PullRequestTextCheck($mirror, $texts), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck($repositories), new LockFactory(new InMemoryStore()), new TaskTokens($ledger));
     }
 
     /**

@@ -19,6 +19,8 @@ final readonly class BuildJob
         // The planner's choice, so the model comes from the project's tier map, never from the caller.
         public Tier $tier,
         public string $image,
+        // What the task's earlier build jobs used, from their ledger rows, so the per-task total counts across continuations.
+        public int $earlierTaskTokens = 0,
     ) {
     }
 

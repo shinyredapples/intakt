@@ -46,6 +46,7 @@ use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTaskNotCleared;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
+use Intakt\Core\Build\UseCase\BuildTask\TaskTokens;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushResult;
 use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
@@ -231,6 +232,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(ParagraphEnd::class)]
 #[CoversClass(PushStep::class)]
 #[UsesClass(ParkedTasks::class)]
+#[UsesClass(TaskTokens::class)]
 #[UsesClass(PushRemoteCheck::class)]
 #[UsesClass(PushRemoteRefused::class)]
 #[UsesClass(ParkedTaskRecord::class)]
@@ -1832,7 +1834,7 @@ final class BuildTaskTest extends TestCase
 
         $texts = new PullRequestTextCheck($checkout, new RoutePullRequestText(new PullRequestTextRoutes($this->textLedger ?? $ledger, $this->textLocks ?? $this->locks)));
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, $this->regressionTests ?? new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, $this->regressionTests ?? new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks, new TaskTokens($ledger));
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
