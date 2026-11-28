@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Build;
 
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\HandBack\Contract\HandBackRefusal;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\TestWith;
@@ -19,6 +20,7 @@ use Symfony\Component\Process\Process;
 final class BuildScriptTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../docker/job/build.sh';
+    private const string PRECHECK = __DIR__.'/../../../docker/job/precheck.sh';
     // Seconds a killed watchdog's sleep may take to end, because the kill is delivered asynchronously and a loaded runner may finish its exit only after the script returned.
     private const int WATCHDOG_DEADLINE = 5;
     // The script's own bound on git bundle create, repeated here because the script is shell and holds it as a literal.
@@ -62,6 +64,43 @@ final class BuildScriptTest extends TestCase
         self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
         self::assertSame("feat: build the task\n\n## Summary\n", $this->outputFile('pull-request.md'));
         self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+    }
+
+    public function testTheSessionSeesTheTasksBranchAndItsStartingCommitForTheBuildersOwnCheck(): void
+    {
+        $base = $this->history->commit('feat: the pushed head');
+        $this->givenTheCli('printf "%s %s\n" "$INTAKT_BUILD_BRANCH" "$INTAKT_BUILD_BASE" > "$RECORD/start"');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame("task {$base}\n", (string) file_get_contents($this->history->folder.'/start'));
+    }
+
+    public function testARefusalTheBuildersOwnCheckRaisesInTheSessionIsFixedThereAndTheBundleHoldsTheFix(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            git checkout --quiet -b side
+            git commit --quiet --allow-empty -m 'feat: work on the side'
+            git checkout --quiet task
+            git commit --quiet --allow-empty -m 'feat: build the task'
+            git merge --quiet --no-ff --no-edit side
+            printf 'feat: build the task\n' > PR.md
+            sh "$PRECHECK" > "$RECORD/first"
+            echo "exit $?" >> "$RECORD/first"
+            git reset --quiet --hard HEAD^1
+            git cherry-pick --quiet --allow-empty side
+            sh "$PRECHECK" > "$RECORD/second"
+            echo "exit $?" >> "$RECORD/second"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame(HandBackRefusal::HoldsMerge->reason()."\nexit 1\n", (string) file_get_contents($this->history->folder.'/first'));
+        self::assertSame("precheck clean\nexit 0\n", (string) file_get_contents($this->history->folder.'/second'));
+        $this->history->inMirror('fetch', '--quiet', $this->output.'/handback.bundle', 'refs/heads/task:refs/heads/fetched');
+        self::assertSame('', $this->history->inMirror('rev-list', '--merges', 'fetched', '--not', 'main'));
+        self::assertSame('2', $this->history->inMirror('rev-list', '--count', 'fetched', '--not', 'main'));
     }
 
     public function testTheCliGetsThePromptOnItsInputAndTheModelToRun(): void
@@ -1839,6 +1878,8 @@ final class BuildScriptTest extends TestCase
             'INTAKT_JOB_OUTPUT' => $this->output,
             'PATH' => ($this->pathHead ?? $this->bin).':'.getenv('PATH'),
             'RECORD' => $this->history->folder,
+            // Where the job mounts it at BuilderPrompt::PRECHECK, which the test cannot write.
+            'PRECHECK' => (string) realpath(self::PRECHECK),
             'INTAKT_GATE_SLOTS' => $this->inherited,
             'BASH_DEFAULT_TIMEOUT_MS' => $this->inheritedTimeout,
             'BASH_MAX_TIMEOUT_MS' => $this->inheritedTimeout,
