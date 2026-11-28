@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Budget\Infrastructure;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\AccountPick;
@@ -91,7 +92,7 @@ final readonly class LedgerAccountPicks implements AccountPicks
             return null;
         }
 
-        $reset = DateTimeImmutable::createFromFormat(DATE_ATOM, $left->resetsAt);
+        $reset = DateTimeImmutable::createFromFormat(DATE_ATOM, $left->resetsAt, new DateTimeZone('UTC'));
 
         return false !== $reset && $reset->format(DATE_ATOM) === $left->resetsAt ? $reset : false;
     }
