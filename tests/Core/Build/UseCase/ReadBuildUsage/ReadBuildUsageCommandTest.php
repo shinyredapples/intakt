@@ -97,6 +97,39 @@ final class ReadBuildUsageCommandTest extends TestCase
         self::assertStringContainsString('is not a regular file', $this->unwrapped($tester));
     }
 
+    public function testALogReplacedByALinkAfterTheCheckIsNotFollowedToTheLinksTarget(): void
+    {
+        new Filesystem()->dumpFile($this->folder.'/build.log', 'x');
+
+        $tester = $this->swappedInto(SwappedLog::LINK, new ReadBytes());
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('was replaced after it was checked', $this->unwrapped($tester));
+        self::assertTrue(is_link($this->folder.'/build.log'));
+    }
+
+    public function testALogReplacedByANamedPipeAfterTheCheckIsOpenedWithoutWaitingAndNotRead(): void
+    {
+        new Filesystem()->dumpFile($this->folder.'/build.log', 'x');
+        $waits = new ReadBytes();
+
+        $tester = $this->swappedInto(SwappedLog::PIPE, $waits);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertSame(0, $waits->total());
+        self::assertStringContainsString('was replaced after it was checked', $this->unwrapped($tester));
+    }
+
+    public function testANamedPipeIsNeverOpened(): void
+    {
+        posix_mkfifo($this->folder.'/build.log', 0o600);
+
+        $tester = $this->usageCommand($this->folder.'/build.log');
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('is not a regular file', $this->unwrapped($tester));
+    }
+
     public function testAFolderOrAMissingPathIsNeverRead(): void
     {
         self::assertSame(Command::FAILURE, $this->usageCommand($this->folder)->getStatusCode());
@@ -136,6 +169,19 @@ final class ReadBuildUsageCommandTest extends TestCase
         $tester->execute(['log' => $log]);
 
         return $tester;
+    }
+
+    private function swappedInto(string $into, ReadBytes $waits): CommandTester
+    {
+        stream_context_set_default([SwappedLog::PROTOCOL => ['into' => $into, 'target' => (string) realpath(self::LOGS.'/sample.log'), 'waits' => $waits]]);
+        stream_wrapper_register(SwappedLog::PROTOCOL, SwappedLog::class);
+
+        try {
+            return $this->usageCommand(SwappedLog::PROTOCOL.'://'.$this->folder.'/build.log');
+        } finally {
+            stream_wrapper_unregister(SwappedLog::PROTOCOL);
+            stream_context_set_default([SwappedLog::PROTOCOL => ['into' => null, 'target' => null, 'waits' => null]]);
+        }
     }
 
     // The error block wraps a long path, so its words are compared without the wrapping.
