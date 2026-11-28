@@ -133,7 +133,7 @@ final readonly class RunBuildJob
 
             throw $failure;
         } catch (DockerEngineFailed|JobEventNotRecorded $failure) {
-            // Failures before the runner was called (the gate's registry lookup) pass unchanged and read no cause.
+            // Passed on unchanged and without reading the cause, because the gate's registry lookup fails before the runner is called, so the cause is another build's.
             if (!$reachedRunner) {
                 throw $failure;
             }
@@ -155,15 +155,6 @@ final readonly class RunBuildJob
         }
 
         return $outcome->stoppedFor($cause);
-    }
-
-    // A failed removal is dropped only here, because the job-end failure carries the stop cause the row must keep, and the prompt is a scratch file.
-    private function removeQuietly(string $prompt): void
-    {
-        try {
-            $this->filesystem->remove($prompt);
-        } catch (IOExceptionInterface) {
-        }
     }
 
     private function modelFor(BuildJob $job): string
@@ -218,6 +209,15 @@ final readonly class RunBuildJob
         }
 
         return $this->outcomeOf($result);
+    }
+
+    // A failed removal is dropped only here, because the job-end failure carries the stop cause the row must keep, and the prompt is a scratch file.
+    private function removeQuietly(string $prompt): void
+    {
+        try {
+            $this->filesystem->remove($prompt);
+        } catch (IOExceptionInterface) {
+        }
     }
 
     private function outcomeOf(JobResult $result): BuildJobOutcome
