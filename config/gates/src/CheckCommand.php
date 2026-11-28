@@ -179,6 +179,7 @@ final readonly class CheckCommand
             new RatchetListsGate(),
             new WorkflowsGate(),
             new LeftUndoneGate(),
+            new RouteNamesGate(),
         ];
     }
 

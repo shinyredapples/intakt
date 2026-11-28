@@ -10,7 +10,7 @@ use Symfony\Component\String\UnicodeString;
 
 final class RouteNamesFollowUseCases
 {
-    private const string CONTROLLER = '/^Intakt\\\\(?:\w+\\\\)*?(\w+)\\\\UseCase\\\\(\w+)\\\\/';
+    private const string CONTROLLER = '/^Intakt\\\\(?:Core|Plugin)\\\\(\w+)\\\\UseCase\\\\(\w+)\\\\/';
 
     private const string OWN_NAMESPACE = 'Intakt\\';
 
@@ -42,13 +42,14 @@ final class RouteNamesFollowUseCases
     {
         $controller = $route->getDefault('_controller');
 
-        return is_string($controller) ? explode('::', $controller)[0] : null;
+        // Because a route file may write the class with a leading backslash, which names the same class.
+        return is_string($controller) ? ltrim(explode('::', $controller)[0], '\\') : null;
     }
 
     private function findingFor(string $name, string $controller): ?string
     {
         if (1 !== preg_match(self::CONTROLLER, $controller, $parts)) {
-            return sprintf('Route "%s" is served by %s, which is not in a UseCase/<Name>/ folder: move the controller into one, so the route name can be <module>_<use_case>.', $name, $controller);
+            return sprintf('Route "%s" is served by %s, which is not in a UseCase/<Name>/ folder directly inside its module (src/Core/<Module>/ or src/Plugin/<Module>/): move the controller into one, so the route name can be <module>_<use_case>.', $name, $controller);
         }
 
         $expected = $this->snake($parts[1]).'_'.$this->snake($parts[2]);

@@ -334,13 +334,13 @@ The file lies in the checked folder (`--root`, else the repository), under `var/
 
 `bin/check --static-gates`, with no other argument, runs no gate. It prints one JSON line with two lists and exits with 0:
 
-- `static`: the gates that do not run your change's code, so they can check a copy of the change on their own (every gate except `phpstan`, `tests` and `container`);
+- `static`: the gates that do not run your change's code, so they can check a copy of the change on their own (every gate except `phpstan`, `tests`, `container` and `routes`);
 - `order`: every gate of a run without `--journeys`, in gate order (the order of the gate list in `bin/check`).
 
 For example:
 
 ```
-{"static":["cs","rector",...,"ratchet","workflows","left-undone"],"order":["cs","phpstan","rector",...,"container","ratchet","workflows","left-undone"]}
+{"static":["cs","rector",...,"ratchet","workflows","left-undone"],"order":["cs","phpstan","rector",...,"container","ratchet","workflows","left-undone","routes"]}
 ```
 
 With any other argument beside it, `bin/check` runs no gate: it prints an `error` line with its usage and exits with 2. A normal `bin/check` run is unchanged: it still starts the static gates before the gates that run your change's code.
@@ -412,6 +412,15 @@ An object that can be changed after it is built can be seen half set up, and any
 ## When `bin/check` reports a test method name
 
 A test name that reads as a sentence says what behavior broke when it fails, so the `phpstan` gate of `bin/check` reports a finding `intakt.testMethodSentence` for every public method whose name starts with `test`, or that carries PHPUnit's `#[Test]` attribute, and that is not named `test` followed by at least three camel-case words, in a class under `tests/` that extends PHPUnit's `TestCase` (directly or through a parent, abstract classes included). `testFormIsSent()` passes; `testFormSent()`, `test_it_sends_mail()`, `testsendsmail()` and a `#[Test]` method named `works()` are reported. A run of capitals (`HTTP`) is one word, also when it starts with `A` or `I` (`testASCIIWorks()` and `testAURLWorks()` have two; write `testAUrlIsSent()`), and digits belong to the word before them (`testA96PxIconIsShown()` has five), so a name whose first word starts with a digit (`test2xxAnswersAreFine()`) is reported. Interfaces, anonymous classes and classes that do not extend `TestCase`, such as a double with `testConnection()`, are not judged. A data provider is exempt when a `#[DataProvider]` or `#[DataProviderExternal]` attribute names it on a test that a class PHPUnit runs (a concrete one) declares or inherits (an attribute on a method PHPUnit does not run as a test, such as a private helper, or on a parent's test that every concrete subclass overrides without it, does not count), so a subclass may implement `testCases()` for its abstract base, and a subclass's test may name a provider its parent class declares. A concrete class that runs the provider without naming it itself ends the exemption: its own tests must name it with `#[DataProvider]`, or a `#[DataProviderExternal]` must name exactly that class and the provider. PHPUnit also runs an exempt static provider whose name starts with `test` as a test; renaming it without that prefix avoids this. Only a static method without `#[Test]` that may return provider rows can be exempt: an instance method, a method that carries `#[Test]` and a static method returning `void` are judged as tests, since PHPUnit runs them as tests even when another method names them as a provider. When `bin/check` checks only the changed files, a static method that may return provider rows (one without `#[Test]` and not declared to return a type that cannot be iterated, such as `void`) is not reported, since the test that names it as a provider may not be among them; the full check judges it. A trait's method is judged in the test classes that use it and reported once, in the trait. To resolve a finding, rename the method to state the behavior, such as `testTheFormIsSent()`.
+
+## When `bin/check` reports a route name
+
+A route's name says where its controller lives, so the `routes` gate of `bin/check` reads the routes of the `prod` environment (`php bin/console debug:router --format=json --env=prod`, also with `--fast`) and checks every route whose controller class is in the `Intakt\` namespace. Its name must be `<module>_<use_case>`: the module folder under `src/Core/` or `src/Plugin/` and the `UseCase/<Name>/` folder directly inside it, both in snake case, so `Intakt\Core\Dashboard\UseCase\ShowReviewRecord\ShowReviewRecordController` serves `dashboard_show_review_record`. Routes of other vendors' controllers are skipped. There are two findings:
+
+- `Route "<name>" is served by <controller>, so it must be named "<expected>" (<module>_<use_case>)`: rename the route to the expected name, or move the controller into the `UseCase/<Name>/` folder the name says. A second action of one controller gets its own use case folder and invokable controller;
+- `Route "<name>" is served by <controller>, which is not in a UseCase/<Name>/ folder directly inside its module`: move the controller into `src/Core/<Module>/UseCase/<Name>/` or `src/Plugin/<Module>/UseCase/<Name>/`; a folder nested deeper, such as `src/Core/Dashboard/Pages/UseCase/ShowDemo/`, does not count.
+
+A tree without `bin/console` fails the gate, and so does a console that cannot list its routes (the finding names the exit code and the first error line). Run `php bin/console debug:router --show-controllers` to see each route's controller.
 
 ## When `bin/check` reports a magic method
 

@@ -66,6 +66,23 @@ final class RouteNamesFollowUseCasesTest extends TestCase
         self::assertStringContainsString('not in a UseCase/<Name>/ folder', $findings[0]);
     }
 
+    public function testAUseCaseFolderNestedBelowTheModuleIsRejected(): void
+    {
+        $routes = $this->routes(['pages_show_demo' => 'Intakt\Core\Dashboard\Pages\UseCase\ShowDemo\ShowDemoController']);
+
+        $findings = new RouteNamesFollowUseCases()->findingsIn($routes);
+
+        self::assertCount(1, $findings);
+        self::assertStringContainsString('not in a UseCase/<Name>/ folder directly inside its module', $findings[0]);
+    }
+
+    public function testAControllerWrittenWithALeadingBackslashIsCheckedToo(): void
+    {
+        $routes = $this->routes(['dashboard_show_demo' => '\Intakt\Core\Dashboard\UseCase\PlayDemo\ShowDemoController']);
+
+        self::assertStringContainsString('must be named "dashboard_play_demo"', implode("\n", new RouteNamesFollowUseCases()->findingsIn($routes)));
+    }
+
     public function testAControllerOutsideTheIntaktNamespaceIsIgnored(): void
     {
         $routes = $this->routes(['_wdt' => 'web_profiler.controller.profiler::toolbarAction', 'mcp_endpoint' => 'Mcp\Server\Controller']);
