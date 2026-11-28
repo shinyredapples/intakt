@@ -46,7 +46,7 @@ final class FindingTitleAndKindContractTest extends KernelTestCase
 
         $findings = McpServerClient::at($answer, 'result', 'structuredContent', 'verdicts', '0', 'verdict', 'findings');
         self::assertIsArray($findings);
-        self::assertSame([['A large cart loses its discount', 'logic'], ['The discount test is missing', 'missing test']], array_map(static fn (array $finding): array => [$finding['title'] ?? null, $finding['kind'] ?? null], $findings));
+        self::assertSame([['A large cart loses its discount', 'The discount test is missing'], ['logic', 'missing test']], [array_column($findings, 'title'), array_column($findings, 'kind')]);
     }
 
     public function testTheFindingsResourceCarriesEachFindingsTitleAndKind(): void

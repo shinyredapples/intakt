@@ -463,20 +463,20 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     {
         $round = new RoundFixture(self::getContainer())->start(1);
         $ledger = new InMemoryLedger();
-        $findings = [$this->titledAt('F1', Severity::P1, 7, 'A large cart loses its discount', FindingKind::Logic), $this->findingAt('F2', Severity::P3, 20)];
+        $findings = [$this->titled('F1', Severity::P1, FindingKind::Logic), $this->findingAt('F2', Severity::P3, 20)];
 
         $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of(new Judgement([]), $findings), []);
 
         $recorded = $ledger->payloads()[0]['findings'];
         self::assertIsArray($recorded);
-        self::assertSame([['A large cart loses its discount', 'logic'], [null, null]], array_map(static fn (array $finding): array => [$finding['title'], $finding['kind']], $recorded));
+        self::assertSame([['Problem named F1', null], ['logic', null]], [array_column($recorded, 'title'), array_column($recorded, 'kind')]);
     }
 
     public function testTwoFindingsAtOnePlaceAreStoredAsTheActEntryWithTheSurvivorsTitleAndKind(): void
     {
         $round = new RoundFixture(self::getContainer())->start(1);
         $ledger = new InMemoryLedger();
-        $findings = [$this->titledAt('F1', Severity::P2, 7, 'A large cart loses its discount', FindingKind::Logic), $this->titledAt('F2', Severity::P1, 7, 'The discount test is missing', FindingKind::MissingTest)];
+        $findings = [$this->titled('F1', Severity::P2, FindingKind::Logic), $this->titled('F2', Severity::P1, FindingKind::MissingTest)];
         $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act)]);
 
         $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of($judgement, $findings), []);
@@ -484,7 +484,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $done = $this->serializer()->deserialize((string) json_encode($ledger->payloads()[0]), JudgeDone::class, JsonEncoder::FORMAT);
         self::assertInstanceOf(JudgeDone::class, $done);
         $entry = $done->findings[0];
-        self::assertSame(['F1', Severity::P1, ['F2'], 'A large cart loses its discount', FindingKind::Logic], [$entry->id, $entry->severity, [...$entry->merged], $entry->title, $entry->kind]);
+        self::assertSame(['F1', Severity::P1, ['F2'], 'Problem named F1', FindingKind::Logic], [$entry->id, $entry->severity, [...$entry->merged], $entry->title, $entry->kind]);
     }
 
     public function testAJudgeRowWithATitleAndKindReadsBackAndIsWrittenAgainWithThem(): void
@@ -700,20 +700,21 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         return new Finding($id, $severity, 'src/A.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
     }
 
-    private function titledAt(string $id, Severity $severity, int $line, string $title, FindingKind $kind): Finding
+    // At line 7, the place of every titled finding here, so two of them merge into one act entry.
+    private function titled(string $id, Severity $severity, FindingKind $kind): Finding
     {
         return new Finding(
             $id,
             $severity,
             'src/A.php',
-            $line,
+            7,
             null,
             'Text of '.$id.'.',
             FixableBy::Builder,
             false,
             null,
             null,
-            title: $title,
+            title: 'Problem named '.$id,
             kind: $kind,
         );
     }
