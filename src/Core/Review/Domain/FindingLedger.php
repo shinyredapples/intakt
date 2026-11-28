@@ -169,6 +169,8 @@ final class FindingLedger
             $tracked->latest->evidence,
             $tracked->latest->regression,
             $tracked->latest->gate_gap,
+            $tracked->latest->title,
+            $tracked->latest->kind,
         );
     }
 

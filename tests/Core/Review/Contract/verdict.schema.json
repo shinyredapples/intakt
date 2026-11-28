@@ -93,6 +93,30 @@
                     },
                     "gate_gap": {
                         "type": "boolean"
+                    },
+                    "title": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "nullable": false,
+                        "minLength": 1,
+                        "description": "The problem in 3 to 6 plain words, for example \"A large cart loses its discount\"."
+                    },
+                    "kind": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "enum": [
+                            "security",
+                            "logic",
+                            "missing test",
+                            "tidy-up",
+                            "other"
+                        ],
+                        "nullable": false,
+                        "description": "What sort of problem this is."
                     }
                 },
                 "required": [
@@ -107,7 +131,9 @@
                     "requirement",
                     "evidence",
                     "regression",
-                    "gate_gap"
+                    "gate_gap",
+                    "title",
+                    "kind"
                 ],
                 "additionalProperties": false
             }

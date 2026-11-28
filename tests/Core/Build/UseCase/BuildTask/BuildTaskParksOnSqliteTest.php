@@ -22,6 +22,7 @@ use Intakt\Core\Build\Contract\TierReason;
 use Intakt\Core\Build\Domain\BugPart;
 use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
@@ -106,6 +107,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
 #[UsesClass(RecordedBuildStops::class)]
+#[UsesClass(BuildLimits::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
 #[UsesClass(BuildVerdict::class)]
@@ -149,12 +151,13 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $run = 1 === preg_match('/"run":"([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})"/', $payloads[0] ?? '', $match) ? $match[1] : 'no run';
         self::assertSame(
             [
-                '{"project":"alpha","task":"7","run":"'.$run.'","step":"task","outcome":"passed","failure":null}',
-                '{"project":"alpha","task":"7","run":"'.$run.'","step":"mirror","outcome":"passed","failure":null}',
-                '{"project":"alpha","task":"7","run":"'.$run.'","step":"clone","outcome":"passed","failure":null}',
-                '{"project":"alpha","task":"7","run":"'.$run.'","step":"build_job","outcome":"asked","failure":null}',
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"task","outcome":"passed","failure":null}'],
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"mirror","outcome":"passed","failure":null}'],
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"clone","outcome":"passed","failure":null}'],
+                ['build_step_ended', '{"project":"alpha","task":"7","run":"'.$run.'","step":"build_job","outcome":"asked","failure":null}'],
+                ['task_parked', '{"project":"alpha","task":"7","run":"'.$run.'"}'],
             ],
-            $payloads,
+            array_map(array_values(...), $this->connection()->fetchAllAssociative('SELECT kind, payload FROM ledger_event ORDER BY position')),
         );
         self::assertSame([], glob($this->folder.'/hand-backs/*'));
     }
@@ -184,7 +187,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone], $outcome->passedSteps());
         // The scripted job would have asked another question, so this one proves the job never ran.
         self::assertStringContainsString('missing: Must keep working.', $this->question());
-        $payload = $this->connection()->fetchOne('SELECT payload FROM ledger_event ORDER BY position DESC LIMIT 1');
+        $payload = $this->connection()->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'build_step_ended' ORDER BY position DESC LIMIT 1");
         self::assertIsString($payload);
         self::assertStringContainsString('"step":"build_job","outcome":"asked","failure":null}', $payload);
     }
@@ -245,7 +248,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts', new RecordedBuildStops());
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts', new RecordedBuildStops(), new BuildLimits(1, 1, 1, 1));
         $files = new HandBackFile($checkout, new Filesystem(), $this->folder.'/hand-backs');
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);

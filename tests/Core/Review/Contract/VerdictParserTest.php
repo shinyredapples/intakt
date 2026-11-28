@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\Contract;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingKind;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FollowUpNote;
 use Intakt\Core\Review\Contract\ResolvedFinding;
@@ -66,6 +67,8 @@ final class VerdictParserTest extends KernelTestCase
             repeat: false,
             requirement: '...',
             evidence: new Evidence('...', '...'),
+            title: 'A cart loses its discount',
+            kind: FindingKind::Logic,
         );
         self::assertEquals(new Verdict(Decision::Changes, [$finding], [new ResolvedFinding('F1'), new ResolvedFinding('F2')], [new FollowUpNote('...')]), $verdict);
     }
@@ -151,6 +154,103 @@ final class VerdictParserTest extends KernelTestCase
         $this->expectExceptionMessageMatches('/'.implode('|', $wordings).'/');
 
         $this->reviewer()->verdictFor($output);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function titlesOutsideThreeToSixWords(): iterable
+    {
+        yield 'two words' => ['Discount lost', 'At least three words of the title must hold a letter or a digit.'];
+        yield 'seven words' => ['A cart of one hundred loses discounts', 'At most six words of the title may hold a letter or a digit.'];
+        yield 'seven words, one hyphenated' => ['The tidy-up step breaks all cart discounts', 'At most six words of the title may hold a letter or a digit.'];
+    }
+
+    // Only the classes refuse these, because the schema names the word count in the description alone, which the schema file cannot hold an answer to.
+    #[DataProvider('titlesOutsideThreeToSixWords')]
+    public function testATitleOutsideThreeToSixWordsIsRefusedAsUnreadable(string $title, string $message): void
+    {
+        $this->expectException(VerdictUnreadable::class);
+        $this->expectExceptionMessageMatches('/findings\[0\]\.title: '.preg_quote($message, '/').'/');
+
+        $this->reviewer()->verdictFor(VerdictDocument::fromTheDesign()->withFinding('title', $title)->json());
+    }
+
+    public function testANullTitleIsRefusedAsUnreadable(): void
+    {
+        $this->expectException(VerdictUnreadable::class);
+        $this->expectExceptionMessageMatches('/findings\[0\]\.title: This value should not be null\./');
+
+        $this->reviewer()->verdictFor(VerdictDocument::fromTheDesign()->withFinding('title', null)->json());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function titlesOfThreeToSixWords(): iterable
+    {
+        yield 'three words' => ['Discount is lost'];
+        yield 'six words' => ['A cart of 100 loses discounts'];
+        yield 'punctuation inside words' => ["The cart's tidy-up fails"];
+        yield 'the example the schema and the prompt give' => [Finding::TITLE_EXAMPLE];
+        yield 'three real words and a lone dash' => ['Discount - is lost'];
+        yield 'three real words padded with dots' => ['Discount is lost . .'];
+        yield 'words outside ASCII' => ['Rabatt für Ärzte fehlt'];
+        yield 'six words, one hyphenated' => ['The tidy-up step breaks cart discounts'];
+        yield 'five words, one hyphenated' => ['The null-check misses empty carts'];
+        yield 'four words, a method name' => ['Cart::total() adds the discount'];
+        yield 'three words, a path' => ['src/Cart.php loses discounts'];
+        yield 'three hyphenated words' => ['a-b c-d e-f'];
+        yield 'six real words and a lone dash' => ['A large cart - loses its discount'];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function titlesWithFewerThanThreeRealWords(): iterable
+    {
+        yield 'punctuation alone' => ['. . .'];
+        yield 'two real words and dots' => ['Cart . . broken'];
+        yield 'two real words and marks' => ['Cart is ! ?'];
+        yield 'two real words with marks attached' => ['... cart, broken!'];
+        yield 'numbers that are no decimal digits' => ['¼ ½ ¾'];
+        yield 'two real words and vulgar fractions' => ['Cart ½ ¾ broken'];
+    }
+
+    // Symfony's WordCount counts each of these marks as a word, which is why the title has a rule of its own: upstream/validator-word-count-counts-punctuation
+    #[DataProvider('titlesWithFewerThanThreeRealWords')]
+    public function testATitleWithFewerThanThreeRealWordsIsRefusedAsUnreadable(string $title): void
+    {
+        $this->expectException(VerdictUnreadable::class);
+        $this->expectExceptionMessageMatches('/findings\[0\]\.title: At least three words of the title must hold a letter or a digit\./');
+
+        $this->reviewer()->verdictFor(VerdictDocument::fromTheDesign()->withFinding('title', $title)->json());
+    }
+
+    #[DataProvider('titlesOfThreeToSixWords')]
+    public function testATitleOfThreeToSixWordsMapsAsTheReviewerGaveIt(string $title): void
+    {
+        $verdict = $this->reviewer()->verdictFor(VerdictDocument::fromTheDesign()->withFinding('title', $title)->json());
+
+        self::assertSame($title, $verdict->findings[0]->title);
+    }
+
+    /**
+     * @return iterable<string, array{string, FindingKind}>
+     */
+    public static function kinds(): iterable
+    {
+        foreach (FindingKind::cases() as $kind) {
+            yield $kind->value => [$kind->value, $kind];
+        }
+    }
+
+    #[DataProvider('kinds')]
+    public function testEveryKindMaps(string $value, FindingKind $kind): void
+    {
+        $verdict = $this->reviewer()->verdictFor(VerdictDocument::fromTheDesign()->withFinding('kind', $value)->json());
+
+        self::assertSame($kind, $verdict->findings[0]->kind);
     }
 
     public function testAWrongTypeIsRefusedWithTheContractVerdictNamedInItsText(): void

@@ -26,6 +26,8 @@ final readonly class VerdictDocument
                 'evidence' => ['probe' => '...', 'output' => '...'],
                 'regression' => false,
                 'gate_gap' => false,
+                'title' => 'A cart loses its discount',
+                'kind' => 'logic',
             ],
         );
     }

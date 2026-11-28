@@ -67,6 +67,15 @@ final readonly class UsageLedger
     /**
      * @throws UsageNotRecorded
      */
+    #[NoDiscard('a reservation must be settled or left unsettled')]
+    public function reserveForTask(string $project, AnsweringTier $tier, int $task): UsageReservation
+    {
+        return $this->started(fn (string $call): UsageStarted => new UsageStarted($call, 'started', $project, $tier->tier, null, $tier->answering->model, null, (string) $task));
+    }
+
+    /**
+     * @throws UsageNotRecorded
+     */
     public function settle(UsageReservation $reservation, DeferredResult ...$rounds): void
     {
         ['usages' => $usages, 'unreadable' => $unreadable] = $this->readRounds($reservation, ...$rounds);

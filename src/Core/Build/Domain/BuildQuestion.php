@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\Domain;
 
+use Intakt\Core\Build\Contract\ReadinessGap;
 use JsonException;
 use stdClass;
 
@@ -41,6 +42,28 @@ final readonly class BuildQuestion
         );
     }
 
+    // Worded by plain code from the closed list of gaps, never from the model's reason, because the model read the task's untrusted text and people read this.
+    /**
+     * @param non-empty-list<ReadinessGap> $missing
+     */
+    public static function forMissingReadiness(array $missing): self
+    {
+        $names = implode(', ', array_map(static fn (ReadinessGap $gap): string => $gap->wording(), $missing));
+        $add = 'Add the missing items to the task';
+
+        return new self(
+            sprintf('This task is not ready to build. It lacks: %s.', $names),
+            [$add, 'Close the task'],
+            $add,
+        );
+    }
+
+    // The question with its choices, so the task's author sees what to do on the issue without opening the dashboard.
+    public function asComment(): string
+    {
+        return $this->question."\n\n".implode("\n", array_map(static fn (string $choice): string => '- '.$choice, $this->choices));
+    }
+
     /**
      * @throws QuestionRefused
      */
@@ -51,20 +74,40 @@ final readonly class BuildQuestion
         }
 
         $data = self::decoded($text);
-        $question = self::textOf($data['question'] ?? null);
 
-        if ('' === $question) {
-            throw QuestionRefused::emptyQuestion();
+        return self::accepted($data['question'] ?? null, $data['choices'] ?? null, $data['recommendation'] ?? null);
+    }
+
+    // Null for texts the rule would refuse or trim, or that no accepted hand-back could hold, because only an accepted question is ever stored and it is stored trimmed.
+    public static function fromStored(mixed $question, mixed $choices, mixed $recommendation): ?self
+    {
+        try {
+            $accepted = self::accepted($question, $choices, $recommendation);
+        } catch (QuestionRefused) {
+            return null;
         }
 
-        $choices = self::choicesOf($data['choices'] ?? null);
-        $recommendation = self::textOf($data['recommendation'] ?? null);
-
-        if (!in_array($recommendation, $choices, true)) {
-            throw QuestionRefused::recommendationNotAChoice();
+        // The shortest hand-back that holds the texts, because all of them came out of one hand-back and one over the limit is refused; a text that is no UTF-8 never came out of JSON.
+        try {
+            $shortest = self::shortestHandBackOf($accepted);
+        } catch (JsonException) {
+            return null;
         }
 
-        return new self($question, $choices, $recommendation);
+        if (strlen($shortest) > self::MAX_BYTES) {
+            return null;
+        }
+
+        return [$question, $choices, $recommendation] === [$accepted->question, $accepted->choices, $accepted->recommendation] ? $accepted : null;
+    }
+
+    /**
+     * @throws JsonException
+     */
+    // Escaped only where JSON must escape, because a hand-back may write every other character as it is.
+    private static function shortestHandBackOf(self $question): string
+    {
+        return json_encode(['question' => $question->question, 'choices' => $question->choices, 'recommendation' => $question->recommendation], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_LINE_TERMINATORS);
     }
 
     /**
@@ -90,6 +133,27 @@ final readonly class BuildQuestion
             static fn (array $string): string => str_starts_with($string[0], '"\u0000') && str_ends_with($string[0], ':') ? '"\u0001'.substr($string[0], 7) : $string[0],
             $text,
         ) ?? $text;
+    }
+
+    /**
+     * @throws QuestionRefused
+     */
+    private static function accepted(mixed $givenQuestion, mixed $givenChoices, mixed $givenRecommendation): self
+    {
+        $question = self::textOf($givenQuestion);
+
+        if ('' === $question) {
+            throw QuestionRefused::emptyQuestion();
+        }
+
+        $choices = self::choicesOf($givenChoices);
+        $recommendation = self::textOf($givenRecommendation);
+
+        if (!in_array($recommendation, $choices, true)) {
+            throw QuestionRefused::recommendationNotAChoice();
+        }
+
+        return new self($question, $choices, $recommendation);
     }
 
     private static function textOf(mixed $value): string
