@@ -563,6 +563,47 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertSame([], $result->findings);
     }
 
+    public function testCopyingTheStagedUtf8BlobOverLatin1RulesFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInLatin1();
+        $sandbox->write('.gitignore', $sandbox->git('show', 'HEAD:.gitignore')->output);
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAGitignoreCheckedOutInUtf16LittleEndianWithByteOrderMarkPasses(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInUtf16LeBom();
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame("\xFF\xFE*\0.\0l\0o\0g\0\n\0", file_get_contents($sandbox->root.'/.gitignore'));
+        self::assertSame('', $sandbox->git('status', '--porcelain')->output, 'the checkout is clean');
+        self::assertSame([], $result->findings);
+    }
+
+    public function testAnUnstagedRuleEditInAUtf16LittleEndianWithByteOrderMarkGitignoreStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInUtf16LeBom();
+        $sandbox->write('.gitignore', "\xFF\xFE*\0.\0b\0a\0k\0\n\0");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAUtf16LittleEndianGitignoreMissingTheByteOrderMarkCountsAsDiffering(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesInUtf16LeBom();
+        $sandbox->write('.gitignore', "*\0.\0l\0o\0g\0\n\0");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertContains($this->differsFromIndex('.gitignore'), $result->findings);
+    }
+
     public function testAnUnstagedAttributesEditDoesNotChangeTheEncodingAnEncodedGitignoreIsReadIn(): void
     {
         $sandbox = $this->repositoryCheckingOutRulesInLatin1();
@@ -653,6 +694,19 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         $sandbox->write('.gitattributes', ".gitignore text working-tree-encoding=ISO-8859-1\n");
         $sandbox->write('.gitignore', "caf\xE9.log\n");
         $sandbox->commitAll('chore: check out the rules in latin1');
+        unlink($sandbox->root.'/.gitignore');
+        $sandbox->git('checkout', '--', '.gitignore');
+
+        return $sandbox;
+    }
+
+    private function repositoryCheckingOutRulesInUtf16LeBom(): Sandbox
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('.gitattributes', ".gitignore text working-tree-encoding=UTF-16LE-BOM\n");
+        $sandbox->write('.gitignore', "\xFF\xFE*\0.\0l\0o\0g\0\n\0");
+        $sandbox->commitAll('chore: check out the rules in utf-16le with a byte order mark');
         unlink($sandbox->root.'/.gitignore');
         $sandbox->git('checkout', '--', '.gitignore');
 
