@@ -1,19 +1,25 @@
 name: ci
 # Every gate on each pull request (on GitHub's test merge of it) and on main, where a push that reuses a pull request's
-# result skips them (the main job); a newer run of the same ref cancels the one it replaces.
+# result skips them (the main job); a newer run of the same ref cancels the one it replaces. Once a night (schedule) and
+# on demand (workflow_dispatch) every gate runs on the newest main commit, as on a direct push, in its own concurrency
+# group so a push to main does not cancel it; a failure opens or updates one issue (the nightly-failed job).
 # Never pull_request_target: pull-request code must not run with the base repository's secrets or write token.
 on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: '43 3 * * *'
+  workflow_dispatch:
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '-nightly' || '' }}
   cancel-in-progress: true
 permissions:
   contents: read
 # Each job runs where the repository variable CI_RUNS_ON says: unset, on GitHub's ubuntu-24.04; set to a JSON label list
 # such as ["self-hosted","linux","x64","intakt-ci"], on a self-hosted runner. Every job is fork-guarded (it runs for a push
-# to main and for pull requests from this repository only), so a fork's pull request never reaches a self-hosted runner.
+# to main, the nightly or on-demand run on main and pull requests from this repository only), so a fork's pull request
+# and a manual run off main never reach a runner.
 # A self-hosted runner must be ephemeral (a clean machine state for every job, registered --ephemeral) with no network
 # path to the owner's other machines: a same-repository pull request runs its own workflow and scripts there with Docker
 # access, and only a clean state keeps that from reaching a later job. A persistent self-hosted runner is not supported.
@@ -26,7 +32,7 @@ jobs:
   # tests GitHub's merge of the head into main; its check job records that tree, and only that tree counts, usually the
   # head's own after a fast-forward land. This job then only saves the Composer and CI image caches that pull requests
   # restore. Any other push (a direct push, a release commit) runs all, and a failure of this job before it decides skips
-  # no job that needs it. What a pull-request filter skips is then left to the nightly full run on main (#2126).
+  # no job that needs it. What a pull-request filter skips is then left to the nightly full run on main.
   main:
     if: github.event_name == 'push'
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
@@ -108,7 +114,7 @@ jobs:
   # as uid 1000, the same steps on either kind of runner; no step runs the change's code as root or with the Docker socket.
   check:
     needs: main
-    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.ref_protected)) }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 20
     steps:
@@ -234,7 +240,7 @@ jobs:
   # request instead of the next nightly run. The steps and container options are those of the journeys job of journeys.yml.
   journeys:
     needs: main
-    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.ref_protected)) }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     # Every journey at 300 seconds plus the image build.
     timeout-minutes: 40
@@ -256,7 +262,7 @@ jobs:
         run: |
           set -euo pipefail
           needed=yes
-          if [ "$EVENT" != push ]; then
+          if [ "$EVENT" = pull_request ]; then
             base=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")
             needed=$(.github/ci/image-needed.sh "$base" "$HEAD_SHA")
             paths=(
@@ -308,10 +314,10 @@ jobs:
   # configuration, the dependencies, the CI definition (.github/workflows/ and .github/ci/), added lines naming
   # Doctrine anywhere in src/, or a test in group persistence that the change adds, removes or edits. A push to main
   # runs the engines only when its commit did not pass as the head of a pull request into main, so a change this filter
-  # misses is caught by the nightly full run on main (#2126), or until then by the next direct push or release commit.
+  # misses is caught by the nightly full run on main or by the next direct push or release commit.
   changes:
     needs: main
-    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.ref_protected)) }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 5
     outputs:
@@ -331,7 +337,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          if [ "$EVENT" = push ]; then
+          if [ "$EVENT" != pull_request ]; then
             echo "persistence=true" >> "$GITHUB_OUTPUT"
             echo "persistence engines needed: always on main"
             exit 0
@@ -374,7 +380,7 @@ jobs:
   # reports every engine, each in its own log group.
   persistence:
     needs: changes
-    if: ${{ !cancelled() && !failure() && needs.changes.result == 'success' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
+    if: ${{ !cancelled() && !failure() && needs.changes.result == 'success' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.ref_protected)) }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 20
     env:
@@ -459,7 +465,7 @@ jobs:
   # is a full machine reset and a build. The full history is fetched for the upgrade check's base commit.
   image:
     needs: main
-    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
+    if: ${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.ref_protected)) }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 35
     steps:
@@ -475,7 +481,7 @@ jobs:
       # Decided in a step, not by a paths filter, so the job reports on every pull request. The base is the pull request's
       # merge base, or on a full push run the head's first parent. A push to main whose commit passed as the head of a pull request into
       # main skips this job; a later full run's check starts from its own first parent, so the upgrade across the skipped
-      # change stays unchecked. The rest of what the check misses is left to the nightly full run on main (#2126). A failing
+      # change stays unchecked. The rest of what the check misses is left to the nightly full run on main. A failing
       # git fails the step.
       - name: Decide on the app image and the upgrade check
         id: upgrade
@@ -485,7 +491,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          if [ "$EVENT" = push ]; then
+          if [ "$EVENT" != pull_request ]; then
             base=$(git rev-parse HEAD~1)
             needed=yes
             image=yes
@@ -515,3 +521,24 @@ jobs:
         env:
           BASE: ${{ steps.upgrade.outputs.base }}
         run: bash docker/verify-upgrade.sh intakt:ci "$BASE"
+  # A failed nightly or on-demand full run on main opens the issue "Nightly CI failed on main" with the run link, or
+  # comments the link on the open one (.github/ci/nightly-failed-issue.sh). The only job that may write issues; a pull
+  # request or push run skips it, so it never blocks a merge. A cancel by hand makes failure() false.
+  nightly-failed:
+    needs: [check, journeys, changes, persistence, image]
+    if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && github.ref_protected
+    # GitHub's image has gh.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Open or update the nightly failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_LINK: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: .github/ci/nightly-failed-issue.sh "$RUN_LINK"

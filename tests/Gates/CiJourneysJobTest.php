@@ -18,18 +18,18 @@ final class CiJourneysJobTest extends TestCase
 {
     private const string WORKFLOW = __DIR__.'/../../.github/workflows/ci.yml';
 
-    public function testTheCiWorkflowRunsOnEveryPullRequestAndEveryPushToMain(): void
+    public function testTheCiWorkflowRunsOnEveryPullRequestEveryPushToMainAndNightly(): void
     {
         $on = $this->workflow()['on'];
 
-        self::assertSame(['pull_request', 'push'], array_keys($on));
+        self::assertSame(['pull_request', 'push', 'schedule', 'workflow_dispatch'], array_keys($on));
         self::assertNull($on['pull_request']);
         self::assertSame(['branches' => ['main']], $on['push']);
     }
 
     public function testTheJourneysJobRunsOnlyBehindTheForkGuard(): void
     {
-        self::assertSame("\${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}", $this->job()['if'] ?? null);
+        self::assertSame("\${{ !cancelled() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.ref_protected)) }}", $this->job()['if'] ?? null);
     }
 
     public function testTheJourneysJobRunsWhereTheCheckJobRuns(): void
