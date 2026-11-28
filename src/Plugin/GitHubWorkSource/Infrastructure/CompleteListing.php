@@ -154,7 +154,9 @@ final readonly class CompleteListing
      */
     private function planOver(string $project, array $rows, string $label): IntakePlan
     {
-        return $this->planOverWith($project, $label, $rows, $this->store->failuresOf($project));
+        $failures = $this->store->failuresOf($project);
+
+        return $this->planOverWith($this->rulesOf($project, $label), $rows, $failures);
     }
 
     // Another worker that stored a listing meanwhile holds the newer rows, but vouched them under its own eligibility label, so a row that is a candidate under this one has its history read first; the rows are not written again, because only a write that won may write.
@@ -171,17 +173,22 @@ final readonly class CompleteListing
         $failures = $this->store->failuresOf($project);
         $this->stillNewestSince($project, $readBefore);
 
-        return $this->planOverWith($project, $label, $newer, $failures);
+        return $this->planOverWith($this->rulesOf($project, $label), $newer, $failures);
     }
 
-    // The split plans are read last, after the listing, the histories and the failures, because a plan recorded while those were read must still hold its original; build admission checks again for a plan recorded after this.
+    // Called last, after the listing, the histories and the failures, because a split plan recorded while those were read must still hold its original; build admission checks again for a plan recorded after this.
+    private function rulesOf(string $project, string $label): IntakeRules
+    {
+        return new IntakeRules($label, $this->umbrellas->of($project));
+    }
+
     /**
      * @param list<StoredIssue>  $rows
      * @param array<int, string> $failures
      */
-    private function planOverWith(string $project, string $label, array $rows, array $failures): IntakePlan
+    private function planOverWith(IntakeRules $rules, array $rows, array $failures): IntakePlan
     {
-        return new IntakeRules($label, $this->umbrellas->of($project))->planOf(array_map(static fn (StoredIssue $row): QueuedIssue => $row->queued(), $rows), $failures);
+        return $rules->planOf(array_map(static fn (StoredIssue $row): QueuedIssue => $row->queued(), $rows), $failures);
     }
 
     // Checked once, after the last read the plan is answered from, and never retried, because a winning write is never answered from rows older than the newest committed listing, and the history and failure reads leave time for a third worker to commit one.
