@@ -822,6 +822,104 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
         self::assertStringContainsString('tests/ProviderAliasTest.php:9 intakt.testMethodSentence Test method Intakt\Sample\ProviderAliasBase::testData()', $this->ruleFindingsIn($sandbox));
     }
 
+    public function testAShortOriginalStillExposedBesideAnAliasTheClassOverridesIsReportedAtTheAlias(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/OverriddenChecks.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait OverriddenChecks { public function testRuns(): void {} }\n");
+        $sandbox->write('tests/AliasCase.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class AliasCase extends \PHPUnit\Framework\TestCase
+        {
+            use OverriddenChecks { testRuns as testTheChecksRun; }
+
+            public function testTheChecksRun(): void {}
+        }
+        PHP_WRAP);
+
+        self::assertSame('tests/AliasCase.php:7 intakt.testMethodSentence Test method Intakt\Sample\AliasCase::testRuns()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAShortMethodTheClassDeclaresUnderAnAliasNameIsReportedWhereItIsDeclaredBesideTheOriginalAtTheAlias(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/OverriddenChecks.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait OverriddenChecks { public function testRuns(): void {} }\n");
+        $sandbox->write('tests/AliasCase.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class AliasCase extends \PHPUnit\Framework\TestCase
+        {
+            use OverriddenChecks { testRuns as testGo; }
+
+            public function testGo(): void {}
+        }
+        PHP_WRAP);
+
+        self::assertSame(
+            'tests/AliasCase.php:9 intakt.testMethodSentence Test method Intakt\Sample\AliasCase::testGo()'.self::FINDING."\n"
+            .'tests/AliasCase.php:7 intakt.testMethodSentence Test method Intakt\Sample\AliasCase::testRuns()'.self::FINDING,
+            $this->ruleFindingsIn($sandbox),
+        );
+    }
+
+    public function testAnAbstractTraitMethodDoesNotHideTheConcreteTestMethodAnotherTraitBrings(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/SlotChecks.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait Required { abstract public function testRuns(): void; }\ntrait Provided { public function testRuns(): void {} }\n");
+        $sandbox->write('tests/AliasCase.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class AliasCase extends \PHPUnit\Framework\TestCase
+        {
+            use Required, Provided { Provided::testRuns as testTheChecksRun; }
+        }
+        PHP_WRAP);
+
+        self::assertSame('tests/AliasCase.php:7 intakt.testMethodSentence Test method Intakt\Sample\AliasCase::testRuns()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAConcreteTraitMethodKeepsItsVisibilityWhenAnAbstractOneComesFirst(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/SlotChecks.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait Required { abstract public function testRuns(): void; }\ntrait Provided { protected function testRuns(): void {} }\n");
+        $sandbox->write('tests/AliasCase.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class AliasCase extends \PHPUnit\Framework\TestCase
+        {
+            use Required, Provided { Provided::testRuns as testTheChecksRun; }
+        }
+        PHP_WRAP);
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAnAbstractTraitMethodThatComesSecondDoesNotTakeTheNameFromTheConcreteOne(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/SlotChecks.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait Required { abstract protected function testRuns(): void; }\ntrait Provided { public function testRuns(): void {} }\n");
+        $sandbox->write('tests/AliasCase.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class AliasCase extends \PHPUnit\Framework\TestCase
+        {
+            use Provided, Required { Provided::testRuns as testTheChecksRun; }
+        }
+        PHP_WRAP);
+
+        self::assertSame('tests/AliasCase.php:7 intakt.testMethodSentence Test method Intakt\Sample\AliasCase::testRuns()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
     public function testAShortTestMethodOfATraitUnderSourceUsedWithoutAliasPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('test-method-src-trait-without-alias');

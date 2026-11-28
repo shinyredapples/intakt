@@ -34,7 +34,12 @@ final readonly class ComposedTraitMethod
 
     public function isRunAsTest(): bool
     {
-        return Modifiers::PUBLIC === $this->fact['visibility'] && !$this->fact['abstract'] && ($this->fact['marked'] || PhpUnitTestMethod::isNamed($this->fact['name']));
+        return Modifiers::PUBLIC === $this->fact['visibility'] && !$this->isAbstract() && ($this->fact['marked'] || PhpUnitTestMethod::isNamed($this->fact['name']));
+    }
+
+    public function isAbstract(): bool
+    {
+        return $this->fact['abstract'];
     }
 
     // because an alias without a modifier keeps the visibility the trait gives the method, whatever the same block does to the original name
