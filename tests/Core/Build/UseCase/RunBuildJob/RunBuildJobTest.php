@@ -12,15 +12,19 @@ use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
+use Intakt\Core\Build\Domain\BuildObservation;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\Domain\TrustedBuildFigures;
+use Intakt\Core\Build\Domain\UntrustedBuildFigures;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobEndFailed;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobObserver;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
@@ -51,6 +55,7 @@ use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -62,6 +67,10 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(RecordedBuildStops::class)]
 #[CoversClass(BuildJobEndFailed::class)]
 #[UsesClass(BuildLimits::class)]
+#[UsesClass(BuildJobObserver::class)]
+#[UsesClass(BuildObservation::class)]
+#[UsesClass(TrustedBuildFigures::class)]
+#[UsesClass(UntrustedBuildFigures::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
@@ -119,6 +128,26 @@ final class RunBuildJobTest extends TestCase
         self::assertSame('BUNDLE', $outcome->bundle);
         self::assertSame("feat: x\n", $outcome->pullRequestText);
         self::assertSame("log\n", $outcome->log);
+    }
+
+    public function testAJobThatEndedCarriesWhatItsOutputShowed(): void
+    {
+        $log = '{"type":"result","usage":{"input_tokens":40,"output_tokens":2}}'."\n";
+
+        $outcome = $this->runBuilds(OutputFiles::of(['build.log' => $log]))->run($this->job());
+
+        self::assertSame(42, $outcome->observation?->trusted->tokensUsed);
+        self::assertSame('2026-11-28T10:00:00+00:00', $outcome->observation->trusted->observedAt->format(DATE_ATOM));
+    }
+
+    public function testAJobWhoseOutputTheRunnerRefusedCarriesNoObservation(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobOutputRefused::unlisted());
+
+        $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+
+        self::assertNull($outcome->observation);
     }
 
     public function testTheTiersModelAndTheBranchReachTheBuildScript(): void
@@ -757,6 +786,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, $this->gate ?? new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $this->script, $this->precheck, $this->promptFolder ?? $this->folder.'/prompts', $this->stops, new BuildLimits(1, 1, 1, 1));
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, $this->gate ?? new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, $filesystem ?? new Filesystem(), $this->script, $this->precheck, $this->promptFolder ?? $this->folder.'/prompts', $this->stops, new BuildLimits(1, 1, 1, 1), new BuildJobObserver(new MockClock('2026-11-28 10:00:00 UTC')));
     }
 }

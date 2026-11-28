@@ -12,13 +12,17 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
+use Intakt\Core\Build\Domain\BuildObservation;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\Domain\TrustedBuildFigures;
+use Intakt\Core\Build\Domain\UntrustedBuildFigures;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobObserver;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
@@ -47,8 +51,10 @@ use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -60,6 +66,10 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(RunBuildJob::class)]
 #[UsesClass(RecordedBuildStops::class)]
 #[UsesClass(BuildLimits::class)]
+#[UsesClass(BuildJobObserver::class)]
+#[UsesClass(BuildObservation::class)]
+#[UsesClass(TrustedBuildFigures::class)]
+#[UsesClass(UntrustedBuildFigures::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
 #[UsesClass(BuildVerdict::class)]
@@ -96,6 +106,8 @@ final class RunBuildJobCommandTest extends TestCase
 
     private ?JobRunner $runner = null;
 
+    private int $verbosity = OutputInterface::VERBOSITY_NORMAL;
+
     public function testABuiltJobWritesTheBundleAndPrintsThePullRequestText(): void
     {
         $tester = $this->executed(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: <b>x</b>\n\n## Summary\n"]), []);
@@ -103,6 +115,27 @@ final class RunBuildJobCommandTest extends TestCase
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame('BUNDLE', file_get_contents($this->folder.'/out.bundle'));
         self::assertSame('bundle '.$this->folder."/out.bundle\npull request text:\nfeat: <b>x</b>\n\n## Summary\n", $tester->getDisplay());
+    }
+
+    public function testAVerboseRunPrintsTheObservedFiguresTrustedAndUntrustedApart(): void
+    {
+        $log = '{"type":"result","usage":{"input_tokens":1200,"output_tokens":300,"cache_creation_input_tokens":500,"cache_read_input_tokens":0}}'."\n";
+
+        $this->verbosity = OutputInterface::VERBOSITY_VERBOSE;
+
+        $tester = $this->executed(OutputFiles::of(['build.log' => $log]), []);
+
+        self::assertStringStartsWith(
+            "observed at 2026-11-28T10:00:00+00:00: 2000 tokens (trusted: the CLI's report)\nbuilder's figures (untrusted): content none, 0 failing tests, check running: no\n",
+            $tester->getDisplay(),
+        );
+    }
+
+    public function testARunThatIsNotVerbosePrintsNoFigures(): void
+    {
+        $tester = $this->executed(OutputFiles::of(['build.log' => '{"type":"result","usage":{"input_tokens":1}}'."\n"]), []);
+
+        self::assertStringNotContainsString('observed at', $tester->getDisplay());
     }
 
     public function testTheTaskFileAndEachDecisionReachThePromptFenced(): void
@@ -311,6 +344,7 @@ final class RunBuildJobCommandTest extends TestCase
             $this->folder.'/prompts',
             new RecordedBuildStops(),
             new BuildLimits(1, 1, 1, 1),
+            new BuildJobObserver(new MockClock('2026-11-28 10:00:00 UTC')),
         ), new Filesystem()));
         $tester = new CommandTester($application->find('intakt:build:run'));
         $tester->execute([
@@ -321,7 +355,7 @@ final class RunBuildJobCommandTest extends TestCase
             'image' => 'intakt-job-demo:1',
             'bundle' => $this->folder.'/out.bundle',
             ...$arguments,
-        ]);
+        ], ['verbosity' => $this->verbosity]);
 
         return $tester;
     }
