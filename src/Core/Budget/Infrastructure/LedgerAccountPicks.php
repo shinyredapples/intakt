@@ -97,7 +97,7 @@ final readonly class LedgerAccountPicks implements AccountPicks
             return false;
         }
 
-        $reset =DateTimeImmutable::createFromFormat(DATE_ATOM, $left->resetsAt, new DateTimeZone('UTC'));
+        $reset = DateTimeImmutable::createFromFormat(DATE_ATOM, $left->resetsAt, new DateTimeZone('UTC'));
 
         return false !== $reset && $reset->format(DATE_ATOM) === $left->resetsAt ? $reset : false;
     }
