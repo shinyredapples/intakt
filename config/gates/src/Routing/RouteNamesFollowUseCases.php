@@ -20,7 +20,7 @@ final class RouteNamesFollowUseCases
     private array $declaredClasses = [];
 
     /**
-     * @param array<string, string> $classOfService the class of each service the container defines, by service ID
+     * @param array<string, string> $classOfService
      */
     public function __construct(private readonly array $classOfService = [])
     {

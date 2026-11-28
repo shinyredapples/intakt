@@ -63,6 +63,22 @@ final class RouteNamesGateTest extends SandboxTestCase
         self::assertStringContainsString('Route "dashboard_show_demo" is served by Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController, so it must be named "dashboard_play_demo"', $run->findingsOf('routes'));
     }
 
+    public function testARouteWhoseControllerIsAServiceAliasFailsTheGate(): void
+    {
+        $sandbox = $this->kernelSandbox();
+        $kernel = (string) file_get_contents($sandbox->root.'/src/Kernel.php');
+        $kernel = str_replace("'http_method_override' => false]);", "'http_method_override' => false]);\n        \$container->services()->set('dashboard.play_demo', 'Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController');\n        \$container->services()->alias('dashboard.first', 'dashboard.play_demo');\n        \$container->services()->alias('dashboard.demo', 'dashboard.first')->public();", $kernel);
+        $served = str_replace("->controller('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController')", "->controller('dashboard.demo')", $kernel);
+        self::assertStringContainsString("alias('dashboard.demo', 'dashboard.first')", $served);
+        self::assertStringContainsString("controller('dashboard.demo')", $served);
+        $sandbox->write('src/Kernel.php', $served);
+
+        $run = $sandbox->check('--only=routes');
+
+        self::assertTrue($run->failed('routes'), $run->output());
+        self::assertStringContainsString('so it must be named "dashboard_play_demo"', $run->findingsOf('routes'));
+    }
+
     public function testAConsoleThatPrintsNoServiceListFailsTheGate(): void
     {
         $sandbox = $this->kernelSandbox();

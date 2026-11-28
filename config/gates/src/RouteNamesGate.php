@@ -69,60 +69,6 @@ final class RouteNamesGate implements RunsTheChangesCode
         return GateResult::withFindings($this->name(), new RouteNamesFollowUseCases($classOfService)->findingsIn($routes));
     }
 
-    /**
-     * @return array<string, string>|null
-     */
-    private function classOfServiceFrom(string $json): ?array
-    {
-        $listed = $this->decoded($json);
-
-        if (!is_array($listed) || !is_array($listed['definitions'] ?? null) || !is_array($listed['aliases'] ?? [])) {
-            return null;
-        }
-
-        $classes = [];
-
-        foreach ($listed['definitions'] as $id => $definition) {
-            if (is_string($id) && is_array($definition) && is_string($definition['class'] ?? null)) {
-                $classes[$id] = $definition['class'];
-            }
-        }
-
-        $targets = [];
-
-        foreach ($listed['aliases'] ?? [] as $id => $alias) {
-            $target = is_array($alias) ? ($alias['service'] ?? null) : null;
-
-            if (is_string($id) && is_string($target)) {
-                $targets[$id] = $target;
-            }
-        }
-
-        foreach (array_keys($targets) as $id) {
-            $target = $targets[$id];
-
-            // Because an alias may point to another alias; the bound stops a cycle.
-            for ($hops = count($targets); $hops > 0 && isset($targets[$target]); --$hops) {
-                $target = $targets[$target];
-            }
-
-            if (isset($classes[$target])) {
-                $classes[$id] = $classes[$target];
-            }
-        }
-
-        return $classes;
-    }
-
-    private function decoded(string $json): mixed
-    {
-        try {
-            return json_decode($json, true, 512, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            return null;
-        }
-    }
-
     private function routesFrom(string $json): ?RouteCollection
     {
         $listed = $this->decoded($json);
@@ -143,4 +89,70 @@ final class RouteNamesGate implements RunsTheChangesCode
 
         return $routes;
     }
+
+    private function decoded(string $json): mixed
+    {
+        try {
+            return json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return null;
+        }
+    }
+
+    /**
+     * @return array<string, string>|null
+     */
+    private function classOfServiceFrom(string $json): ?array
+    {
+        $listed = $this->decoded($json);
+
+        if (!is_array($listed) || !is_array($listed['definitions'] ?? null) || !is_array($listed['aliases'] ?? [])) {
+            return null;
+        }
+
+        $classes = $this->definedClasses($listed['definitions']);
+
+        return $classes + $this->aliasedClasses($listed['aliases'] ?? [], $classes);
+    }
+
+    /**
+     * @param array<mixed> $definitions
+     *
+     * @return array<string, string>
+     */
+    private function definedClasses(array $definitions): array
+    {
+        $classes = [];
+
+        foreach ($definitions as $id => $definition) {
+            if (is_string($id) && is_array($definition) && is_string($definition['class'] ?? null)) {
+                $classes[$id] = $definition['class'];
+            }
+        }
+
+        return $classes;
+    }
+
+    /**
+     * @param array<mixed>          $aliases
+     * @param array<string, string> $classes
+     *
+     * @return array<string, string>
+     */
+    private function aliasedClasses(array $aliases, array $classes): array
+    {
+        $aliased = [];
+
+        // Because the compiled container points every alias straight at a definition, even one declared as an alias of an alias.
+        foreach ($aliases as $id => $alias) {
+            $target = is_array($alias) ? ($alias['service'] ?? null) : null;
+
+            if (is_string($id) && is_string($target) && isset($classes[$target])) {
+                $aliased[$id] = $classes[$target];
+            }
+        }
+
+        return $aliased;
+    }
 }
+
