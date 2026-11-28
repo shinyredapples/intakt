@@ -32,7 +32,7 @@ final readonly class UseBlocks
         return new self($owner, array_values(array_merge(...array_map(static fn (TraitUse $use): array => $use->traits, $uses))), array_values(array_merge(...array_map(static fn (TraitUse $use): array => $use->adaptations, $uses))));
     }
 
-    // as PHP binds a trait: its aliases first, then, unless insteadof excludes it, the method under its own name with the last visibility change; the first trait to bind a name keeps it
+    // as PHP binds a trait: its aliases first, then, unless insteadof excludes it, the method under its own name with the last visibility change; the first concrete method to bind a name keeps it
     /**
      * @param array<string, TraitMethod> $methods
      * @param array<string, TraitMethod> $provided
@@ -45,7 +45,7 @@ final readonly class UseBlocks
             $methods = $this->bindAliases($methods, $trait, $method);
 
             if (!$this->excludes($trait, $method)) {
-                $methods[$name] ??= $method->withVisibility($this->lastVisibilityChange($trait, $method));
+                $methods = $this->claim($methods, $name, $method->withVisibility($this->lastVisibilityChange($trait, $method)));
             }
         }
 
@@ -61,7 +61,7 @@ final readonly class UseBlocks
     {
         foreach ($this->adaptationsOf($trait, $method) as $alias) {
             if ($alias->newName instanceof Identifier) {
-                $methods[$alias->newName->toLowerString()] ??= $method->renamed($alias->newName->toString(), $this->visibility($alias), $this->owner.':'.$alias->getStartLine());
+                $methods = $this->claim($methods, $alias->newName->toLowerString(), $method->renamed($alias->newName->toString(), $this->visibility($alias), $this->owner.':'.$alias->getStartLine()));
             }
         }
 
@@ -79,6 +79,23 @@ final readonly class UseBlocks
     private function visibility(Alias $alias): int
     {
         return (int) $alias->newModifier & Modifiers::VISIBILITY_MASK;
+    }
+
+    /**
+     * @param array<string, TraitMethod> $methods
+     *
+     * @return array<string, TraitMethod>
+     */
+    private function claim(array $methods, string $name, TraitMethod $method): array
+    {
+        $bound = $methods[$name] ?? null;
+
+        // because a concrete method another trait brings in implements an abstract one under the same name, whichever trait the block lists first
+        if (!$bound instanceof TraitMethod || ($bound->isAbstract() && !$method->isAbstract())) {
+            $methods[$name] = $method;
+        }
+
+        return $methods;
     }
 
     private function excludes(Name $trait, TraitMethod $method): bool

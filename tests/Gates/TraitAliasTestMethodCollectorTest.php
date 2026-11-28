@@ -171,6 +171,35 @@ final class TraitAliasTestMethodCollectorTest extends PhpStanRuleTestCase
         self::assertSame($this->findingsAtTheClassAlias('testAgain', 'testRuns'), $this->ruleFindingsIn($sandbox));
     }
 
+    public function testTheOriginalNameOfAnAliasTheClassOverridesIsStillReportedAtTheAlias(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->write('src/Shared.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Shared\n{\n    public function testRuns(): void {}\n}\n");
+        $sandbox->write('tests/SampleTest.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\nuse PHPUnit\\Framework\\TestCase;\nfinal class SampleTest extends TestCase\n{\n    use Shared { testRuns as testTheCheckRuns; }\n    public function testTheCheckRuns(): void {}\n}\n");
+
+        self::assertSame($this->findingsAtTheClassAlias('testRuns'), $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAnAbstractTraitMethodListedFirstLeavesTheConcreteTestOfTheNextTraitJudged(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->write('src/Required.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Required\n{\n    abstract protected function testRuns(): void;\n}\n");
+        $sandbox->write('src/Provided.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Provided\n{\n    public function testRuns(): void {}\n}\n");
+        $sandbox->write('tests/SampleTest.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\nuse PHPUnit\\Framework\\TestCase;\nfinal class SampleTest extends TestCase\n{\n    use Required, Provided { Provided::testRuns as testAgain; }\n}\n");
+
+        self::assertSame($this->findingsAtTheClassAlias('testAgain', 'testRuns'), $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAnAbstractTraitMethodListedLastLeavesTheConcreteTestOfTheFirstTraitJudged(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->write('src/Required.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Required\n{\n    abstract protected function testRuns(): void;\n}\n");
+        $sandbox->write('src/Provided.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Provided\n{\n    public function testRuns(): void {}\n}\n");
+        $sandbox->write('tests/SampleTest.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\nuse PHPUnit\\Framework\\TestCase;\nfinal class SampleTest extends TestCase\n{\n    use Provided, Required { Provided::testRuns as testAgain; }\n}\n");
+
+        self::assertSame($this->findingsAtTheClassAlias('testAgain', 'testRuns'), $this->ruleFindingsIn($sandbox));
+    }
+
     public function testAProviderNamedOnlyByAHiddenTraitTestLeavesThePublicStaticAliasJudged(): void
     {
         $sandbox = Sandbox::empty();

@@ -28,23 +28,20 @@ final readonly class TraitComposition
      */
     public function takenFromTraits(ClassReflection $class): array
     {
-        // because most classes use no trait, and parsing their source would tell nothing
-        $declaration = [] === $class->getNativeReflection()->getTraitNames() ? null : $this->declarationOf($class);
+        $declaration = $this->traitUserOf($class);
 
-        if (!$declaration instanceof ClassLike) {
-            return [];
-        }
+        return $declaration instanceof ClassLike ? array_diff_key($this->bound($declaration, $class), $this->ownNames($declaration)) : [];
+    }
 
-        $blocks = UseBlocks::of($declaration, $class->getName());
-        $methods = [];
+    // also under the names the class or trait declares itself, because an alias it overrides still renamed the trait method, whose original name the class then exposes
+    /**
+     * @return array<string, TraitMethod>
+     */
+    public function boundFromTraits(ClassReflection $class): array
+    {
+        $declaration = $this->traitUserOf($class);
 
-        foreach ($blocks->traits as $trait) {
-            if ($this->reflections->hasClass($trait->toString())) {
-                $methods = $blocks->bind($methods, $trait, $this->methodsOf($this->reflections->getClass($trait->toString())));
-            }
-        }
-
-        return array_diff_key($methods, $this->ownNames($declaration));
+        return $declaration instanceof ClassLike ? $this->bound($declaration, $class) : [];
     }
 
     public function isPublic(ClassReflection $class, ReflectionMethod $method): bool
@@ -62,6 +59,29 @@ final readonly class TraitComposition
         }
 
         return $method->isPublic();
+    }
+
+    private function traitUserOf(ClassReflection $class): ?ClassLike
+    {
+        // because most classes use no trait, and parsing their source would tell nothing
+        return [] === $class->getNativeReflection()->getTraitNames() ? null : $this->declarationOf($class);
+    }
+
+    /**
+     * @return array<string, TraitMethod>
+     */
+    private function bound(ClassLike $declaration, ClassReflection $class): array
+    {
+        $blocks = UseBlocks::of($declaration, $class->getName());
+        $methods = [];
+
+        foreach ($blocks->traits as $trait) {
+            if ($this->reflections->hasClass($trait->toString())) {
+                $methods = $blocks->bind($methods, $trait, $this->methodsOf($this->reflections->getClass($trait->toString())));
+            }
+        }
+
+        return $methods;
     }
 
     private function declarationOf(ClassReflection $class): ?ClassLike

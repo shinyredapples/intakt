@@ -42,7 +42,7 @@ final readonly class TraitAliasTestMethodCollector implements Collector
         $owner = $scope->getTraitReflection() ?? $class;
         $composition = new TraitComposition($this->reflections);
         $exposed = $composition->takenFromTraits($class);
-        $declared = $composition->takenFromTraits($owner);
+        $declared = $composition->boundFromTraits($owner);
         $records = [];
 
         foreach ($this->renamingAliases($node) as $alias) {
@@ -77,7 +77,7 @@ final readonly class TraitAliasTestMethodCollector implements Collector
      *
      * @return array<string, list<string>>
      */
-    // the alias and the original name, each with the identity the class must still expose under it: an outer alias, the class's own method or the other trait insteadof selects is judged where it is declared
+    // the alias and the original name, each judged on its own with the identity the class must still expose under it: an outer alias, the class's own method or the other trait insteadof selects is judged where it is declared, and the original name stays judged here when the class overrides the alias
     private function namesRunUnder(Alias $alias, ClassReflection $owner, array $declared): array
     {
         $method = $declared[strtolower((string) $alias->newName)] ?? null;
