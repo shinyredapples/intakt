@@ -16,11 +16,12 @@ You can ask Intakt first whether a task is ready and how big it is:
 php bin/console intakt:build:size <project> <issue number>
 ```
 
-1. Intakt checks that the issue is one it may work on: it carries the project's eligibility label, and the people who wrote it and labeled it can write to the repository.
+1. Intakt checks that the issue is one it may work on: it carries the project's eligibility label and not the `idea` label, and the people who wrote it and labeled it can write to the repository.
 2. A model reads the task once and answers whether it says what changes, how to tell it is done, and that it is one change. It also guesses the size: `small`, `medium`, `large`, or `split` (too big for one build).
-3. If something is missing, Intakt parks the task and posts one comment on the issue naming what to add. Edit the issue, then run the command again.
+3. If something is missing, Intakt parks the task and posts one comment on the issue naming what to add. Edit the issue, then run the command again. If the command fails after parking, run it again: it finds a comment it already posted and does not post it twice.
+4. Once the edited task is ready, Intakt removes that question again.
 
-The command prints `outcome ready`, `outcome parked`, `outcome invalid` (the answer was unusable, nothing happened) or `outcome already_sized` (the same text was sized before). Splitting a task that is too big is planned.
+The command prints `outcome ready`, `outcome parked`, `outcome invalid` (the answer was unusable, nothing happened) or `outcome already_sized` (the task's latest verdict is on this same text). Splitting a task that is too big is planned.
 
 ## The steps
 

@@ -41,6 +41,9 @@ final class ScriptedIssue
     /** @var array<string, mixed> */
     public array $storedOtherwise = [];
 
+    // The status GitHub answers to a post it stored all the same, as it can with a 502.
+    public ?int $answerToAStoredPost = null;
+
     public static function task(): TaskIssue
     {
         return new TaskIssue(self::PROJECT, self::NUMBER);
@@ -108,6 +111,9 @@ final class ScriptedIssue
         // Stamped with the App's id, because GitHub stamps a comment posted with an installation token so.
         $stored = [...$payload, 'user' => ['login' => 'intakt[bot]', 'type' => 'Bot'], 'created_at' => self::MOMENT, 'updated_at' => self::MOMENT, 'performed_via_github_app' => ['id' => (int) self::APP_ID], ...$this->storedOtherwise];
         $this->comments[] = $stored;
+        if (null !== $this->answerToAStoredPost) {
+            return new MockResponse('{"message":"Bad Gateway"}', ['http_code' => $this->answerToAStoredPost]);
+        }
 
         return new MockResponse(json_encode($stored, JSON_THROW_ON_ERROR), ['http_code' => 201]);
     }

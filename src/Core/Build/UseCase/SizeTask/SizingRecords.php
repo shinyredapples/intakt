@@ -23,27 +23,29 @@ final readonly class SizingRecords
         return 'task-sizing-'.hash('sha256', strlen($project).':'.$project.':'.$task);
     }
 
-    // A verdict on the same text stands, because sizing it again would spend tokens and park the task twice; an invalid answer settles nothing, so it is tried again, and an edited task is sized afresh.
-    public function holdsAVerdictOn(SizingRequest $request): bool
+    // A hash, because the record and the comment's marker name the text a verdict is of without holding it: the title and the body are untrusted.
+    public static function textOf(SizingRequest $request): string
     {
-        $text = $this->textOf($request);
-
-        foreach ($this->ledger->readOfKindAbout(LedgerEventKind::TaskSized, self::keyOf($request->project, $request->task)) as $recorded) {
-            $payload = json_decode($recorded->event->payload, true);
-
-            if (is_array($payload) && $text === ($payload['text'] ?? null) && SizingOutcome::Invalid->value !== ($payload['outcome'] ?? null)) {
-                return true;
-            }
-        }
-
-        return false;
+        return hash('sha256', strlen($request->title).':'.$request->title.$request->body);
     }
 
-    // The task by its number, a hash of its text and the verdict's closed fields only, because the title, the body and the model's reason are untrusted text.
+    // Only the last one, because an older verdict on a text the task held before says nothing of what the later one parked or released; an invalid answer settles nothing, so it is passed over and the task is tried again.
+    public function latestVerdictOf(SizingRequest $request): ?RecordedSizing
+    {
+        $latest = null;
+
+        foreach ($this->ledger->readOfKindAbout(LedgerEventKind::TaskSized, self::keyOf($request->project, $request->task)) as $recorded) {
+            $latest = RecordedSizing::in($recorded->event->payload) ?? $latest;
+        }
+
+        return $latest;
+    }
+
+    // The task by its number, a hash of its text and the verdict's closed fields only, because the title, the body and the model's reason are untrusted text; the run, because a later ready verdict takes back the question this run parked.
     /**
      * @throws TaskNotSized
      */
-    public function record(SizingRequest $request, SizingOutcome $outcome, ?SizingVerdict $verdict): void
+    public function record(SizingRequest $request, SizingOutcome $outcome, ?SizingVerdict $verdict, string $run): void
     {
         $payload = json_encode([
             'project' => $request->project,
@@ -52,7 +54,8 @@ final readonly class SizingRecords
             'missing' => array_map(static fn (ReadinessGap $gap): string => $gap->value, $verdict->missing ?? []),
             'size' => $verdict?->size->value,
             'estimated_lines' => $verdict?->estimated_lines,
-            'text' => $this->textOf($request),
+            'text' => self::textOf($request),
+            'run' => $run,
         ], JSON_THROW_ON_ERROR);
 
         $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::TaskSized, $payload, self::keyOf($request->project, $request->task)));
@@ -60,10 +63,5 @@ final readonly class SizingRecords
         if (!$appended->succeeded()) {
             throw TaskNotSized::notRecorded($request->project, $request->task, (string) $appended->failure);
         }
-    }
-
-    private function textOf(SizingRequest $request): string
-    {
-        return hash('sha256', strlen($request->title).':'.$request->title.$request->body);
     }
 }

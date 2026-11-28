@@ -39,6 +39,13 @@ final class SampleIssue implements IssueReads, IssueHistories
         return new ListedIssue($this->number, 'Add a cart page', $body, new IssueLabels(...([] === $labels ? [self::LABEL] : $labels)), $author, new DateTimeImmutable('2026-11-20T10:00:00Z'), null, false);
     }
 
+    // The read and the history together, because sizing refuses an issue whose history is of another text than the read.
+    public function rewrittenAs(string $body): void
+    {
+        $this->open = $this->listedAs(self::OWNER, $body);
+        $this->history = new IssueHistory(self::OWNER, [new LabelApplication(self::LABEL, self::OWNER)], $body, new IssueLabels(self::LABEL));
+    }
+
     #[Override]
     public function listOpen(string $project, ?string $validator): IssueListing
     {

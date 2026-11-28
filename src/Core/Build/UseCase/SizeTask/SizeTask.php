@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\SizeTask;
 
+use Intakt\Core\Build\Contract\ReadinessGap;
+use Intakt\Core\Build\Contract\SizingRequest;
 use Intakt\Core\Build\Contract\SizingVerdict;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
+use Intakt\Core\Build\UseCase\BuildTask\ParkedTaskNotCleared;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\GitHubForge\Contract\TaskComments;
 use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
@@ -86,20 +90,27 @@ final readonly class SizeTask
     {
         $request = $this->tasks->requestFor($run->project, $run->task);
 
-        if ($this->records->holdsAVerdictOn($request)) {
+        $latest = $this->records->latestVerdictOf($request);
+
+        if ($latest?->isOf($request) ?? false) {
             return SizingOutcome::AlreadySized;
         }
 
         $verdict = $this->vendor->size($request);
         $outcome = $this->outcomeOf($verdict);
 
-        $this->parkedWhenNotReady($run, $verdict);
-        // After the parking and the comment, so a record says parked only once the task is parked and asked.
-        $this->records->record($request, $outcome, $verdict);
+        match ($outcome) {
+            SizingOutcome::Parked => $this->parkedAndAsked($run, $request, $verdict->missing ?? []),
+            SizingOutcome::Ready => $this->releasedFromItsReadinessQuestion($run, $latest),
+            default => null,
+        };
+        // After the parking and the comment, so a record says parked only once the task is parked and asked, and ready only once the earlier readiness question is gone.
+        $this->records->record($request, $outcome, $verdict, $run->id);
 
         return $outcome;
     }
 
+    // A verdict that is not ready names a gap, because the agent refuses one with nothing missing.
     private function outcomeOf(?SizingVerdict $verdict): SizingOutcome
     {
         return match (true) {
@@ -109,18 +120,15 @@ final readonly class SizeTask
         };
     }
 
-    // Parked before the comment, because a retry after a failed comment parks the task again in place and comments once, while a comment before a failed park would be posted twice.
+    // Parked before the comment, because a comment before a failed park would ask about a task that is not parked. The comment is keyed by the hash of the sized text, because the forge can store a comment and still answer as failed: the retry then finds it and posts no second one, while an edited text that still lacks the same item gets its own comment.
     /**
+     * @param list<ReadinessGap> $missing
+     *
      * @throws TaskNotSized
      */
-    private function parkedWhenNotReady(BuildRun $run, ?SizingVerdict $verdict): void
+    private function parkedAndAsked(BuildRun $run, SizingRequest $request, array $missing): void
     {
-        // An empty list never reaches here, because the agent refuses a verdict that is not ready with nothing missing.
-        if (!$verdict instanceof SizingVerdict || $verdict->ready || [] === $verdict->missing) {
-            return;
-        }
-
-        $question = BuildQuestion::forMissingReadiness($verdict->missing);
+        $question = BuildQuestion::forMissingReadiness($missing);
 
         try {
             $this->parkedTasks->park($run, $question);
@@ -129,9 +137,28 @@ final readonly class SizeTask
         }
 
         try {
-            $this->comments->post($run->project, $run->task, $question->asComment());
-        } catch (ForgeWriteFailed|ForgeRateLimited $failure) {
+            $this->comments->postOnce($run->project, $run->task, $question->asComment(), 'sizing-'.SizingRecords::textOf($request));
+        } catch (ForgeReadFailed|ForgeWriteFailed|ForgeRateLimited $failure) {
             throw TaskNotSized::notCommented($run->project, $run->task, $failure->getMessage());
+        }
+    }
+
+    // Cleared as the run that parked it, because a question a build run stored later then stays: an edit that makes the task ready answers the readiness question and no other.
+    /**
+     * @throws TaskNotSized
+     */
+    private function releasedFromItsReadinessQuestion(BuildRun $run, ?RecordedSizing $latest): void
+    {
+        $parkedBy = $latest?->parkedBy();
+
+        if (null === $parkedBy) {
+            return;
+        }
+
+        try {
+            $this->parkedTasks->clear(new BuildRun($run->project, $run->task, $parkedBy));
+        } catch (ParkedTaskNotCleared) {
+            throw TaskNotSized::stillParked($run->project, $run->task);
         }
     }
 }

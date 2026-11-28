@@ -10,11 +10,13 @@ use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
+use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
+use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
 
 // The rule intake applies, asked again here, because the command names any issue and a stranger's issue must neither spend tokens nor be parked: docs/design/05-architecture/14-threat-model.md
 final readonly class EligibleTasks
@@ -60,6 +62,10 @@ final readonly class EligibleTasks
             return sprintf('it lacks the label "%s"', $label);
         }
 
+        if ($task->labels->contains(WorkLabels::IDEA)) {
+            return sprintf('it carries the label "%s", which intake leaves out', WorkLabels::IDEA);
+        }
+
         if (!$steers($task->author)) {
             return 'its author has no write access';
         }
@@ -67,7 +73,8 @@ final readonly class EligibleTasks
         // The history of the text as read, because a body edited since by an account without write access would reach the model unvouched.
         $history = $this->histories->of($project, $task->number, $task->updatedAt);
 
-        if ($history->body !== $task->body) {
+        // The labels too, as a set, because the history lists every application of a label, also of one removed since, and only the labels it holds now show that the read and the history are of the same issue state.
+        if ($history->body !== $task->body || $this->sorted($history->currentLabels) !== $this->sorted($task->labels)) {
             return 'it changed while it was read';
         }
 
@@ -78,6 +85,17 @@ final readonly class EligibleTasks
         $vouched = array_any($history->labels, static fn (LabelApplication $applied): bool => $label === $applied->label && $steers($applied->appliedBy));
 
         return $vouched ? null : sprintf('the label "%s" was not applied by an account with write access', $label);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function sorted(IssueLabels $labels): array
+    {
+        $names = [...$labels];
+        sort($names);
+
+        return $names;
     }
 
     // Remembered for this read only, because the author is often the last editor and the one who applied the label, and each ask is a forge call.

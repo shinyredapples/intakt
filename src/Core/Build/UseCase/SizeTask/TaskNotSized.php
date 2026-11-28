@@ -29,6 +29,11 @@ final class TaskNotSized extends RuntimeException implements ReportableFailure
         return new self(sprintf('Issue %d of project "%s" is parked, but its comment was not posted: %s', $task, $project, $reason));
     }
 
+    public static function stillParked(string $project, int $task): self
+    {
+        return new self(sprintf('Issue %d of project "%s" is ready, but its earlier readiness question was not removed.', $task, $project));
+    }
+
     public static function busy(string $project, int $task): self
     {
         return new self(sprintf('Issue %d of project "%s" is not sized: another sizing of it is running.', $task, $project));

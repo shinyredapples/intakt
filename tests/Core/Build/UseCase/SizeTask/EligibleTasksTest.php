@@ -88,6 +88,36 @@ final class EligibleTasksTest extends TestCase
         $fixture->eligibleTasks()->requestFor('alpha', 7);
     }
 
+    public function testATaskThatAlsoCarriesTheIdeaLabelIsRefusedAsIntakeLeavesItOut(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->issue->open = $fixture->issue->listedAs(SampleIssue::OWNER, SampleIssue::BODY, SampleIssue::LABEL, 'idea');
+        $fixture->issue->history = new IssueHistory(SampleIssue::OWNER, [new LabelApplication(SampleIssue::LABEL, SampleIssue::OWNER)], SampleIssue::BODY, new IssueLabels(SampleIssue::LABEL, 'idea'));
+
+        $this->expectExceptionObject(new TaskNotSized('Issue 7 of project "alpha" cannot be sized: it carries the label "idea", which intake leaves out'));
+
+        $fixture->eligibleTasks()->requestFor('alpha', 7);
+    }
+
+    public function testATaskWhoseHistoryNoLongerHoldsTheLabelItWasReadWithIsRefused(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->issue->history = new IssueHistory(SampleIssue::OWNER, [new LabelApplication(SampleIssue::LABEL, SampleIssue::OWNER)], SampleIssue::BODY, new IssueLabels());
+
+        $this->expectExceptionObject(new TaskNotSized('Issue 7 of project "alpha" cannot be sized: it changed while it was read'));
+
+        $fixture->eligibleTasks()->requestFor('alpha', 7);
+    }
+
+    public function testATaskWhoseLabelsAreListedInAnotherOrderThanItsHistoryHoldsThemIsSized(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->issue->open = $fixture->issue->listedAs(SampleIssue::OWNER, SampleIssue::BODY, 'priority:high', SampleIssue::LABEL);
+        $fixture->issue->history = new IssueHistory(SampleIssue::OWNER, [new LabelApplication(SampleIssue::LABEL, SampleIssue::OWNER)], SampleIssue::BODY, new IssueLabels(SampleIssue::LABEL, 'priority:high'));
+
+        self::assertSame(7, $fixture->eligibleTasks()->requestFor('alpha', 7)->task);
+    }
+
     public function testAProjectWithoutAnEligibilityLabelIsRefused(): void
     {
         $this->expectExceptionObject(ProjectNamesNoEligibilityLabel::named('beta'));

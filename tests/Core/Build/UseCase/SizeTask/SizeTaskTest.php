@@ -14,6 +14,7 @@ use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\SizeTask\EligibleTasks;
+use Intakt\Core\Build\UseCase\SizeTask\RecordedSizing;
 use Intakt\Core\Build\UseCase\SizeTask\SizeTask;
 use Intakt\Core\Build\UseCase\SizeTask\SizingOutcome;
 use Intakt\Core\Build\UseCase\SizeTask\SizingRecords;
@@ -29,7 +30,12 @@ use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
+use Intakt\Plugin\GitHubForge\Domain\IssueComment;
+use Intakt\Plugin\GitHubForge\Domain\TaskIssue;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueComments;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubTaskComments;
 use Intakt\Plugin\Vendor\Contract\SizingVendor;
+use Intakt\Tests\Plugin\GitHubForge\ScriptedIssue;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -39,6 +45,11 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(SizingRecords::class)]
 #[CoversClass(TaskNotSized::class)]
 #[CoversClass(SizingOutcome::class)]
+#[CoversClass(RecordedSizing::class)]
+#[UsesClass(GitHubTaskComments::class)]
+#[UsesClass(GitHubIssueComments::class)]
+#[UsesClass(IssueComment::class)]
+#[UsesClass(TaskIssue::class)]
 #[UsesClass(EligibleTasks::class)]
 #[UsesClass(EligibilityLabels::class)]
 #[UsesClass(ProjectEligibilityLabel::class)]
@@ -253,6 +264,149 @@ final class SizeTaskTest extends TestCase
         self::assertSame(SizingOutcome::Ready, $outcome);
     }
 
+    // Forced order: the forge keeps the first comment and answers 502, so the first run fails after the comment is stored and the retry meets it.
+    public function testARetryAfterACommentTheForgeStoredButAnsweredAsFailedEndsParkedWithOneComment(): void
+    {
+        $fixture = $this->fixture();
+        $issue = new ScriptedIssue();
+        $issue->answerToAStoredPost = 502;
+        $sizing = $fixture->sizing($this->vendor($this->verdict([ReadinessGap::AcceptanceCondition], SizeTier::Small, 20)), comments: new GitHubTaskComments($issue->comments()));
+
+        try {
+            (void) $sizing->run(ScriptedIssue::PROJECT, ScriptedIssue::NUMBER);
+            self::fail('A comment answered with 502 was reported as posted.');
+        } catch (TaskNotSized $notSized) {
+            self::assertSame('Issue 7 of project "widget" is parked, but its comment was not posted: GitHub answered 502 to a write.', $notSized->getMessage());
+        }
+
+        self::assertNotContains(LedgerEventKind::TaskSized, $fixture->ledger->kinds());
+        self::assertSame(SizingOutcome::Parked, $sizing->run(ScriptedIssue::PROJECT, ScriptedIssue::NUMBER));
+        self::assertCount(1, $issue->posted());
+        self::assertStringStartsWith('This task is not ready to build. It lacks: an acceptance condition.', $issue->posted()[0]);
+        self::assertSame(1, (int) $fixture->parked->fetchOne('SELECT COUNT(*) FROM build_parked_task'));
+        self::assertSame(['parked'], array_column($this->sizings($fixture), 'outcome'));
+    }
+
+    public function testACommentIsKeyedByTheHashOfTheSizedText(): void
+    {
+        $fixture = $this->fixture();
+
+        (void) $fixture->sizing($this->vendor($this->verdict([ReadinessGap::AcceptanceCondition], SizeTier::Small, 20)))->run('alpha', 7);
+
+        self::assertSame(['sizing-'.SizingRecords::textOf(new SizingRequest('alpha', 7, 'Add a cart page', SampleIssue::BODY))], $fixture->comments->keys);
+    }
+
+    public function testAnEditedTaskThatStillLacksTheSameItemGetsItsOwnComment(): void
+    {
+        $fixture = $this->fixture();
+        $sizing = $fixture->sizing($this->vendor($this->verdict([ReadinessGap::AcceptanceCondition], SizeTier::Small, 20)));
+        (void) $sizing->run('alpha', 7);
+        $fixture->issue->rewrittenAs('Users see their items on /cart, with prices.');
+
+        self::assertSame(SizingOutcome::Parked, $sizing->run('alpha', 7));
+        self::assertCount(2, $fixture->comments->posted);
+        self::assertSame($fixture->comments->posted[0][2], $fixture->comments->posted[1][2]);
+    }
+
+    public function testCommentsThatCannotBeReadBackFailTheSizingAndRecordNoParkedOutcome(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->comments->unreadable = new ForgeReadFailed('GitHub answered 500 to a read of the comments.');
+
+        try {
+            (void) $fixture->sizing($this->vendor($this->verdict([ReadinessGap::AcceptanceCondition], SizeTier::Small, 20)))->run('alpha', 7);
+            self::fail('A comment that was not read back was reported as posted.');
+        } catch (TaskNotSized $notSized) {
+            self::assertSame('Issue 7 of project "alpha" is parked, but its comment was not posted: GitHub answered 500 to a read of the comments.', $notSized->getMessage());
+        }
+
+        self::assertSame([], $fixture->comments->posted);
+        self::assertNotContains(LedgerEventKind::TaskSized, $fixture->ledger->kinds());
+    }
+
+    public function testATaskAnEditMadeReadyNoLongerShowsItsReadinessQuestion(): void
+    {
+        $fixture = $this->fixture();
+        $sizing = $fixture->sizing($this->vendorAnswering($this->verdict([ReadinessGap::AcceptanceCondition], SizeTier::Small, 20), $this->verdict([], SizeTier::Small, 20)));
+        self::assertSame(SizingOutcome::Parked, $sizing->run('alpha', 7));
+        $fixture->issue->rewrittenAs(SampleIssue::BODY.' Done when the cart shows a saved item.');
+
+        self::assertSame(SizingOutcome::Ready, $sizing->run('alpha', 7));
+        self::assertSame([], $fixture->parked->fetchAllAssociative('SELECT question FROM build_parked_task'));
+    }
+
+    public function testAQuestionABuildRunParkedLaterStaysWhenTheTaskIsSizedReady(): void
+    {
+        $fixture = $this->fixture();
+        $sizing = $fixture->sizing($this->vendorAnswering($this->verdict([ReadinessGap::AcceptanceCondition], SizeTier::Small, 20), $this->verdict([], SizeTier::Small, 20)));
+        (void) $sizing->run('alpha', 7);
+        $fixture->parkedTasks()->park(new BuildRun('alpha', 7, 'a-later-build-run'), BuildQuestion::forMissingReadiness([ReadinessGap::SingleOutcome]));
+        $fixture->issue->rewrittenAs(SampleIssue::BODY.' Done when the cart shows a saved item.');
+
+        self::assertSame(SizingOutcome::Ready, $sizing->run('alpha', 7));
+        self::assertSame(['a-later-build-run'], $fixture->parked->fetchFirstColumn('SELECT run FROM build_parked_task'));
+    }
+
+    public function testAReadinessQuestionTheDatabaseDoesNotRemoveRecordsNoReadyOutcome(): void
+    {
+        $fixture = $this->fixture();
+        $sizing = $fixture->sizing($this->vendorAnswering($this->verdict([ReadinessGap::AcceptanceCondition], SizeTier::Small, 20), $this->verdict([], SizeTier::Small, 20)));
+        (void) $sizing->run('alpha', 7);
+        $fixture->issue->rewrittenAs(SampleIssue::BODY.' Done when the cart shows a saved item.');
+        $fixture->parked->executeStatement('DROP TABLE build_parked_task');
+
+        try {
+            (void) $sizing->run('alpha', 7);
+            self::fail('A task whose question was not removed was reported as ready.');
+        } catch (TaskNotSized $notSized) {
+            self::assertSame('Issue 7 of project "alpha" is ready, but its earlier readiness question was not removed.', $notSized->getMessage());
+        }
+
+        self::assertSame(['parked'], array_column($this->sizings($fixture), 'outcome'));
+    }
+
+    public function testARestoredReadyTextIsSizedAgainAfterAnotherTextWasParked(): void
+    {
+        $fixture = $this->fixture();
+        $sizing = $fixture->sizing($this->vendorAnswering($this->verdict([], SizeTier::Small, 20), $this->verdict([ReadinessGap::AcceptanceCondition], SizeTier::Small, 20), $this->verdict([], SizeTier::Small, 20)));
+        self::assertSame(SizingOutcome::Ready, $sizing->run('alpha', 7));
+        $fixture->issue->rewrittenAs('Add a cart.');
+        self::assertSame(SizingOutcome::Parked, $sizing->run('alpha', 7));
+        $fixture->issue->rewrittenAs(SampleIssue::BODY);
+
+        self::assertSame(SizingOutcome::Ready, $sizing->run('alpha', 7));
+        self::assertSame(0, (int) $fixture->parked->fetchOne('SELECT COUNT(*) FROM build_parked_task'));
+        self::assertSame(SizingOutcome::AlreadySized, $sizing->run('alpha', 7));
+    }
+
+    public function testAnInvalidAnswerOnAnEditedTextLeavesTheEarlierVerdictStanding(): void
+    {
+        $fixture = $this->fixture();
+        $sizing = $fixture->sizing($this->vendorAnswering($this->verdict([], SizeTier::Small, 20), null));
+        (void) $sizing->run('alpha', 7);
+        $fixture->issue->rewrittenAs('Add a cart.');
+        self::assertSame(SizingOutcome::Invalid, $sizing->run('alpha', 7));
+        $fixture->issue->rewrittenAs(SampleIssue::BODY);
+
+        self::assertSame(SizingOutcome::AlreadySized, $sizing->run('alpha', 7));
+    }
+
+    private function vendorAnswering(?SizingVerdict ...$verdicts): SizingVendor
+    {
+        $vendor = self::createStub(SizingVendor::class);
+        $vendor->method('size')->willReturnOnConsecutiveCalls(...$verdicts);
+
+        return $vendor;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function sizings(SizingFixture $fixture): array
+    {
+        return array_values(array_filter($fixture->ledger->payloads(), static fn (array $payload): bool => isset($payload['text'])));
+    }
+
     private function fixture(InMemoryLedger $ledger = new InMemoryLedger()): SizingFixture
     {
         return new SizingFixture(self::createStub(ManagerRegistry::class), $ledger);
@@ -287,6 +441,6 @@ final class SizeTaskTest extends TestCase
      */
     private function recorded(SizingFixture $fixture): array
     {
-        return array_map(static fn (array $payload): array => array_diff_key($payload, ['text' => true]), $fixture->ledger->payloads());
+        return array_map(static fn (array $payload): array => array_diff_key($payload, ['text' => true, 'run' => true]), $fixture->ledger->payloads());
     }
 }

@@ -13,6 +13,7 @@ use Intakt\Core\Build\UseCase\SizeTask\SizingRecords;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
+use Intakt\Plugin\GitHubForge\Contract\TaskComments;
 use Intakt\Plugin\Vendor\Contract\SizingVendor;
 use Intakt\Tests\Core\Build\ParkedTaskTable;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
@@ -39,20 +40,27 @@ final readonly class SizingFixture
         $this->issue = new SampleIssue($number);
     }
 
-    public function sizing(SizingVendor $vendor, SteeringAccounts $accounts = new SteeringLogins(SampleIssue::OWNER)): SizeTask
+    public function sizing(SizingVendor $vendor, SteeringAccounts $accounts = new SteeringLogins(SampleIssue::OWNER), ?TaskComments $comments = null): SizeTask
     {
         return new SizeTask(
             $this->eligibleTasks($accounts),
             $vendor,
             new SizingRecords($this->ledger),
-            new ParkedTasks($this->parked, $this->ledger, $this->registry, new MockClock('2026-11-28 12:00:00 UTC')),
-            $this->comments,
+            $this->parkedTasks(),
+            $comments ?? $this->comments,
             new LockFactory(new InMemoryStore()),
         );
     }
 
+    public function parkedTasks(): ParkedTasks
+    {
+        return new ParkedTasks($this->parked, $this->ledger, $this->registry, new MockClock('2026-11-28 12:00:00 UTC'));
+    }
+
     public function eligibleTasks(SteeringAccounts $accounts = new SteeringLogins(SampleIssue::OWNER)): EligibleTasks
     {
-        return new EligibleTasks($this->issue, $this->issue, $accounts, new EligibilityLabels(new ProjectEligibilityLabel('alpha', SampleIssue::LABEL), new ProjectEligibilityLabel('sample', SampleIssue::LABEL)));
+        $labels = array_map(static fn (string $project): ProjectEligibilityLabel => new ProjectEligibilityLabel($project, SampleIssue::LABEL), ['alpha', 'sample', 'widget']);
+
+        return new EligibleTasks($this->issue, $this->issue, $accounts, new EligibilityLabels(...$labels));
     }
 }

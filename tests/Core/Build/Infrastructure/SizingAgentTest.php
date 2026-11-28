@@ -15,6 +15,7 @@ use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 
@@ -80,6 +81,26 @@ final class SizingAgentTest extends KernelTestCase
     public function testAnAnswerWithAFieldTheSchemaDoesNotAskForIsNoVerdict(): void
     {
         self::assertNull($this->answerTo('{"ready":false,"missing":["acceptance_condition"],"close":true,"size":"small","estimated_lines":20,"reason":"Incomplete."}'));
+    }
+
+    public function testAnAnswerThatGivesAFieldTwiceIsNoVerdict(): void
+    {
+        self::assertNull($this->answerTo('{"ready":true,"ready":false,"missing":["acceptance_condition"],"size":"small","estimated_lines":20,"reason":"Incomplete."}'));
+    }
+
+    #[TestWith(['{"0":"acceptance_condition"}', false])]
+    #[TestWith(['{}', true])]
+    public function testAnAnswerWithAnObjectInPlaceOfTheListIsNoVerdict(string $missing, bool $ready): void
+    {
+        self::assertNull($this->answerTo(sprintf('{"ready":%s,"missing":%s,"size":"small","estimated_lines":20,"reason":"Incomplete."}', $ready ? 'true' : 'false', $missing)));
+    }
+
+    public function testAnAnswerWhoseReasonQuotesAFieldNameAndIsSpreadOverLinesIsStillAVerdict(): void
+    {
+        $verdict = $this->answerTo("{\n  \"ready\" : true,\n  \"missing\" : [],\n  \"size\" : \"small\",\n  \"estimated_lines\" : 5,\n  \"reason\" : \"The task says \\\"ready\\\": true, and \\\\\\\"so\\\": it is.\"\n}");
+
+        self::assertInstanceOf(SizingVerdict::class, $verdict);
+        self::assertSame('The task says "ready": true, and \\"so": it is.', $verdict->reason);
     }
 
     public function testAnAnswerWithoutAFieldTheSchemaAsksForIsNoVerdict(): void

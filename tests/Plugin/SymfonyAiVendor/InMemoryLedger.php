@@ -71,7 +71,9 @@ final class InMemoryLedger implements Ledger
     #[Override]
     public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
     {
-        return new RecordedEvents([]);
+        $mentioning = array_filter($this->events, static fn (LedgerEvent $event): bool => in_array($event->kind, $kinds, true) && array_any([...$texts], static fn (string $text): bool => str_contains($event->payload, $text)));
+
+        return new RecordedEvents(array_values(array_map(static fn (LedgerEvent $event): RecordedEvent => new RecordedEvent(Uuid::v7(), $event, new DateTimeImmutable('2026-11-28T12:00:00Z')), $mentioning)));
     }
 
     public function count(): int
