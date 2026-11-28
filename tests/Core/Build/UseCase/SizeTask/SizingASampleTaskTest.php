@@ -145,7 +145,7 @@ final class SizingASampleTaskTest extends KernelTestCase
         $outcome = $this->sizing('{"ready":true,"missing":[],"size":"split","estimated_lines":900,"reason":"Two changes.","parts":'.json_encode($parts, JSON_THROW_ON_ERROR).'}', $fixture)->run('sample', 12);
 
         self::assertSame(SizingOutcome::Split, $outcome);
-        $records = array_map(static fn (RecordedEvent $recorded): array => [$recorded->event->kind->value, json_decode($recorded->event->payload, true, flags: JSON_THROW_ON_ERROR)], [...$ledger->readInOrder()]);
+        $records = array_map(static fn (RecordedEvent $recorded): array => [$recorded->event->kind->value, self::payloadOf($recorded)], [...$ledger->readInOrder()]);
         self::assertSame(['usage_recorded', 'usage_recorded', 'task_split_planned', 'task_split'], array_column($records, 0));
         self::assertSame(['started', '12'], [$records[0][1]['phase'] ?? null, $records[0][1]['task'] ?? null]);
         self::assertSame(['project' => 'sample', 'task' => '12', 'size' => 'split', 'estimated_lines' => 900, 'parts' => $parts, 'labels' => ['ready']], array_diff_key($records[2][1], ['text' => true, 'run' => true]));
@@ -153,6 +153,18 @@ final class SizingASampleTaskTest extends KernelTestCase
         self::assertSame([[100, 'Read the cart', ['ready']], [101, 'Show the total', ['ready']]], array_map(static fn (array $part): array => [$part['number'], $part['title'], $part['labels']], $fixture->parts->filed));
         self::assertStringEndsWith('Waits for #100', $fixture->parts->filed[1]['body']);
         self::assertSame([['sample', 12, 'This task was split into #100, #101. It stays open as their umbrella.']], $fixture->comments->posted);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function payloadOf(RecordedEvent $recorded): array
+    {
+        $payload = json_decode($recorded->event->payload, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($payload);
+
+        /** @var array<string, mixed> $payload */
+        return $payload;
     }
 
     private function sizing(string $answer, SizingFixture $fixture): SizeTask

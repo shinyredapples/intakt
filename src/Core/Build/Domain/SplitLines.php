@@ -11,7 +11,7 @@ final readonly class SplitLines
     private const int MOST = 4;
     // A part is never split again, so a chain a build cannot finish in two steps must be cut differently instead.
     private const int LONGEST_CHAIN = 2;
-    // GitHub's limit for an issue title, in characters.
+    // GitHub refuses a longer issue title, so a part with one could never be filed.
     private const int LONGEST_TITLE = 256;
     private const array MARKERS = [' | done-when: ', ' | verify: ', ' | files: ', ' | depends on: '];
     private const string NO_DEPENDENCY = 'none';
