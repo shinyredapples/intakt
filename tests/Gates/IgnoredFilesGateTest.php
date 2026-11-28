@@ -437,6 +437,43 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertSame([], $result->findings);
     }
 
+    public function testAGitignoreCheckedOutWithCrlfLineEndingsByTheCommittedAttributesPasses(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesWithCrlf();
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertStringContainsString("\r\n", (string) file_get_contents($sandbox->root.'/.gitignore'));
+        self::assertSame('', $sandbox->git('status', '--porcelain')->output, 'the checkout is clean');
+        self::assertSame([], $result->findings);
+    }
+
+    public function testAnUnstagedRuleEditInACrlfCheckedOutGitignoreStillFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryCheckingOutRulesWithCrlf();
+        $sandbox->write('sub dir/.gitignore', "*.bak\r\n");
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([$this->differsFromIndex('sub dir/.gitignore')], $result->findings);
+    }
+
+    private function repositoryCheckingOutRulesWithCrlf(): Sandbox
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->git('config', 'core.autocrlf', 'false');
+        $sandbox->write('.gitattributes', ".gitignore text eol=crlf\n");
+        $sandbox->write('.gitignore', "*.log\n");
+        $sandbox->write('sub dir/.gitignore', "*.tmp\n");
+        $sandbox->commitAll('chore: check out the rules with crlf');
+        unlink($sandbox->root.'/.gitignore');
+        unlink($sandbox->root.'/sub dir/.gitignore');
+        $sandbox->git('checkout', '--', '.gitignore', 'sub dir/.gitignore');
+
+        return $sandbox;
+    }
+
     private function differsFromIndex(string $path): string
     {
         return $path.': working-tree .gitignore differs from the index; stage or revert it so the gate judges the rules that will be committed';

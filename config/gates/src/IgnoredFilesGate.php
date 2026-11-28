@@ -58,19 +58,34 @@ final readonly class IgnoredFilesGate implements Gate
             |> array_values(...);
     }
 
-    // Because ls-files reads the working-tree rules, an unstaged edit could hide a tracked file that CI, judging the committed rules, rejects; blob ids, not stat data, so an edit that keeps size and mtime still counts.
     /**
      * @return list<string>
      */
     private function ruleFilesDifferingFromTheIndex(Workspace $workspace): array
     {
+        // Because ls-files reads the working-tree rules, an unstaged edit could hide a tracked file that CI, judging the committed rules, rejects; blob ids, not stat data, so an edit that keeps size and mtime still counts.
         $staged = $this->stagedRuleFiles($workspace);
         $present = array_filter(array_keys($staged), static fn (string $path): bool => is_file($workspace->root.'/'.$path) && !is_link($workspace->root.'/'.$path));
         $hashes = $this->workingTreeBlobs($workspace, array_values($present));
 
         return array_keys($staged)
             |> (static fn (array $paths): array => array_filter($paths, static fn (string $path): bool => ($hashes[$path] ?? null) !== $staged[$path]))
+            |> (fn (array $paths): array => array_filter($paths, fn (string $path): bool => !isset($hashes[$path]) || !$this->sameRulesIgnoringCarriageReturns($workspace, $path, $staged[$path])))
             |> array_values(...);
+    }
+
+    // Because the hardened call hashes without the repository's attributes (a clean filter it names would run), a checkout that eol=crlf or core.autocrlf converted hashes differently from its clean blob; git drops the carriage return before each line break of a .gitignore, so such a file carries the same rules.
+    private function sameRulesIgnoringCarriageReturns(Workspace $workspace, string $path, string $blob): bool
+    {
+        $result = $workspace->git(['cat-file', 'blob', $blob]);
+
+        if (!$result->succeeded()) {
+            throw new ScopeFailure('git cat-file failed: '.$result->firstErrorLine());
+        }
+
+        $workingTree = file_get_contents($workspace->root.'/'.$path);
+
+        return false !== $workingTree && str_replace("\r\n", "\n", $workingTree) === str_replace("\r\n", "\n", $result->output);
     }
 
     // Because git reads no .gitignore that is a symbolic link, neither here nor in CI, a tracked link carries no rules to compare; only stage 0, so a conflicted file is not compared three times.
