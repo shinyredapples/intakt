@@ -151,11 +151,9 @@ final readonly class TraitAliasCollector implements Collector
     private function exposedVisibility(ClassReflection $wrapper, ReflectionMethod $method, array $adaptations): int
     {
         $name = $method->getName();
-        $alias = array_find($adaptations['aliases'], static fn (array $adaptation): bool => null !== $adaptation['name'] && 0 === strcasecmp($adaptation['name'], $name));
-        $original = $alias['method'] ?? $name;
-        $source = $this->supplyingTrait($wrapper, $original, $alias['trait'] ?? null, $adaptations['exclusions']);
-        $hiding = array_find(array_reverse($adaptations['aliases']), static fn (array $adaptation): bool => null === $adaptation['name'] && 0 !== $adaptation['visibility'] && 0 === strcasecmp($adaptation['method'], $name) && (null === $adaptation['trait'] || $source instanceof ClassReflection && self::names($adaptation['trait'], $source)));
-        $written = null === $alias ? $hiding['visibility'] ?? 0 : $alias['visibility'];
+        $alias = $this->aliasNamed($adaptations, $name);
+        $source = $this->supplyingTrait($wrapper, $name, $adaptations);
+        $written = null === $alias ? $this->hiddenTo($adaptations, $name, $source) : $alias['visibility'];
 
         if (0 !== $written) {
             return $written;
@@ -165,7 +163,48 @@ final readonly class TraitAliasCollector implements Collector
             return $method->isPublic() ? Modifiers::PUBLIC : Modifiers::PRIVATE;
         }
 
-        return $this->visibilityIn($source, $original);
+        return $this->visibilityIn($source, $alias['method'] ?? $name);
+    }
+
+    /**
+     * @param Adaptations $adaptations
+     *
+     * @return AliasRecord|null
+     */
+    private function aliasNamed(array $adaptations, string $name): ?array
+    {
+        return array_find($adaptations['aliases'], static fn (array $adaptation): bool => null !== $adaptation['name'] && 0 === strcasecmp($adaptation['name'], $name));
+    }
+
+    // because PHP takes the method from the trait the alias names (also when an insteadof excludes that trait's own name), or else from the first trait that brings the name and that no insteadof excludes, so a protected method insteadof sets aside does not hide the public one it selects
+    /**
+     * @param Adaptations $adaptations
+     */
+    private function supplyingTrait(ClassReflection $wrapper, string $name, array $adaptations): ?ClassReflection
+    {
+        $alias = $this->aliasNamed($adaptations, $name);
+        $original = $alias['method'] ?? $name;
+        $named = $alias['trait'] ?? null;
+        $candidates = null === $named
+            ? $this->unexcludedTraits($wrapper, $original, $adaptations['exclusions'])
+            : array_filter($wrapper->getTraits(), static fn (ClassReflection $trait): bool => self::names($named, $trait));
+
+        return array_find($candidates, static fn (ClassReflection $trait): bool => $trait->getNativeReflection()->hasMethod($original));
+    }
+
+    // the last visibility-only adaptation wins, as in PHP, and one that names another trait than the supplying one changes that trait's method, not this one
+    /**
+     * @param Adaptations $adaptations
+     */
+    private function hiddenTo(array $adaptations, string $name, ?ClassReflection $source): int
+    {
+        $hiding = array_find(
+            array_reverse($adaptations['aliases']),
+            static fn (array $adaptation): bool => null === $adaptation['name'] && 0 !== $adaptation['visibility'] && 0 === strcasecmp($adaptation['method'], $name)
+                && (null === $adaptation['trait'] || $source instanceof ClassReflection && self::names($adaptation['trait'], $source)),
+        );
+
+        return $hiding['visibility'] ?? 0;
     }
 
     // because the supplying trait may itself be a wrapper that is not analyzed, whose reflection has the same flaw, a method it takes from its own traits is resolved through its `use` blocks as well
@@ -178,19 +217,6 @@ final readonly class TraitAliasCollector implements Collector
         }
 
         return $method->isPublic() ? Modifiers::PUBLIC : Modifiers::PRIVATE;
-    }
-
-    // because PHP takes the method from the trait the alias names (also when an insteadof excludes that trait's own name), or else from the first trait that brings the name and that no insteadof excludes, so a protected method insteadof sets aside does not hide the public one it selects
-    /**
-     * @param list<Exclusion> $exclusions
-     */
-    private function supplyingTrait(ClassReflection $wrapper, string $original, ?string $named, array $exclusions): ?ClassReflection
-    {
-        $candidates = null === $named
-            ? $this->unexcludedTraits($wrapper, $original, $exclusions)
-            : array_filter($wrapper->getTraits(), static fn (ClassReflection $trait): bool => self::names($named, $trait));
-
-        return array_find($candidates, static fn (ClassReflection $trait): bool => $trait->getNativeReflection()->hasMethod($original));
     }
 
     /**
