@@ -10,13 +10,17 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
 use Intakt\Plugin\GitHubForge\Contract\PartIssue;
+use Intakt\Plugin\GitHubForge\Infrastructure\CreatedParts;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubTaskParts;
+use Intakt\Plugin\GitHubForge\Infrastructure\PartIssueCalls;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(GitHubTaskParts::class)]
+#[CoversClass(PartIssueCalls::class)]
+#[CoversClass(CreatedParts::class)]
 #[UsesClass(PartIssue::class)]
 #[UsesClass(IssueLabels::class)]
 final class GitHubTaskPartsTest extends TestCase
@@ -216,6 +220,23 @@ final class GitHubTaskPartsTest extends TestCase
         }
 
         self::assertSame('GET https://api.github.com/repos/acme/widget/issues/1', array_last($tracker->requests));
+        self::assertCount(1, $tracker->filed());
+    }
+
+    public function testAKeptPartGitHubAnswersWithAnotherIssueFilesNothing(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->storedOtherwise = ['body' => 'Part 1 of 2 of #7.'];
+        $this->unconfirmed($tracker);
+        $tracker->issues[0]['number'] = 9;
+
+        try {
+            $this->fileOnce($tracker);
+            self::fail('A kept part answered with another issue was reported as filed.');
+        } catch (ForgeReadFailed $failed) {
+            self::assertSame('GitHub answered the read of part #1 with something other than that issue.', $failed->getMessage());
+        }
+
         self::assertCount(1, $tracker->filed());
     }
 
