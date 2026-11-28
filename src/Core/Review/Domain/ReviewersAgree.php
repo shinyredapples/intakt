@@ -98,7 +98,8 @@ final readonly class ReviewersAgree
         }
 
         // Split at blank lines because a code span never crosses one (CommonMark), so a lone backtick cannot pair with a span opener of a later paragraph.
-        $paragraphs = array_map($this->paragraphWords(...), (array) preg_split(self::BLANK_LINE, $text));
+        $paragraphs = preg_split(self::BLANK_LINE, $text);
+        $paragraphs = array_map($this->paragraphWords(...), false === $paragraphs ? [$text] : $paragraphs);
 
         return implode(' ', array_filter($paragraphs, static fn (string $words): bool => '' !== $words));
     }
