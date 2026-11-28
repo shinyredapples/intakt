@@ -74,7 +74,7 @@ final readonly class LedgerAccountPicks implements AccountPicks
             return null;
         }
 
-        $resets = array_map(self::resetOf(...), $row->leftOut);
+        $resets = array_map($this->resetOf(...), $row->leftOut);
         if (in_array(false, $resets, true)) {
             return null;
         }
@@ -85,7 +85,7 @@ final readonly class LedgerAccountPicks implements AccountPicks
     }
 
     // A reset that does not format back to its own text is refused, because PHP rolls February 30 over into March and accepts other offset forms.
-    private static function resetOf(PickedLeftOut $left): DateTimeImmutable|false|null
+    private function resetOf(PickedLeftOut $left): DateTimeImmutable|false|null
     {
         if (null === $left->resetsAt) {
             return null;
