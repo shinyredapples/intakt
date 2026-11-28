@@ -183,7 +183,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             }
         }
 
-        return [] === $cooling || !$this->ranking instanceof AccountRanking ? [] : $this->ranking->rank($cooling)->leftOut;
+        return [] === $cooling ? [] : $this->ranking->rank($cooling)->leftOut;
     }
 
     /**
