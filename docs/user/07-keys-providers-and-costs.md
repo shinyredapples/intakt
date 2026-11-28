@@ -54,11 +54,11 @@ Planned: Intakt does not watch a running build for these limits yet, so today a 
 
 ## What a build spent
 
-A build finished, and you want to know how many tokens it used. A Claude subscription does not tell Intakt, but the build's own log does.
+A build finished, and you want to know how many tokens it used. A Claude subscription does not tell Intakt, but the build hands back a small usage file, `usage.log`: the token counts of each of its messages and nothing else of the session.
 
-1. After each build, Intakt reads the log in a separate, locked-down process and writes the token counts into the build's ledger line.
-2. The log is the build's to write, so a log that is too big, or holds no counts or broken ones, gets a reason instead of a number, never a zero.
-3. To check a kept log yourself, run `intakt:build:usage <log>` ([details](../reference/user-manual.md#what-a-build-spent)).
+1. After each build, Intakt reads that file in a separate, locked-down process and writes the token counts into the build's ledger line.
+2. The file is the build's to write, so a file that is too big, or holds no counts or broken ones, gets a reason instead of a number, never a zero.
+3. To check a kept file yourself, run `intakt:build:usage <log>` ([details](../reference/user-manual.md#what-a-build-spent)).
 
 ## When a provider says "slow down"
 
