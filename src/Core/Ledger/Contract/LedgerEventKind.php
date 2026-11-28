@@ -62,4 +62,7 @@ enum LedgerEventKind: string
     case OwnerPushNoticed = 'owner_push_noticed';
     case TaskParked = 'task_parked';
     case TaskSized = 'task_sized';
+    case PartIssueCreated = 'part_issue_created';
+    case TaskSplitPlanned = 'task_split_planned';
+    case TaskSplit = 'task_split';
 }

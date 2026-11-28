@@ -8,6 +8,7 @@ use Intakt\Core\Disk\Contract\DiskHold;
 use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
 use Intakt\Core\Disk\Contract\NearestFolder;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\GitCommand;
 use Intakt\Core\Git\Contract\HardenedGit;
@@ -84,6 +85,24 @@ final readonly class UpdateMirror
         return $this->writeTo($project, $remote, $this->destinationOf($this->mirrors->pathOf($project)));
     }
 
+    // Public, because the list of existing mirrors (MirrorsOnDisk) must name exactly the folders an update measures and fetches into.
+    public function isMirror(string $path): bool
+    {
+        // Because git looks upward from a folder that is not a repository and would find the install's own checkout.
+        if (!is_file($path.'/HEAD') || !is_dir($path.'/objects') || !is_dir($path.'/refs')) {
+            return false;
+        }
+
+        try {
+            $bare = $this->local(['rev-parse', '--is-bare-repository'], $path);
+        } catch (WorkTreeInBareRepository) {
+            // Because the bare call refuses a folder whose config gives it a work tree, which is no mirror either; a call that was killed or timed out is no answer and propagates, so a valid mirror is never replaced for it.
+            return false;
+        }
+
+        return $bare->isSuccessful() && 'true' === trim($bare->getOutput());
+    }
+
     private function destinationOf(string $path): string
     {
         // Because the floors guard the folder the update writes to: a fetch fills the mirror itself, which may be mounted on a disk of its own, while a first clone or the replacement of a folder that is no mirror goes to staging in the mirrors folder.
@@ -104,7 +123,7 @@ final readonly class UpdateMirror
         }
 
         if ($hold instanceof DiskHold) {
-            throw MirrorNotUpdated::at($path, $hold->reason());
+            throw MirrorNotUpdated::at($path, $hold->reason(), new NewWorkHeld($hold));
         }
     }
 
@@ -123,23 +142,6 @@ final readonly class UpdateMirror
         $this->createMirror($project, $remote, $path);
 
         return $path;
-    }
-
-    private function isMirror(string $path): bool
-    {
-        // Because git looks upward from a folder that is not a repository and would find the install's own checkout.
-        if (!is_file($path.'/HEAD') || !is_dir($path.'/objects') || !is_dir($path.'/refs')) {
-            return false;
-        }
-
-        try {
-            $bare = $this->local(['rev-parse', '--is-bare-repository'], $path);
-        } catch (WorkTreeInBareRepository) {
-            // Because the bare call refuses a folder whose config gives it a work tree, which is no mirror either; a call that was killed or timed out is no answer and propagates, so a valid mirror is never replaced for it.
-            return false;
-        }
-
-        return $bare->isSuccessful() && 'true' === trim($bare->getOutput());
     }
 
     private function fromMirrorsDirectory(string $remote): string

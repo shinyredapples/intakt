@@ -23,6 +23,10 @@ The `watch` section of a project takes the optional `eligibility_label`: the iss
 
 Test: `tests/Plugin/GitHubWorkSource/Domain/IssueReferencesTest.php`.
 
+## Split parts
+
+Intake has no rule of its own for the parts of a split task ([Task sizing](task-sizing.md#the-split)). The GitHub App files each part as a new issue with the original's labels and, after its done-when, verify and files lines, one `Waits for #<number>` line per earlier part it depends on, written by plain code from the plan. The App's own account is `own-identity` to the trust check, which steers ([GitHub App identity](github-app-identity.md)), so a part that carries the project's eligibility label among the inherited labels has an author and a labeler with write access and is eligible like any task. Its `Waits for` lines are read by `IssueReferences` like any others, so a part is held while a part it waits for is open, and a part that waits for none is free at once. The same rules apply after filing: an edit by an account without write access, or a label someone else applies, counts as it does for any issue. The original stays open as their umbrella and keeps its labels; keeping it from being built is not done here.
+
 ## Stored state (`work_source_issue`, `work_source_validator`, `work_source_failure`)
 
 Issue #2906, part 1 of #2666. Three Doctrine entities in `Plugin/GitHubWorkSource/Domain`, mapped as the `GitHubWorkSource` entry of `config/packages/doctrine.yaml`, with migration `Version20261120100000` (and `Version20261120120000` for the sync generation, issue #3063):

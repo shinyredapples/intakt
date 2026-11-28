@@ -44,7 +44,7 @@ In the container image, all of this lives in `/app/var/data`, which you must mou
 
 Intakt pauses new work when a disk runs low on space or on files (inodes), so a checkout does not fail half-way. Two steps check this before they start: updating a project's copy of the repository and making the folder a build works in. Below a limit they stop with the reason and make nothing, and the next try goes ahead once space is back. Work already running is not cut. The two limits are `disk.min_free_bytes` and `disk.min_free_inodes` in the config file.
 
-Planned: showing the pause on its own, and not counting it as a failure. For now such a stop shows as a failed step.
+A pull request the watcher holds back this way waits and is tried again a minute later; the pause never counts as one of its failures, so a long spell of low disk hands no pull request to the Maintainer. A build still shows such a stop as a failed step. The Status page shows the pause in plain words while the disk of the mirrors folder or of a project's mirror is low (which limit, which folder, how much is left), and the line goes away by itself on the next reload once space is back.
 
 ## Backing up
 

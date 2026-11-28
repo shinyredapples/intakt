@@ -34,6 +34,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\FindingIds;
+use Intakt\Core\Review\Contract\FindingKind;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\PanelVerdict;
@@ -87,6 +88,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(CatchUpOwed::class)]
 #[UsesClass(ReviewerFindingsRecorded::class)]
 #[UsesClass(JudgeDone::class)]
+#[UsesClass(FindingKind::class)]
 #[UsesClass(FindingIds::class)]
 #[UsesClass(DroppedFinding::class)]
 #[UsesClass(CountedQuotes::class)]
@@ -471,6 +473,35 @@ final class LedgerRoundsTest extends TestCase
         );
 
         self::assertSame(['src/A.php', 7], [$review?->rounds[0]->findings[0]->file, $review?->rounds[0]->findings[0]->line]);
+    }
+
+    public function testAJudgedFindingWithATitleAndKindKeepsBothInTheReadModel(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1'), new FindingIds(), [new JudgeDoneFinding(
+                'F1',
+                Severity::P1,
+                'Broken. More.',
+                new FindingIds(),
+                title: 'Discount lost',
+                kind: FindingKind::Logic,
+            )])),
+        );
+
+        self::assertSame(['Discount lost', 'Logic'], [$review?->rounds[0]->findings[0]->shortLine(), $review?->rounds[0]->findings[0]->kindWords()]);
+    }
+
+    public function testAJudgedFindingRecordedBeforeTitlesFallsBackToItsHeadlineWithNoKind(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1'), new FindingIds(), [new JudgeDoneFinding('F1', Severity::P1, 'Broken. More.')])),
+        );
+
+        self::assertSame(['Broken.', null], [$review?->rounds[0]->findings[0]->shortLine(), $review?->rounds[0]->findings[0]->kindWords()]);
     }
 
     public function testTheJudgesCallReadsInPlainWordsWithTheDropReason(): void

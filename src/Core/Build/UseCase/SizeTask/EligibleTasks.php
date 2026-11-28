@@ -45,7 +45,7 @@ final readonly class EligibleTasks
             throw TaskNotSized::unreadable($project, $number, $refusal ?? 'it is not an open issue');
         }
 
-        return new SizingRequest($project, $number, $task->title, $task->body);
+        return new SizingRequest($project, $number, $task->title, $task->body, [...$task->labels]);
     }
 
     /**

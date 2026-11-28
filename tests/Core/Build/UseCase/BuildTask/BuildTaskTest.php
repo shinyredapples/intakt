@@ -53,6 +53,7 @@ use Intakt\Core\Build\UseCase\BuildTask\PushRemoteRefused;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobEndFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
@@ -131,9 +132,11 @@ use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
+use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
+use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
@@ -294,6 +297,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
 #[UsesClass(RecordedBuildStops::class)]
+#[UsesClass(BuildJobEndFailed::class)]
 #[UsesClass(BuildLimits::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
@@ -540,6 +544,45 @@ final class BuildTaskTest extends TestCase
 
         self::assertSame(BuildStep::BuildJob, $outcome->last);
         self::assertSame(['failed', $outcome->failure, 'per_task_total'], [$ledger->payloads()[3]['outcome'], $ledger->payloads()[3]['failure'], $ledger->payloads()[3]['stop_cause']]);
+    }
+
+    #[TestWith([BuildStopCause::NoProgress])]
+    #[TestWith([BuildStopCause::RunawayCeiling])]
+    #[TestWith([BuildStopCause::PerTaskTotal])]
+    public function testAStoppedBuildJobWhoseEndEventIsNotRecordedNamesItsStopCauseInTheFailedBuildJobRow(BuildStopCause $cause): void
+    {
+        $this->runner = $this->runnerThatStopsAndFails($cause, JobEventNotRecorded::for('job_ended', 'the database is locked'));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame([BuildStep::BuildJob, 'The ledger did not record the job event "job_ended": the database is locked'], [$outcome->last, $outcome->failure]);
+        self::assertSame(['failed', $outcome->failure, $cause->value], [$ledger->payloads()[3]['outcome'], $ledger->payloads()[3]['failure'], $ledger->payloads()[3]['stop_cause']]);
+    }
+
+    #[TestWith([BuildStopCause::NoProgress])]
+    #[TestWith([BuildStopCause::RunawayCeiling])]
+    #[TestWith([BuildStopCause::PerTaskTotal])]
+    public function testAStoppedBuildJobWhoseDockerEngineFailsAtItsEndNamesItsStopCauseInTheFailedBuildJobRow(BuildStopCause $cause): void
+    {
+        $this->runner = $this->runnerThatStopsAndFails($cause, DockerEngineFailed::notStoppedAfterKill('intakt-job-alpha', 10));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame([BuildStep::BuildJob, 'The container intakt-job-alpha did not stop within 10 seconds after the kill; no exit code is recorded.'], [$outcome->last, $outcome->failure]);
+        self::assertSame(['failed', $outcome->failure, $cause->value], [$ledger->payloads()[3]['outcome'], $ledger->payloads()[3]['failure'], $ledger->payloads()[3]['stop_cause']]);
+    }
+
+    public function testABuildJobWhoseEndEventIsNotRecordedWithoutAStopRecordsNoStopCause(): void
+    {
+        $this->runner = $this->runnerThatStopsAndFails(null, JobEventNotRecorded::for('job_ended', 'the database is locked'));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(['failed', $outcome->failure, null], [$ledger->payloads()[3]['outcome'], $ledger->payloads()[3]['failure'], $ledger->payloads()[3]['stop_cause']]);
+        self::assertSame(['task', 'mirror', 'clone', 'build_job'], array_column($ledger->payloads(), 'step'));
     }
 
     public function testThePullRequestTextsFirstLineIsTheTitleAndWhatFollowsTheBlankLineTheBody(): void
@@ -1696,6 +1739,21 @@ final class BuildTaskTest extends TestCase
             $change();
 
             return $result;
+        });
+
+        return $runner;
+    }
+
+    // Stopped while it ran and failed at its end, because that is the order in which a watched build's job-end failure arrives.
+    private function runnerThatStopsAndFails(?BuildStopCause $cause, DockerEngineFailed|JobEventNotRecorded $failure): JobRunner
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($cause, $failure): never {
+            if ($cause instanceof BuildStopCause) {
+                $this->stops->record($this->stoppedJob(), $cause);
+            }
+
+            throw $failure;
         });
 
         return $runner;

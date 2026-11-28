@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\UseCase\UpdateMirror;
 
+use Intakt\Core\Disk\Contract\DiskFloor;
 use Intakt\Core\Disk\Contract\DiskHold;
 use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
 use Intakt\Core\Disk\Contract\NearestFolder;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Disk\Infrastructure\FlooredDiskSpace;
 use Intakt\Core\Disk\Infrastructure\FreeSpaceReader;
 use Intakt\Core\Git\Contract\GitCall;
@@ -37,6 +39,7 @@ use Symfony\Component\Process\Process;
 #[UsesClass(GitCall::class)]
 #[UsesClass(FlooredDiskSpace::class)]
 #[UsesClass(DiskHold::class)]
+#[UsesClass(NewWorkHeld::class)]
 #[UsesClass(FreeSpaceUnreadable::class)]
 #[UsesClass(ControlledFreeSpaceReader::class)]
 final class UpdateMirrorBelowTheDiskFloorsTest extends TestCase
@@ -59,6 +62,16 @@ final class UpdateMirrorBelowTheDiskFloorsTest extends TestCase
 
         self::assertSame(sprintf('the mirror at %s/alpha.git was not updated: the disk of %s holds new work: %d free bytes, below the floor of %d', $this->mirrors, dirname($this->mirrors), self::BYTES - 1, self::BYTES), $failure->getMessage());
         self::assertDirectoryDoesNotExist($this->mirrors);
+    }
+
+    public function testAHeldMirrorUpdateNamesTheDiskHoldAsItsCause(): void
+    {
+        $this->reader->report(self::BYTES - 1, self::INODES);
+
+        $cause = $this->heldUpdate()->getPrevious();
+
+        self::assertInstanceOf(NewWorkHeld::class, $cause);
+        self::assertSame(DiskFloor::Bytes, $cause->hold->floor);
     }
 
     public function testAnExistingMirrorIsMeasuredOnItsOwnDiskAndHeldWhenOnlyThatDiskIsBelowTheFloor(): void

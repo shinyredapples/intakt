@@ -18,6 +18,8 @@ final readonly class CeilingStartGuard
     public const int TRUSTED_FOR_SECONDS = 1800;
     public const int PARALLEL_TRUSTED_FOR_SECONDS = 300;
     public const float PARALLEL_MARGIN = 10.0;
+    // Bounds the correction of the closed form, because its float error is far below one second and the stepping must never run without end.
+    private const int PACE_CORRECTION_SECONDS = 3;
 
     /**
      * @param array<string, float> $ceilings
@@ -107,8 +109,27 @@ final readonly class CeilingStartGuard
         return min($ends);
     }
 
-    // The readings stand still until the next probe, so only the elapsed week moves the paced ceiling; the account is free the first whole second the ceiling passes the use, because a use at the ceiling still holds it.
+    // The readings stand still until the next probe, so only the elapsed week moves the paced ceiling; the closed form is only a candidate, because its float rounding can miss the guard's own comparison by a second at an exact boundary, so the same comparison corrects it to the first free second.
     private function paceReleases(WindowUse $short, WindowUse $weekly, DateTimeImmutable $weekResetsAt): ?DateTimeImmutable
+    {
+        $now = $this->clock->now();
+        $release = $this->closedFormPaceRelease($short, $weekly, $weekResetsAt);
+        if (!$release instanceof DateTimeImmutable) {
+            return null;
+        }
+
+        for ($step = 0; $step < self::PACE_CORRECTION_SECONDS && $this->heldByPaceAt($short, $weekly, $release); ++$step) {
+            $release = $release->modify('+1 second');
+        }
+
+        for ($step = 0; $step < self::PACE_CORRECTION_SECONDS && $release->modify('-1 second') > $now && !$this->heldByPaceAt($short, $weekly, $release->modify('-1 second')); ++$step) {
+            $release = $release->modify('-1 second');
+        }
+
+        return $release;
+    }
+
+    private function closedFormPaceRelease(WindowUse $short, WindowUse $weekly, DateTimeImmutable $weekResetsAt): ?DateTimeImmutable
     {
         $weeklyCeiling = $this->ceilings[UsageWindow::Weekly->value];
         if ($weeklyCeiling <= 0.0) {
@@ -126,6 +147,12 @@ final readonly class CeilingStartGuard
         $seconds = (int) floor($neededShare * $week - $elapsed - UsageWindow::FiveHour->seconds()) + 1;
 
         return $now->modify(sprintf('+%d seconds', max(1, $seconds)));
+    }
+
+    // Same comparison as windowAtCeiling() with no margin, so the reported release is the second decide() first admits.
+    private function heldByPaceAt(WindowUse $short, WindowUse $weekly, DateTimeImmutable $at): bool
+    {
+        return $short->usage->usedPercent >= $this->pacedByWeek($this->ceilings[UsageWindow::FiveHour->value], $weekly, $at);
     }
 
     // A reset window starts empty, so its reading says nothing any more; without a reset time, one window's length is when it reset at the latest.
@@ -162,14 +189,14 @@ final readonly class CeilingStartGuard
     private function ceilingOf(UsageWindow $window, array $uses, float $margin): float
     {
         return $this->ceilings[$window->value]
-            |> (fn (float $ceiling): float => UsageWindow::FiveHour === $window ? $this->pacedByWeek($ceiling, $uses[UsageWindow::Weekly->value] ?? null) : $ceiling)
+            |> (fn (float $ceiling): float => UsageWindow::FiveHour === $window ? $this->pacedByWeek($ceiling, $uses[UsageWindow::Weekly->value] ?? null, $this->clock->now()) : $ceiling)
             |> (static fn (float $ceiling): float => $ceiling - $margin);
     }
 
     // Ahead of the weekly pace the short window gets the share of its ceiling the pace allows, so the week is not spent by day three.
-    private function pacedByWeek(float $ceiling, ?WindowUse $weekly): float
+    private function pacedByWeek(float $ceiling, ?WindowUse $weekly, DateTimeImmutable $at): float
     {
-        $pace = $this->weeklyPace($weekly);
+        $pace = $this->weeklyPace($weekly, $at);
         if (null === $pace || !$weekly instanceof WindowUse || $weekly->usage->usedPercent <= $pace) {
             return $ceiling;
         }
@@ -178,7 +205,7 @@ final readonly class CeilingStartGuard
     }
 
     // The pace counts the current five-hour window as already spent, so a week that just reset is not throttled by its first calls.
-    private function weeklyPace(?WindowUse $weekly): ?float
+    private function weeklyPace(?WindowUse $weekly, DateTimeImmutable $at): ?float
     {
         $resetsAt = $weekly?->usage->resetsAt;
         if (!$resetsAt instanceof DateTimeImmutable) {
@@ -186,7 +213,7 @@ final readonly class CeilingStartGuard
         }
 
         $week = UsageWindow::Weekly->seconds();
-        $elapsed = $week - ($resetsAt->getTimestamp() - $this->clock->now()->getTimestamp());
+        $elapsed = $week - ($resetsAt->getTimestamp() - $at->getTimestamp());
 
         return $this->ceilings[UsageWindow::Weekly->value] * min(1.0, max(0, $elapsed + UsageWindow::FiveHour->seconds()) / $week);
     }

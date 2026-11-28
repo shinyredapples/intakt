@@ -6,6 +6,8 @@ namespace Intakt\Core\Build\Contract;
 
 use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
+use Symfony\Component\Validator\Constraints\All;
+use Symfony\Component\Validator\Constraints\Count;
 use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\PositiveOrZero;
 
@@ -15,6 +17,7 @@ final readonly class SizingVerdict
 {
     /**
      * @param list<ReadinessGap> $missing
+     * @param list<string>       $parts
      */
     public function __construct(
         #[Schema(description: 'True only when the task states an observable result, an acceptance condition and a single outcome.')]
@@ -29,12 +32,18 @@ final readonly class SizingVerdict
         #[Length(min: 1, max: 1000)]
         #[Schema(description: 'Your reason in a few sentences.')]
         public string $reason,
+        #[Count(max: 4)]
+        #[All([new Length(min: 1, max: 1000)])]
+        #[Schema(description: 'Only when size is split: two to four parts, each one line "<title> | done-when: <observable result> | verify: <command> | files: <paths> | depends on: <none, or part <n> naming earlier parts, separated by \', \'>"; empty for every other size.')]
+        public array $parts,
     ) {
     }
 
-    // Checked in plain code, because the schema cannot tie the flag to the list: a task that is not ready with nothing missing would be parked with an empty comment.
+    // Checked in plain code, because the schema cannot tie the flag to the list: a task that is not ready with nothing missing would be parked with an empty comment, and a split without parts would leave nothing to build.
     public function agreesWithItself(): bool
     {
-        return $this->ready === ([] === $this->missing) && count($this->missing) === count(array_unique(array_column($this->missing, 'value')));
+        return $this->ready === ([] === $this->missing)
+            && count($this->missing) === count(array_unique(array_column($this->missing, 'value')))
+            && (SizeTier::Split === $this->size) === ([] !== $this->parts);
     }
 }
