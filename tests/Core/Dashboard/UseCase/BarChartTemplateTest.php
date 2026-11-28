@@ -82,7 +82,7 @@ final class BarChartTemplateTest extends KernelTestCase
         $starts = $this->costChart()->filter('text.c-axis[text-anchor="end"]')->each(static fn (Crawler $label): float => (float) $label->attr('x') - 8 * strlen($label->text()));
 
         self::assertCount(3, $starts);
-        self::assertGreaterThanOrEqual(0.0, min($starts));
+        self::assertSame([], array_filter($starts, static fn (float $start): bool => $start < 0.0));
     }
 
     public function testACountChartKeepsItsNarrowGutterBecauseItsAxisLabelsAreShort(): void
