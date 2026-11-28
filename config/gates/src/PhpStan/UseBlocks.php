@@ -81,6 +81,18 @@ final readonly class UseBlocks
         return (int) $alias->newModifier & Modifiers::VISIBILITY_MASK;
     }
 
+    private function excludes(Name $trait, TraitMethod $method): bool
+    {
+        return array_any($this->adaptations, static fn (Node $adaptation): bool => $adaptation instanceof Precedence && 0 === strcasecmp($adaptation->method->toString(), $method->name) && array_any($adaptation->insteadof, static fn (Name $excluded): bool => 0 === strcasecmp($excluded->toString(), $trait->toString())));
+    }
+
+    private function lastVisibilityChange(Name $trait, TraitMethod $method): int
+    {
+        $changes = array_filter(array_map($this->visibility(...), array_filter($this->adaptationsOf($trait, $method), static fn (Alias $alias): bool => !$alias->newName instanceof Identifier)), static fn (int $visibility): bool => 0 !== $visibility);
+
+        return array_last($changes) ?? 0;
+    }
+
     /**
      * @param array<string, TraitMethod> $methods
      *
@@ -96,17 +108,5 @@ final readonly class UseBlocks
         }
 
         return $methods;
-    }
-
-    private function excludes(Name $trait, TraitMethod $method): bool
-    {
-        return array_any($this->adaptations, static fn (Node $adaptation): bool => $adaptation instanceof Precedence && 0 === strcasecmp($adaptation->method->toString(), $method->name) && array_any($adaptation->insteadof, static fn (Name $excluded): bool => 0 === strcasecmp($excluded->toString(), $trait->toString())));
-    }
-
-    private function lastVisibilityChange(Name $trait, TraitMethod $method): int
-    {
-        $changes = array_filter(array_map($this->visibility(...), array_filter($this->adaptationsOf($trait, $method), static fn (Alias $alias): bool => !$alias->newName instanceof Identifier)), static fn (int $visibility): bool => 0 !== $visibility);
-
-        return array_last($changes) ?? 0;
     }
 }
