@@ -164,6 +164,18 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertSame("build1.tmp\n", $sandbox->git('ls-files', '--', '*.tmp')->output);
     }
 
+    public function testTheDocumentedUntrackCommandWithAnApostropheWrittenAsQuoteBackslashQuoteQuoteUntracksOnlyThatFile(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.tmp\n!ab.tmp\n");
+        $sandbox->write("a''b.tmp", "data\n");
+        $sandbox->write('ab.tmp', "data\n");
+        $sandbox->git('add', '--force', '--', "a''b.tmp", 'ab.tmp');
+
+        $sandbox->runScript("git --literal-pathspecs rm --cached -- '".str_replace("'", "'\\''", "a''b.tmp")."'");
+
+        self::assertSame("ab.tmp\n", $sandbox->git('ls-files', '--', '*.tmp')->output);
+    }
+
     public function testAQuotedPathTypedBetweenDollarQuotesUntracksTheFileItNames(): void
     {
         $sandbox = $this->repositoryIgnoring("*.tmp\n");
