@@ -192,7 +192,7 @@ final readonly class TraitAliasCollector implements Collector
         return array_find($candidates, static fn (ClassReflection $trait): bool => $trait->getNativeReflection()->hasMethod($original));
     }
 
-    // the last visibility-only adaptation wins, as in PHP, and one that names another trait than the supplying one changes that trait's method, not this one
+    // because PHP lets the last visibility-only adaptation win and applies one that names a trait to that trait's method only, so a change of the trait insteadof excludes does not hide the method it selects
     /**
      * @param Adaptations $adaptations
      */
