@@ -103,8 +103,9 @@ final class DoctrineLedgerTest extends KernelTestCase
 
         self::assertSame('third', $ledger->newestOfKindAbout(LedgerEventKind::AccountPicked, 'claude-code')?->event->payload);
 
-        $sql = array_map(static fn (array $query): string => (string) $query['sql'], array_merge(...array_values($queries->getData())));
+        $sql = array_column(array_merge(...array_values($queries->getData())), 'sql');
         self::assertCount(1, $sql);
+        self::assertIsString($sql[0]);
         self::assertMatchesRegularExpression('/ORDER BY .*position\S* DESC LIMIT 1/i', $sql[0]);
     }
 

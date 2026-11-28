@@ -76,7 +76,7 @@ final readonly class DoctrineLedger implements Ledger
     // A newest row whose subject differs only in case means the collation ignores case, so the exact subject's rows are read and filtered as readOfKindAbout() does.
     public function newestOfKindAbout(LedgerEventKind $kind, string $subject): ?RecordedEvent
     {
-        $newest = $this->registry->getManager()->getRepository(EventRecord::class)->findOneBy(['kind' => $kind->value, 'subject' => $subject], ['position' => 'DESC']);
+        $newest = array_first($this->registry->getManager()->getRepository(EventRecord::class)->findBy(['kind' => $kind->value, 'subject' => $subject], ['position' => 'DESC'], 1));
         if (!$newest instanceof EventRecord) {
             return null;
         }
