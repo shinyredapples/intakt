@@ -41,66 +41,41 @@ final readonly class IgnoredFilesGate implements Gate
         }
 
         $listing = $workspace->git(self::TRACKED_AND_IGNORED);
-
-        if (!$listing->succeeded()) {
-            return GateResult::failedBecause($this->name(), 'git ls-files failed: '.$listing->firstErrorLine());
-        }
-
         $rules = $workspace->gitWithPathspecMagic(self::UNSTAGED_RULES);
-
-        if (!$rules->succeeded()) {
-            return GateResult::failedBecause($this->name(), 'git diff failed: '.$rules->firstErrorLine());
-        }
-
         $ruleFiles = $workspace->gitWithPathspecMagic(self::RULE_FILES);
+        $failure = $this->failureOf([[self::TRACKED_AND_IGNORED, $listing], [self::UNSTAGED_RULES, $rules], [self::RULE_FILES, $ruleFiles]]);
 
-        if (!$ruleFiles->succeeded()) {
-            return GateResult::failedBecause($this->name(), 'git ls-files failed: '.$ruleFiles->firstErrorLine());
+        if ($failure instanceof GateResult) {
+            return $failure;
         }
 
         $tagged = $this->taggedPaths($ruleFiles->output);
-        $untracked = array_keys(array_filter($tagged, static fn (string $tag): bool => self::UNTRACKED_TAG === $tag));
-        $shadowing = $this->rulesAboveTrackedFiles($workspace, array_map(strval(...), $untracked));
+        $shadowing = $this->rulesAboveTrackedFiles($workspace, array_keys(array_filter($tagged, static fn (string $tag): bool => self::UNTRACKED_TAG === $tag)));
 
         if ($shadowing instanceof GateResult) {
             return $shadowing;
         }
 
-        $reasons = [];
-
-        foreach ($this->paths($rules->output) as $path) {
-            $reasons[$path][] = self::DIFFERS;
-        }
-
-        foreach ($tagged as $path => $tag) {
-            if (self::SKIP_WORKTREE_TAG === $tag || ctype_lower($tag)) {
-                $reasons[$path][] = self::MARKED;
-            }
-        }
-
-        foreach ($shadowing as $path) {
-            $reasons[$path][] = self::UNTRACKED;
-        }
-
-        foreach ($this->paths($listing->output) as $path) {
-            $reasons[$path][] = self::TRACKED;
-        }
-
-        $findings = [];
-
-        foreach ($reasons as $path => $pathReasons) {
-            $findings[] = $this->quoted((string) $path).': '.implode('; ', array_unique($pathReasons));
-        }
-
-        return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
+        return $this->resultOf([
+            ...$this->reasoned($this->paths($rules->output), self::DIFFERS),
+            ...$this->reasoned(array_keys(array_filter($tagged, $this->isMarked(...))), self::MARKED),
+            ...$this->reasoned($shadowing, self::UNTRACKED),
+            ...$this->reasoned($this->paths($listing->output), self::TRACKED),
+        ]);
     }
 
     /**
-     * @return list<string>
+     * @param list<array{list<string>, ProcessResult}> $calls
      */
-    private function paths(string $output): array
+    private function failureOf(array $calls): ?GateResult
     {
-        return array_values(array_unique(array_filter(explode("\0", $output), static fn (string $path): bool => '' !== $path)));
+        foreach ($calls as [$arguments, $result]) {
+            if (!$result->succeeded()) {
+                return GateResult::failedBecause($this->name(), 'git '.$arguments[0].' failed: '.$result->firstErrorLine());
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -129,10 +104,12 @@ final readonly class IgnoredFilesGate implements Gate
         }
 
         $pathspecs = array_map(fn (string $path): string => '' === $this->directoryOf($path) ? '.' : $this->directoryOf($path), $untracked);
-        $tracked = $workspace->git(['ls-files', '-z', '--cached', '--', ...$pathspecs]);
+        $arguments = ['ls-files', '-z', '--cached', '--', ...$pathspecs];
+        $tracked = $workspace->git($arguments);
+        $failure = $this->failureOf([[$arguments, $tracked]]);
 
-        if (!$tracked->succeeded()) {
-            return GateResult::failedBecause($this->name(), 'git ls-files failed: '.$tracked->firstErrorLine());
+        if ($failure instanceof GateResult) {
+            return $failure;
         }
 
         $trackedPaths = $this->paths($tracked->output);
@@ -143,6 +120,44 @@ final readonly class IgnoredFilesGate implements Gate
     private function directoryOf(string $rulePath): string
     {
         return substr($rulePath, 0, -strlen('.gitignore'));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function paths(string $output): array
+    {
+        return array_values(array_unique(array_filter(explode("\0", $output), static fn (string $path): bool => '' !== $path)));
+    }
+
+    /**
+     * @param list<string> $paths
+     *
+     * @return list<array{string, string}>
+     */
+    private function reasoned(array $paths, string $reason): array
+    {
+        return array_map(static fn (string $path): array => [$path, $reason], $paths);
+    }
+
+    private function isMarked(string $tag): bool
+    {
+        return self::SKIP_WORKTREE_TAG === $tag || ctype_lower($tag);
+    }
+
+    /**
+     * @param list<array{string, string}> $reasons
+     */
+    private function resultOf(array $reasons): GateResult
+    {
+        $findings = [];
+
+        foreach (array_unique(array_column($reasons, 0)) as $path) {
+            $pathReasons = array_column(array_filter($reasons, static fn (array $reason): bool => $reason[0] === $path), 1);
+            $findings[] = $this->quoted($path).': '.implode('; ', array_unique($pathReasons));
+        }
+
+        return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
     }
 
     // Because a finding must name a file the reader can untrack, a path JSON cannot carry losslessly is quoted the way git quotes it.

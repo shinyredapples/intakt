@@ -281,10 +281,9 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         $sandbox->commitAll('docs: ignore logs');
         $sandbox->write('docs/.gitignore', "*.tmp\n");
 
-        $result = $sandbox->gateResult(new IgnoredFilesGate());
-        $findings = json_decode($result->toFullJson(), true, flags: JSON_THROW_ON_ERROR)['findings'];
+        $run = $sandbox->runGate(new IgnoredFilesGate());
 
-        self::assertSame(['docs/.gitignore: working-tree .gitignore differs from the index; stage or revert it so the gate judges the rules that will be committed; tracked although .gitignore excludes it; run git rm --cached on it, or add a negated rule to .gitignore'], $findings);
+        self::assertSame('docs/.gitignore: working-tree .gitignore differs from the index; stage or revert it so the gate judges the rules that will be committed; tracked although .gitignore excludes it; run git rm --cached on it, or add a negated rule to .gitignore', $run->findingsOf('ignored'));
     }
 
     public function testAFileExcludedOnlyByARepositoryLocalExcludesFileDoesNotFailTheGate(): void
