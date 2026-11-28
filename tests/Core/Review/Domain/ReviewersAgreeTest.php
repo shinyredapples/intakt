@@ -24,6 +24,7 @@ use PHPUnit\Framework\TestCase;
 final class ReviewersAgreeTest extends TestCase
 {
     private const string CHANGE = "+    public function total(): int\n+    {\n+        return \$this->sum;\n";
+    private const string LITERALS = "+    return total(\"A B\") . total(\"A  B\");\n";
 
     public function testReviewersWhoAllApproveAgree(): void
     {
@@ -157,6 +158,65 @@ final class ReviewersAgreeTest extends TestCase
         ]));
     }
 
+    public function testTheSameFindingAtDifferentFilesIsNotShared(): void
+    {
+        $text = 'The cart loses its discount.';
+
+        self::assertFalse($this->agree([
+            $this->changes($this->finding($text)),
+            $this->changes($this->finding($text, file: 'src/Order.php')),
+        ]));
+    }
+
+    public function testFindingsThatDifferOnlyInWhiteSpaceInsideACodeSpanAfterAnEscapedBacktickAreNotShared(): void
+    {
+        self::assertFalse($this->agree([
+            $this->changes($this->finding('A \` marker and `"A B"` in `total` are wrong.')),
+            $this->changes($this->finding('A \` marker and `"A  B"` in `total` are wrong.')),
+        ], self::LITERALS));
+    }
+
+    public function testFindingsThatDifferOnlyInProseWhiteSpaceAfterAnEscapedBacktickAreShared(): void
+    {
+        self::assertTrue($this->agree([
+            $this->changes($this->finding('A \` marker and `"A B"` in `total` are wrong.')),
+            $this->changes($this->finding('A \`  marker  and `"A B"` in `total` are wrong.')),
+        ], self::LITERALS));
+    }
+
+    public function testFindingsThatDifferOnlyInANonbreakingSpaceOfTheProseAreShared(): void
+    {
+        self::assertTrue($this->agree([
+            $this->changes($this->finding("The\u{00A0}cart loses its discount.")),
+            $this->changes($this->finding('The cart loses its discount.')),
+        ]));
+    }
+
+    public function testFindingsThatAreNotValidUtf8AndDifferAreNotShared(): void
+    {
+        self::assertFalse($this->agree([
+            $this->changes($this->finding("The cart\xFF loses its discount.")),
+            $this->changes($this->finding("The cart\xFE loses its discount.")),
+        ]));
+    }
+
+    public function testReviewersWhoAskForChangesWithoutAFindingDoNotAgree(): void
+    {
+        self::assertFalse($this->agree([$this->changes(), $this->changes()]));
+    }
+
+    public function testAnApprovalAndAChangesVerdictWithTheSameFindingDoNotAgree(): void
+    {
+        $finding = $this->finding('The cart loses its discount.');
+
+        self::assertFalse($this->agree([new Verdict(Decision::Approve, [$finding], [], []), $this->changes($finding)]));
+    }
+
+    public function testTheOnlyVerdictOfARoundAgreesWithItself(): void
+    {
+        self::assertTrue($this->agree([$this->changes($this->finding('The cart loses its discount.'))]));
+    }
+
     private function approval(): Verdict
     {
         return new Verdict(Decision::Approve, [], [], []);
@@ -165,17 +225,17 @@ final class ReviewersAgreeTest extends TestCase
     /**
      * @param list<Verdict> $verdicts
      */
-    private function agree(array $verdicts): bool
+    private function agree(array $verdicts, string $change = self::CHANGE): bool
     {
-        return new ReviewersAgree()->agree($verdicts, self::CHANGE);
+        return new ReviewersAgree()->agree($verdicts, $change);
     }
 
-    private function finding(string $text, Severity $severity = Severity::P1, string $id = 'a1'): Finding
+    private function finding(string $text, Severity $severity = Severity::P1, string $id = 'a1', string $file = 'src/Cart.php'): Finding
     {
         return new Finding(
             id: $id,
             severity: $severity,
-            file: 'src/Cart.php',
+            file: $file,
             line: 12,
             symbol: null,
             text: $text,
