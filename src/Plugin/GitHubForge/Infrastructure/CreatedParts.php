@@ -33,9 +33,9 @@ final readonly class CreatedParts
      *
      * @throws ForgeWriteFailed
      */
-    public function whileHeld(string $project, PartIssue $part, Closure $filing): mixed
+    public function whileHeld(PartPlace $place, PartIssue $part, Closure $filing): mixed
     {
-        $lock = $this->locks->createLock($this->subjectOf($project, $part));
+        $lock = $this->locks->createLock($this->subjectOf($place, $part));
 
         if (!$lock->acquire()) {
             throw new ForgeWriteFailed('Another run is filing this part.');
@@ -52,18 +52,18 @@ final readonly class CreatedParts
     /**
      * @throws ForgeReadFailed
      */
-    public function numberOf(string $repository, string $project, PartIssue $part): ?int
+    public function numberOf(PartPlace $place, PartIssue $part): ?int
     {
         $number = null;
 
-        foreach ($this->ledger->readOfKindAbout(LedgerEventKind::PartIssueCreated, $this->subjectOf($project, $part)) as $kept) {
+        foreach ($this->ledger->readOfKindAbout(LedgerEventKind::PartIssueCreated, $this->subjectOf($place, $part)) as $kept) {
             $fields = PayloadFields::of($kept);
 
             if ($fields->lacks('issue')) {
                 continue;
             }
 
-            if ($fields->text('repository') !== $repository) {
+            if ($fields->text('repository') !== $place->repository) {
                 throw new ForgeReadFailed('The ledger kept this part\'s issue number for another repository than the project\'s now.');
             }
 
@@ -78,18 +78,18 @@ final readonly class CreatedParts
     }
 
     // Any line of the part, the intent of a create included, because a create whose number was never kept may still have stored the part.
-    public function attempted(string $project, PartIssue $part): bool
+    public function attempted(PartPlace $place, PartIssue $part): bool
     {
-        return [] !== [...$this->ledger->readOfKindAbout(LedgerEventKind::PartIssueCreated, $this->subjectOf($project, $part))];
+        return [] !== [...$this->ledger->readOfKindAbout(LedgerEventKind::PartIssueCreated, $this->subjectOf($place, $part))];
     }
 
     // Before the create, so a retry that finds no number and no marker stops instead of filing the part a second time.
     /**
      * @throws ForgeWriteFailed
      */
-    public function intend(string $repository, string $project, PartIssue $part): void
+    public function intend(PartPlace $place, PartIssue $part): void
     {
-        $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::PartIssueCreated, json_encode(['project' => $project, 'repository' => $repository, 'marker' => $part->marker], JSON_THROW_ON_ERROR), $this->subjectOf($project, $part)));
+        $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::PartIssueCreated, json_encode(['project' => $place->project, 'repository' => $place->repository, 'marker' => $part->marker], JSON_THROW_ON_ERROR), $this->subjectOf($place, $part)));
 
         if (!$appended->succeeded()) {
             throw new ForgeWriteFailed(sprintf('Nothing was filed, because the ledger did not keep the intent to file the part: %s', (string) $appended->failure));
@@ -99,9 +99,9 @@ final readonly class CreatedParts
     /**
      * @throws ForgeWriteFailed
      */
-    public function keep(string $repository, string $project, PartIssue $part, int $number): void
+    public function keep(PartPlace $place, PartIssue $part, int $number): void
     {
-        $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::PartIssueCreated, json_encode(['project' => $project, 'repository' => $repository, 'issue' => $number, 'marker' => $part->marker], JSON_THROW_ON_ERROR), $this->subjectOf($project, $part)));
+        $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::PartIssueCreated, json_encode(['project' => $place->project, 'repository' => $place->repository, 'issue' => $number, 'marker' => $part->marker], JSON_THROW_ON_ERROR), $this->subjectOf($place, $part)));
 
         if (!$appended->succeeded()) {
             throw new ForgeWriteFailed(sprintf('GitHub filed part #%d, but the ledger did not keep its number: %s', $number, (string) $appended->failure));
@@ -109,8 +109,8 @@ final readonly class CreatedParts
     }
 
     // Length-prefixed, because a project name may end in text that looks like the start of a marker.
-    private function subjectOf(string $project, PartIssue $part): string
+    private function subjectOf(PartPlace $place, PartIssue $part): string
     {
-        return 'part-issue-'.hash('sha256', strlen($project).':'.$project.$part->marker);
+        return 'part-issue-'.hash('sha256', strlen($place->project).':'.$place->project.$part->marker);
     }
 }

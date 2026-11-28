@@ -15,16 +15,17 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\NextLinks;
 use Intakt\Plugin\GitHubForge\Infrastructure\PartIssueCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Psr\Log\NullLogger;
-use Symfony\Component\Lock\LockFactory;
-use Symfony\Component\Lock\LockInterface;
-use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 // The issues of acme/widget on GitHub: lists them a page at a time in the order they were created and keeps each create as an issue of the App, so a test sees what the owner would see.
@@ -42,7 +43,7 @@ final class ScriptedIssueTracker
 
     public ?int $refusal = null;
 
-    // The size of the pages GitHub serves, whatever per_page asked for; a next page is announced in the Link header.
+    // Shorter than per_page asked for in a test of the Link header, because GitHub may serve a short page and still have more.
     public int $served = 100;
 
     // Answered after the issue is kept, because GitHub can create an issue and still answer 502.
@@ -55,7 +56,7 @@ final class ScriptedIssueTracker
     // Kept across runs, because a later run reads what an earlier run's create kept there.
     public InMemoryLedger $ledger;
 
-    private LockFactory $locks;
+    private readonly LockFactory $locks;
 
     private ?LockInterface $held = null;
 
@@ -98,7 +99,7 @@ final class ScriptedIssueTracker
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
         $calls = new GitHubCalls(new MockHttpClient($this->answer(...), 'https://api.github.com'), $readings, $tokens);
 
-        return new GitHubTaskParts(new PartIssueCalls($calls, new CheckedInstallationTokens($readBack, $tokens)), new WatchedRepositories([self::PROJECT => ['github' => $repository]]), new CreatedParts($this->ledger, $this->locks), self::APP_ID);
+        return new GitHubTaskParts(new PartIssueCalls($calls, new CheckedInstallationTokens($readBack, $tokens), new NextLinks()), new WatchedRepositories([self::PROJECT => ['github' => $repository]]), new CreatedParts($this->ledger, $this->locks), self::APP_ID);
     }
 
     /**
@@ -119,14 +120,27 @@ final class ScriptedIssueTracker
         }
 
         if ('GET' === $method) {
-            parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
-            $page = is_numeric($query['page'] ?? null) ? (int) $query['page'] : 1;
-
-            $headers = $page * $this->served < count($this->issues) ? ['link: <https://api.github.com/repos/acme/widget/issues?page='.($page + 1).'>; rel="next"'] : [];
-
-            return new MockResponse(json_encode(array_slice($this->issues, ($page - 1) * $this->served, $this->served), JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => $headers]);
+            return $this->listing($url);
         }
 
+        return $this->created($options);
+    }
+
+    private function listing(string $url): ResponseInterface
+    {
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        $page = is_numeric($query['page'] ?? null) ? (int) $query['page'] : 1;
+
+        $headers = $page * $this->served < count($this->issues) ? ['link: <https://api.github.com/repos/acme/widget/issues?page='.($page + 1).'>; rel="next"'] : [];
+
+        return new MockResponse(json_encode(array_slice($this->issues, ($page - 1) * $this->served, $this->served), JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => $headers]);
+    }
+
+    /**
+     * @param array<mixed> $options
+     */
+    private function created(array $options): ResponseInterface
+    {
         $body = $options['body'] ?? '';
         $payload = (array) json_decode(is_string($body) ? $body : '', true, flags: JSON_THROW_ON_ERROR);
         $labels = is_array($payload['labels'] ?? null) ? $payload['labels'] : [];

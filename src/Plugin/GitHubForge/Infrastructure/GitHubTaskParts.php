@@ -35,20 +35,20 @@ final readonly class GitHubTaskParts implements TaskParts
     #[Override]
     public function fileOnce(string $project, PartIssue $part): int
     {
-        $repository = $this->repositories->addressOf($project)->path();
+        $place = new PartPlace($project, $this->repositories->addressOf($project)->path());
 
         // Held across the lookup, the create and the record, because two overlapping runs could both find nothing and both file the part.
-        return $this->created->whileHeld($project, $part, fn (): int => $this->filedOnce($repository, $project, $part));
+        return $this->created->whileHeld($place, $part, fn (): int => $this->filedOnce($place, $part));
     }
 
     /**
      * @throws ForgeReadFailed
      * @throws ForgeWriteFailed
      */
-    private function filedOnce(string $repository, string $project, PartIssue $part): int
+    private function filedOnce(PartPlace $place, PartIssue $part): int
     {
-        $path = $repository.'/issues';
-        $kept = $this->created->numberOf($repository, $project, $part);
+        $path = $place->repository.'/issues';
+        $kept = $this->created->numberOf($place, $part);
 
         if (null !== $kept) {
             return $this->reconciled($path.'/'.$kept, $kept, $part);
@@ -61,11 +61,62 @@ final readonly class GitHubTaskParts implements TaskParts
         }
 
         // An earlier create whose number was never kept may have stored the part without the marker, which no search finds, so a person checks the issues instead of this run filing it again.
-        if ($this->created->attempted($project, $part)) {
+        if ($this->created->attempted($place, $part)) {
             throw new ForgeWriteFailed('An earlier create of this part kept no issue number and no issue carries its marker, so nothing was filed again; check the repository\'s issues for the part.');
         }
 
-        return $this->filed($path, $repository, $project, $part);
+        return $this->filed($path, $place, $part);
+    }
+
+    // Without this App's mark, because the number is the answer to this App's own create, and the mark may be what that answer lacked; written only when the marker is missing, because the create may have stored it and only the answer lost it.
+    /**
+     * @throws ForgeReadFailed
+     * @throws ForgeWriteFailed
+     */
+    private function reconciled(string $url, int $kept, PartIssue $part): int
+    {
+        $stored = $this->storedBodyOf($url, $kept);
+
+        if (str_contains($stored, $part->marker)) {
+            return $kept;
+        }
+
+        $answer = $this->calls->written('PATCH', $url, ['body' => ('' === trim($stored) ? $part->body : $stored)."\n\n".$part->marker]);
+        $written = $answer['body'] ?? null;
+
+        return is_string($written) && str_contains($written, $part->marker) ? $kept : throw new ForgeWriteFailed(sprintf('GitHub did not keep the marker written into part #%d.', $kept));
+    }
+
+    /**
+     * @throws ForgeReadFailed
+     */
+    private function storedBodyOf(string $url, int $kept): string
+    {
+        $answer = $this->calls->read($url, [])->body;
+
+        try {
+            $issue = json_decode($answer, true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $invalid) {
+            throw new ForgeReadFailed('GitHub answered the read of an issue with something other than JSON.', $invalid->getCode(), previous: $invalid);
+        }
+
+        if (!is_array($issue) || !str_starts_with(ltrim($answer), '{') || $this->numberOf($issue) !== $kept || array_key_exists('pull_request', $issue)) {
+            throw new ForgeReadFailed(sprintf('GitHub answered the read of part #%d with something other than that issue.', $kept));
+        }
+
+        $body = $issue['body'] ?? null;
+
+        return is_string($body) ? $body : '';
+    }
+
+    /**
+     * @param array<mixed> $issue
+     */
+    private function numberOf(array $issue): ?int
+    {
+        $number = $issue['number'] ?? null;
+
+        return is_int($number) && $number > 0 ? $number : null;
     }
 
     // By this App's mark and the marker, never by the title, because anyone can write the marker into an issue of their own, and two parts may share a title.
@@ -137,68 +188,17 @@ final readonly class GitHubTaskParts implements TaskParts
         return is_int($id) && (string) $id === $this->appId;
     }
 
-    /**
-     * @param array<mixed> $issue
-     */
-    private function numberOf(array $issue): ?int
-    {
-        $number = $issue['number'] ?? null;
-
-        return is_int($number) && $number > 0 ? $number : null;
-    }
-
     // Kept before the answer is checked for the marker, because GitHub may have stored a part whose answer lacks it, and the next run must check that issue instead of filing the part again.
     /**
      * @throws ForgeWriteFailed
      */
-    private function filed(string $path, string $repository, string $project, PartIssue $part): int
+    private function filed(string $path, PartPlace $place, PartIssue $part): int
     {
-        $this->created->intend($repository, $project, $part);
+        $this->created->intend($place, $part);
         $issue = $this->calls->written('POST', $path, ['title' => $part->title, 'body' => $part->body."\n\n".$part->marker, 'labels' => [...$part->labels]]);
         $number = $this->numberOf($issue) ?? throw new ForgeWriteFailed('GitHub answered the create without the number of the issue.');
-        $this->created->keep($repository, $project, $part, $number);
+        $this->created->keep($place, $part, $number);
 
         return $this->isThisAppsPart($issue, $part->marker) ? $number : throw new ForgeWriteFailed(sprintf('GitHub answered the create of part #%d without this App\'s mark or its marker, so the next run checks that issue.', $number));
-    }
-
-    // Without this App's mark, because the number is the answer to this App's own create, and the mark may be what that answer lacked; written only when the marker is missing, because the create may have stored it and only the answer lost it.
-    /**
-     * @throws ForgeReadFailed
-     * @throws ForgeWriteFailed
-     */
-    private function reconciled(string $url, int $kept, PartIssue $part): int
-    {
-        $stored = $this->storedBodyOf($url, $kept);
-
-        if (str_contains($stored, $part->marker)) {
-            return $kept;
-        }
-
-        $answer = $this->calls->written('PATCH', $url, ['body' => ('' === trim($stored) ? $part->body : $stored)."\n\n".$part->marker]);
-        $written = $answer['body'] ?? null;
-
-        return is_string($written) && str_contains($written, $part->marker) ? $kept : throw new ForgeWriteFailed(sprintf('GitHub did not keep the marker written into part #%d.', $kept));
-    }
-
-    /**
-     * @throws ForgeReadFailed
-     */
-    private function storedBodyOf(string $url, int $kept): string
-    {
-        $answer = $this->calls->read($url, [])->body;
-
-        try {
-            $issue = json_decode($answer, true, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException $invalid) {
-            throw new ForgeReadFailed('GitHub answered the read of an issue with something other than JSON.', $invalid->getCode(), previous: $invalid);
-        }
-
-        if (!is_array($issue) || !str_starts_with(ltrim($answer), '{') || $this->numberOf($issue) !== $kept || array_key_exists('pull_request', $issue)) {
-            throw new ForgeReadFailed(sprintf('GitHub answered the read of part #%d with something other than that issue.', $kept));
-        }
-
-        $body = $issue['body'] ?? null;
-
-        return is_string($body) ? $body : '';
     }
 }

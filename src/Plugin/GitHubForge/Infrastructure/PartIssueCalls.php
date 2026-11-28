@@ -21,6 +21,7 @@ final readonly class PartIssueCalls
     public function __construct(
         private GitHubCalls $calls,
         private CheckedInstallationTokens $tokens,
+        private NextLinks $nextLinks,
     ) {
     }
 
@@ -37,7 +38,8 @@ final readonly class PartIssueCalls
             $response = $this->calls->asInstallation('GET', $path, $options);
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
-            $links = $response->getHeaders(false)['link'] ?? [];
+            $links = array_values($response->getHeaders(false)['link'] ?? []);
+            $target = (string) $response->getInfo('url');
         } catch (ExceptionInterface $failure) {
             throw $this->unreachable($failure::class);
         }
@@ -46,7 +48,7 @@ final readonly class PartIssueCalls
             throw new ForgeReadFailed(sprintf('GitHub answered %d to a read of %s.', $status, $path), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
         }
 
-        return new ReadAnswer($body, 1 === preg_match('/<[^>]*>\s*;\s*rel="?next"?/i', implode(',', $links)));
+        return new ReadAnswer($body, $this->nextLinks->namesNext($links, $target));
     }
 
     /**

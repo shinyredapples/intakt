@@ -303,7 +303,7 @@ final class GitHubTaskPartsTest extends TestCase
             self::assertCount(1, $tracker->filed());
         }
 
-        $this->expectExceptionMessage('check the repository\'s issues for the part');
+        $this->expectExceptionObject(new ForgeWriteFailed('An earlier create of this part kept no issue number and no issue carries its marker, so nothing was filed again; check the repository\'s issues for the part.'));
 
         $this->fileOnce($tracker);
     }
