@@ -16,6 +16,7 @@ final readonly class InstallWalk
     private const string TEARDOWN = 'teardown: stop the containers and remove their volume';
     private const string DEMO = 'demo: play the demo run to its verdict';
     private const string UI = 'ui-check: every page';
+    private const string REMOVAL = 'demo-removal: remove the played demo run';
     private const string JOURNEYS = 'journey-check';
     private const string KEYED = 'keyed: review the sample with a provider key';
     private const string ENDED_IN = 'INTAKT_INSTALL_CHECK_ENDED_IN';
@@ -84,14 +85,14 @@ final readonly class InstallWalk
         }
 
         if (!$installed) {
-            return [...$results, ...array_map(fn (string $name): InstallStepResult => $this->skipped($name, 'the install failed'), [self::DEMO, self::UI, self::JOURNEYS]), $this->keyedStep(false, $home)];
+            return [...$results, ...array_map(fn (string $name): InstallStepResult => $this->skipped($name, 'the install failed'), [self::DEMO, self::UI, self::REMOVAL, self::JOURNEYS]), $this->keyedStep(false, $home)];
         }
 
         $clone = $this->cloneIn($home);
         $address = escapeshellarg(InstallCheck::ADDRESS);
         $results[] = $this->step(self::DEMO, 'node '.escapeshellarg($this->checkout.'/bin/install-check-demo').' '.$address.' '.escapeshellarg($this->logs), $clone);
         $results[] = $this->step(self::UI, 'node bin/ui-check '.$address, $clone);
-        $results[] = is_file($clone.'/bin/journey-check') ? $this->step(self::JOURNEYS, 'node bin/journey-check '.$address, $clone) : $this->skipped(self::JOURNEYS, 'the clone has no bin/journey-check');
+        $results = [...$results, ...$this->journeySteps($clone, $address)];
         $results[] = $this->keyedStep(true, $clone);
         $this->keepScreenshots($clone);
 
@@ -204,6 +205,24 @@ final readonly class InstallWalk
     private function slug(string $name): string
     {
         return trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower($name)), '-');
+    }
+
+    /**
+     * @return list<InstallStepResult>
+     */
+    private function journeySteps(string $clone, string $address): array
+    {
+        // An older clone has neither the journey check nor the removal command, so both are skipped and it is never sent the removal.
+        if (!is_file($clone.'/bin/journey-check')) {
+            return [$this->skipped(self::REMOVAL, 'the clone has no bin/journey-check'), $this->skipped(self::JOURNEYS, 'the clone has no bin/journey-check')];
+        }
+
+        // Because the first journey presses the button that plays the demo run, which the wizard's last step /setup?step=5 offers again only once the run the demo step played is removed.
+        $removal = $this->step(self::REMOVAL, 'docker compose exec -T intakt php bin/console intakt:demo:remove', $clone);
+
+        return [$removal, InstallStatus::Passed === $removal->status
+            ? $this->step(self::JOURNEYS, 'node bin/journey-check '.$address, $clone)
+            : $this->skipped(self::JOURNEYS, 'the played demo run was not removed')];
     }
 
     // The clone is removed with the temporary folder, so its screenshots are copied to the logs first.

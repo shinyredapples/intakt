@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
@@ -9,7 +10,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const script = fileURLToPath(new URL('../../../../bin/journey-check', import.meta.url));
-const { STEP_TIMEOUT_MS, parseAddress, expectAnswer, runName, runJourney, screenshotFile, press, report, exitCode } = createRequire(import.meta.url)(script);
+const { STEP_TIMEOUT_MS, OUTCOME, RECORDED_FINDING, JOURNEYS, parseAddress, expectAnswer, runName, runJourney, screenshotFile, press, seeRoleSince, report, exitCode } = createRequire(import.meta.url)(script);
 
 // The runner's port, as the maintainer chose for the check's stand-in servers.
 const PORT = 7781;
@@ -33,10 +34,22 @@ function scratch() {
     return mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), 'journey-check-'));
 }
 
+// The page doubles never load a document, so the report the journey check installs is accepted and never called.
+const REPORTS_UNUSED = { exposeBinding: async () => {}, addInitScript: async () => {}, evaluate: async () => {} };
+// A page double whose every address reports HTTP 200 once it is reached, as a document or a render there would.
+function reportingVisits(page, origin) {
+    let reportTo = () => {};
+    const visit = (path) => { page.at = origin + path; page.emit('framenavigated', page); reportTo({ frame: page }, page.at, 200); };
+
+    return { visit, reports: { exposeBinding: async (name, callback) => { reportTo = callback; }, addInitScript: async () => {}, evaluate: async () => {} } };
+}
+
 // Stands in for a browser whose page cannot find the button and cannot take a screenshot either.
 function browserWithBrokenPage() {
     const page = {
         setDefaultTimeout() {},
+        on() {},
+        ...REPORTS_UNUSED,
         getByRole: () => ({ click: async () => { throw new Error('locator.click: Timeout 10000ms exceeded.\nCall log: waiting for button'); } }),
         screenshot: async () => { throw new Error('the page is gone'); },
     };
@@ -167,3 +180,101 @@ test('the report names each journey, the step that broke and where its screensho
 test('a run whose journeys all passed exits 0', () => {
     assert.equal(exitCode([{ journey: 'First run', failure: null }]), 0);
 });
+
+test('the recorded finding is matched by its sentence ending in amount > 100 and its period', () => {
+    assert.match('The check changed from amount >= 100 to amount > 100.', RECORDED_FINDING);
+    assert.match('The check changed from amount >= 100 to amount > 100. src/discount.js:3', RECORDED_FINDING);
+});
+
+test('the recorded finding is not matched by a sentence that goes on to amount > 100.50', () => {
+    assert.doesNotMatch('The check changed from amount >= 100 to amount > 100.50.', RECORDED_FINDING);
+    assert.doesNotMatch('The check changed from amount >= 100 to amount > 100', RECORDED_FINDING);
+});
+
+test('the verdict wait ends on each heading the verdict card can show', () => {
+    for (const heading of ['Approved', 'Changes needed', 'Blocked: the reviewers could not give a verdict on this change', 'Failed: every reviewer failed, so nobody checked this change', 'Checked, but the outcome was not recorded']) {
+        assert.match(heading, OUTCOME);
+    }
+});
+
+test('the verdict wait does not end on a heading that only starts like a verdict', () => {
+    for (const heading of ['Approved later', 'Blocked:', 'Not approved', 'Review of sample-change in sample']) {
+        assert.doesNotMatch(heading, OUTCOME);
+    }
+});
+
+test('the first journey is First run without a key with its five steps in order', () => {
+    assert.deepEqual(JOURNEYS.map((journey) => [journey.name, journey.steps.map((step) => step.name)]), [['First run without a key', [
+        'open the last setup step and see the start',
+        'press the button "Play the demo run"',
+        'reach /demo and see the demo run',
+        'wait for the verdict of the demo run',
+        'see the recorded finding on the review page',
+    ]]]);
+});
+
+// Forces the order: the match is seen while the page is on /demo, and the navigation to the review commits before the step resumes.
+for (const [position, shown] of [[3, 'the verdict'], [4, 'the finding']]) {
+    test(`${shown} seen on /demo right before the navigation to the review commits fails step ${position + 1}`, async (t) => {
+        const soon = globalThis.setTimeout;
+        t.mock.method(globalThis, 'setTimeout', (callback) => soon(callback, 10));
+        const origin = 'http://localhost';
+        const page = new EventEmitter();
+        let at = `${origin}/setup?step=5`;
+        const visit = (path) => { at = origin + path; page.emit('framenavigated', page); };
+        const locator = {
+            filter: () => locator,
+            first: () => locator,
+            click: async () => visit('/demo'),
+            waitFor: async () => queueMicrotask(() => visit('/reviews/r1')),
+        };
+        Object.assign(page, { url: () => at, mainFrame: () => page, getByRole: () => locator, ...REPORTS_UNUSED });
+        const { steps } = JOURNEYS[0];
+        await steps[1].run(page, origin);
+
+        await assert.rejects(steps[position].run(page, origin), /the page stayed at http:\/\/localhost\/demo, not on a review page/);
+    });
+}
+
+test('a verdict seen on the review page right before the page leaves and returns fails step 4', async () => {
+    const origin = 'http://localhost';
+    const page = new EventEmitter();
+    page.at = `${origin}/setup?step=5`;
+    const { visit, reports } = reportingVisits(page, origin);
+    const locator = {
+        filter: () => locator,
+        first: () => locator,
+        click: async () => { visit('/demo'); visit('/reviews/r1'); },
+        waitFor: async () => { visit('/demo'); visit('/reviews/r1'); },
+    };
+    Object.assign(page, { url: () => page.at, mainFrame: () => page, getByRole: () => locator, ...reports });
+    const { steps } = JOURNEYS[0];
+    await steps[1].run(page, origin);
+
+    await assert.rejects(steps[3].run(page, origin), /the page moved on to http:\/\/localhost\/reviews\/r1 while http:\/\/localhost\/reviews\/r1 was looked at/);
+});
+
+// Forces the order with a stand-in clock (the step's start, the wait for the review page's report, the look's start, the match): the review page is reached and shown, then the step's time runs out before the look starts, or the look matches only after it ran out.
+for (const [when, clock, error] of [
+    ['before the look starts', [0, 0, 1001], /the step's 1000 ms ran out before the look on http:\/\/localhost\/reviews\/r1 could start/],
+    ['while the look runs', [0, 0, 500, 1001], /the match on http:\/\/localhost\/reviews\/r1 came after the step's 1000 ms/],
+]) {
+    test(`a deadline that ends ${when} fails the look on the review page`, async (t) => {
+        const times = [...clock];
+        t.mock.method(performance, 'now', () => times.length > 1 ? times.shift() : times[0]);
+        const origin = 'http://localhost';
+        const page = new EventEmitter();
+        page.at = `${origin}/setup?step=5`;
+        const { visit, reports } = reportingVisits(page, origin);
+        const locator = {
+            filter: () => locator,
+            first: () => locator,
+            click: async () => { visit('/demo'); visit('/reviews/r1'); },
+            waitFor: async () => {},
+        };
+        Object.assign(page, { url: () => page.at, mainFrame: () => page, getByRole: () => locator, ...reports });
+        await JOURNEYS[0].steps[1].run(page, origin);
+
+        await assert.rejects(seeRoleSince('/demo', 'heading', 'Changes needed', 1000).run(page, origin), error);
+    });
+}

@@ -49,7 +49,7 @@ Whoever works on the dashboard can check the listed pages in one go with `bin/ui
 
 ## Walking the dashboard like a person
 
-`bin/journey-check` goes further than looking: it clicks through the dashboard in a browser without a window, the way a person would, and says for each path whether it got through. It finds buttons and text by what they say on screen, never by how they are styled, so a new look keeps working while a renamed button fails, just as it would stop a person. When a path breaks, it names the step and saves a picture of the page in `var/journey-check/`, when it can. It has no paths of its own yet; the first one is planned. [The user guide](../reference/user-manual.md#walking-user-journeys-with-the-journey-check) has the commands.
+`bin/journey-check` goes further than looking: it clicks through the dashboard in a browser without a window, the way a person would, and says for each path whether it got through. It finds buttons and text by what they say on screen, never by how they are styled, so a new look keeps working while a renamed button fails, just as it would stop a person. When a path breaks, it names the step and saves a picture of the page in `var/journey-check/`, when it can. Its first path plays the demo run from the last step of the setup wizard to the run's verdict and its finding on the review page. [The user guide](../reference/user-manual.md#walking-user-journeys-with-the-journey-check) has the commands.
 
 ## The board
 
