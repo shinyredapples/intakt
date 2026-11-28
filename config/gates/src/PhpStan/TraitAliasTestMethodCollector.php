@@ -33,7 +33,7 @@ final readonly class TraitAliasTestMethodCollector implements Collector
     {
         $class = $scope->getClassReflection();
 
-        // PHPUnit runs only the methods of a named TestCase subclass, as for the methods a class declares
+        // because PHPUnit runs only the methods of a named TestCase subclass, so an alias elsewhere may name a method test*() freely
         if (!$class instanceof ClassReflection || $class->isAnonymous() || !in_array(TestCase::class, $class->getParentClassesNames(), true)) {
             return null;
         }
