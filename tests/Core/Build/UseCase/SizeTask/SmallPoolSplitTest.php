@@ -103,6 +103,17 @@ final class SmallPoolSplitTest extends TestCase
         self::assertSame(['size' => 'split', 'parts' => self::PARTS], array_intersect_key($fixture->ledger->payloads()[0], ['size' => true, 'parts' => true]));
     }
 
+    public function testASecondAnswerWithValidPartsThatSaysNotReadyStillSplitsTheTask(): void
+    {
+        $fixture = $this->fixtureWith(['anthropic' => ['only']]);
+        $second = new SizingVerdict(false, [ReadinessGap::SingleOutcome], SizeTier::Split, 450, 'Two changes.', self::PARTS);
+
+        $outcome = $fixture->sizing($this->vendor($this->large(SmallPoolSplit::LOWER_SPLIT_LINES), $second))->run('alpha', 7);
+
+        self::assertSame([SizingOutcome::Split, ['Read the cart', 'Show the total']], [$outcome, $fixture->parts->titles()]);
+        self::assertSame(0, $fixture->parked->fetchOne(sprintf('SELECT COUNT(*) FROM %s', ParkedTaskRecord::TABLE)));
+    }
+
     public function testTheSameEstimateOnAPoolOfTwoAccountsIsKeptWholeWithoutASecondCall(): void
     {
         $fixture = $this->fixtureWith(['anthropic' => ['first', 'second']]);

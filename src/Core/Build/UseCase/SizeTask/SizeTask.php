@@ -201,7 +201,6 @@ final readonly class SizeTask
         }
     }
 
-    // A part keeps a split verdict whole, because a part is never split again; its `task_sized` line says ready with size split.
     /**
      * @throws UsageNotRecorded
      * @throws ProviderRateLimited
@@ -219,6 +218,7 @@ final readonly class SizeTask
         }
 
         if (SizeTier::Split === $verdict->size) {
+            // A part keeps a split verdict whole, because a part is never split again; its `task_sized` line says ready with size split.
             return $this->splits->isPart($request) ? null : $verdict;
         }
 
@@ -229,7 +229,7 @@ final readonly class SizeTask
         return $this->partsFor($request);
     }
 
-    // Asked once, because the first verdict below `split` named no parts; an answer without valid parts keeps the task whole and ready, and never parks it, since the task was already found ready.
+    // Asked once, because the first verdict below `split` named no parts; an answer without valid parts keeps the task whole and ready, and never parks it. Its readiness is not asked again: the first answer found the task ready, so a second answer that says otherwise cannot veto the split.
     /**
      * @throws UsageNotRecorded
      * @throws ProviderRateLimited
@@ -244,6 +244,7 @@ final readonly class SizeTask
     {
         $answer = $this->vendor->size($request->askingForParts());
 
-        return true === $answer?->ready && SizeTier::Split === $answer->size ? $answer : null;
+        // Size `split` means valid part lines here, because the vendor returns no verdict whose parts do not match its size or fail the line check.
+        return SizeTier::Split === $answer?->size ? new SizingVerdict(true, [], $answer->size, $answer->estimated_lines, $answer->reason, $answer->parts) : null;
     }
 }
