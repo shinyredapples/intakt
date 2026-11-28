@@ -88,6 +88,55 @@ final class TraitAliasTestMethodCollectorTest extends PhpStanRuleTestCase
         );
     }
 
+    public function testAShortAliasOfAMethodANestedTraitDeclaresIsReportedAtTheAlias(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->write('tests/Inner.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Inner\n{\n    public function runs(): void\n    {\n    }\n}\n");
+        $sandbox->write('tests/Outer.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Outer\n{\n    use Inner;\n}\n");
+        $sandbox->write('tests/NestTest.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\nuse PHPUnit\\Framework\\TestCase;\nfinal class NestTest extends TestCase\n{\n    use Outer {\n        runs as testRuns;\n    }\n}\n");
+
+        self::assertSame('tests/NestTest.php:8 intakt.testMethodSentence Test method Intakt\Sample\NestTest::testRuns()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAnAliasThroughAWrapperTraitReportsTheAliasAndTheOriginalNameAtTheAliasBesideTheDeclaration(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->write('tests/Inner.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Inner\n{\n    public function testRuns(): void\n    {\n    }\n}\n");
+        $sandbox->write('tests/Wrapper.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Wrapper\n{\n    use Inner;\n}\n");
+        $sandbox->write('tests/SampleTest.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\nuse PHPUnit\\Framework\\TestCase;\nfinal class SampleTest extends TestCase\n{\n    use Wrapper {\n        Wrapper::testRuns as testAgain;\n    }\n}\n");
+
+        // because PHPStan visits the method of the nested trait under its own name too, which a plain use of the wrapper reports at the declaration as well
+        self::assertSame(
+            'tests/Inner.php:6 intakt.testMethodSentence Test method Intakt\Sample\Inner::testRuns()'.self::FINDING."\n"
+            .'tests/SampleTest.php:8 intakt.testMethodSentence Test method Intakt\Sample\SampleTest::testAgain()'.self::FINDING."\n"
+            .'tests/SampleTest.php:8 intakt.testMethodSentence Test method Intakt\Sample\SampleTest::testRuns()'.self::FINDING,
+            $this->ruleFindingsIn($sandbox),
+        );
+    }
+
+    public function testHidingTheMethodOfTheExcludedTraitLeavesTheSelectedTestJudged(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->write('tests/Selected.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Selected\n{\n    public function testRuns(): void\n    {\n    }\n}\n");
+        $sandbox->write('tests/Excluded.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Excluded\n{\n    public function testRuns(): void\n    {\n    }\n}\n");
+        $sandbox->write('tests/SampleTest.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\nuse PHPUnit\\Framework\\TestCase;\nfinal class SampleTest extends TestCase\n{\n    use Selected, Excluded {\n        Selected::testRuns insteadof Excluded;\n        Selected::testRuns as testAgain;\n        Excluded::testRuns as private;\n    }\n}\n");
+
+        self::assertSame(
+            'tests/SampleTest.php:9 intakt.testMethodSentence Test method Intakt\Sample\SampleTest::testAgain()'.self::FINDING."\n"
+            .'tests/SampleTest.php:9 intakt.testMethodSentence Test method Intakt\Sample\SampleTest::testRuns()'.self::FINDING,
+            $this->ruleFindingsIn($sandbox),
+        );
+    }
+
+    public function testAProtectedTraitTestMadePublicBesideARenamingAliasIsReportedAtTheAlias(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->write('tests/Checks.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\ntrait Checks\n{\n    protected function testRuns(): void\n    {\n    }\n}\n");
+        $sandbox->write('tests/SampleTest.php', "<?php\ndeclare(strict_types=1);\nnamespace Intakt\\Sample;\nuse PHPUnit\\Framework\\TestCase;\nfinal class SampleTest extends TestCase\n{\n    use Checks {\n        testRuns as public;\n        testRuns as testAgain;\n    }\n}\n");
+
+        self::assertSame('tests/SampleTest.php:9 intakt.testMethodSentence Test method Intakt\Sample\SampleTest::testRuns()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
     #[Override]
     protected function setUp(): void
     {
@@ -114,6 +163,6 @@ final class TraitAliasTestMethodCollectorTest extends PhpStanRuleTestCase
     #[Override]
     protected function getCollectors(): array
     {
-        return [new TestMethodCollector(), new TraitAliasTestMethodCollector(), new TestProviderCollector(self::createReflectionProvider())];
+        return [new TestMethodCollector(), new TraitAliasTestMethodCollector(self::createReflectionProvider()), new TestProviderCollector(self::createReflectionProvider())];
     }
 }

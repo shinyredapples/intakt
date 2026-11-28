@@ -14,6 +14,7 @@ use PHPStan\Analyser\Scope;
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionMethod;
 use PHPStan\Collectors\Collector;
 use PHPStan\Reflection\ClassReflection;
+use PHPStan\Reflection\ReflectionProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -21,6 +22,10 @@ use PHPUnit\Framework\TestCase;
  */
 final readonly class TraitAliasTestMethodCollector implements Collector
 {
+    public function __construct(private ReflectionProvider $reflections)
+    {
+    }
+
     public function getNodeType(): string
     {
         return TraitUse::class;
@@ -67,23 +72,50 @@ final readonly class TraitAliasTestMethodCollector implements Collector
         $native = $class->getNativeReflection();
         $methods = array_map($native->getMethod(...), array_filter([(string) $alias->newName, $alias->method->toString()], $native->hasMethod(...)));
 
-        return array_values(array_filter($methods, fn (ReflectionMethod $method): bool => $this->comesFrom($method, $alias, $use) && !$this->isHidden($method, $use) && PhpUnitTestMethod::isRun($method) && !TestMethodName::readsAsSentence($method->getName())));
+        return array_values(array_filter($methods, fn (ReflectionMethod $method): bool => $this->comesFrom($method, $alias, $use) && $this->isPublic($method, $alias, $use) && PhpUnitTestMethod::isMarkedOrNamedAsTest($method) && !TestMethodName::readsAsSentence($method->getName())));
     }
 
     // because a method the class declares itself, or takes from another trait through insteadof, is judged where it is declared
     private function comesFrom(ReflectionMethod $method, Alias $alias, TraitUse $use): bool
     {
         $aliasName = $method->getBetterReflection()->getAliasName();
-        $trait = $method->getBetterReflection()->getDeclaringClass()->getName();
         $sameName = null === $aliasName ? 0 === strcasecmp($method->getName(), $alias->method->toString()) : 0 === strcasecmp($aliasName, (string) $alias->newName);
 
-        return $sameName && array_any($use->traits, static fn (Name $used): bool => 0 === strcasecmp($used->toString(), $trait)) && (!$alias->trait instanceof Name || 0 === strcasecmp($alias->trait->toString(), $trait));
+        return $sameName && array_any($use->traits, fn (Name $used): bool => $this->provides($used, $method)) && (!$alias->trait instanceof Name || $this->provides($alias->trait, $method));
     }
 
-    // because BetterReflection keeps the original name public when the class also renames it, while PHP hides it (upstream/phpstan-trait-alias-hidden-original-visibility/)
-    private function isHidden(ReflectionMethod $method, TraitUse $use): bool
+    // because BetterReflection mixes the visibility changes of the original name and its aliases when a class renames a method (upstream/phpstan-trait-alias-hidden-original-visibility/), the use block and the trait's declaration decide, as in PHP
+    private function isPublic(ReflectionMethod $method, Alias $alias, TraitUse $use): bool
     {
-        return null === $method->getBetterReflection()->getAliasName() && array_any($use->adaptations, static fn (Node $adaptation): bool => $adaptation instanceof Alias && !$adaptation->newName instanceof Identifier && 0 !== ($adaptation->newModifier & Modifiers::VISIBILITY_MASK) && 0 === ($adaptation->newModifier & Modifiers::PUBLIC) && 0 === strcasecmp($adaptation->method->toString(), $method->getName()));
+        $changes = null === $method->getBetterReflection()->getAliasName()
+            ? array_filter($use->adaptations, fn (Node $adaptation): bool => $adaptation instanceof Alias && !$adaptation->newName instanceof Identifier && 0 === strcasecmp($adaptation->method->toString(), $method->getName()) && (!$adaptation->trait instanceof Name || $this->provides($adaptation->trait, $method)))
+            : [$alias];
+        $change = array_last(array_filter($changes, static fn (Alias $change): bool => 0 !== ($change->newModifier & Modifiers::VISIBILITY_MASK)));
+
+        return $change instanceof Alias ? 0 !== ($change->newModifier & Modifiers::PUBLIC) : $this->isDeclaredPublic($method, $alias);
+    }
+
+    private function isDeclaredPublic(ReflectionMethod $method, Alias $alias): bool
+    {
+        $trait = $this->reflections->getClass($method->getBetterReflection()->getDeclaringClass()->getName())->getNativeReflection();
+
+        return $trait->hasMethod($alias->method->toString()) && $trait->getMethod($alias->method->toString())->isPublic();
+    }
+
+    // because a trait named in the use block also passes on the methods of the traits it uses itself
+    private function provides(Name $trait, ReflectionMethod $method): bool
+    {
+        $declaring = $method->getBetterReflection()->getDeclaringClass()->getName();
+
+        return $this->reflections->hasClass($trait->toString()) && array_any($this->traitsWithin($this->reflections->getClass($trait->toString())), static fn (string $name): bool => 0 === strcasecmp($name, $declaring));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function traitsWithin(ClassReflection $trait): array
+    {
+        return [$trait->getName(), ...array_merge(...array_map($this->traitsWithin(...), array_values($trait->getTraits())))];
     }
 
     private function mayBeProvider(ClassReflection $class, ReflectionMethod $method): bool

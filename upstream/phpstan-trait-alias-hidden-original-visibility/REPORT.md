@@ -19,7 +19,7 @@ Both report `false`: the visibility-only adaptation applies to the original name
 
 ## Effect in Intakt
 
-The `intakt.testMethodSentence` gate judges the original name of a trait method a test class renames while PHPUnit still runs it. With this bug it would report `testRuns()` in such a class although PHPUnit does not run a private method. `TraitAliasTestMethodCollector::isHidden()` reads the `use` block itself and skips a name an alias without a new name makes protected or private (`tests/Gates/TraitAliasTestMethodCollectorTest.php`, fixture `test-method-alias-hidden`).
+The `intakt.testMethodSentence` gate judges the original name of a trait method a test class renames while PHPUnit still runs it. With this bug it would report `testRuns()` in such a class although PHPUnit does not run a private method. `TraitAliasTestMethodCollector::isPublic()` reads the `use` block and the trait's declaration itself: the last visibility-only adaptation of a name decides, else the trait's declared visibility (`tests/Gates/TraitAliasTestMethodCollectorTest.php`, fixture `test-method-alias-hidden`). The same copy goes wrong the other way: with `testRuns as public;` and `testRuns as testAgain;` on a protected trait method, PHP makes only `testRuns()` public, while the gate saw the alias as the public one (`testAProtectedTraitTestMadePublicBesideARenamingAliasIsReportedAtTheAlias`).
 
 ## Upstream status
 
