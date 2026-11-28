@@ -88,7 +88,7 @@ final readonly class CeilingStartGuard
         return array_first($atCeiling);
     }
 
-    // A short window below its configured ceiling is held only by the weekly pace, and that pace ends with the week's reading: it frees at the weekly reset when that comes before its own.
+    // A short window below its configured ceiling frees at the weekly reset when that comes before its own, because only the weekly pace holds it and the pace ends with the week's reading.
     /**
      * @param array<string, WindowUse> $uses
      */
