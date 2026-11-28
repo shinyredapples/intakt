@@ -34,7 +34,6 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\Finder\Exception\AccessDeniedException;
 use Symfony\Component\Finder\Finder;
 
 final readonly class ReviewJob
@@ -136,7 +135,7 @@ final readonly class ReviewJob
 
         try {
             $this->filesystem->remove($leftBehind);
-        } catch (IOException|AccessDeniedException) {
+        } catch (IOException) {
             // Ignored, because another worker may be removing the same file, and a file that stays is tried again before the next review.
         }
     }
