@@ -91,12 +91,13 @@ The pages below are detailed reference for contributors. Each one describes its 
 ### Builds
 
 - [Build task](build-task.md): `intakt:build:task`, every step from the task to the pushed branch.
+- [Task sizing](task-sizing.md): `intakt:build:size`, the readiness check and size estimate of one new task.
 - [Build job](build-job.md): the builder's CLI in a job container and what it returns.
 - [Builder prompt](builder-prompt.md): what a builder is told, with every untrusted input fenced.
 - [Hand-back checks](hand-back.md): the checks on what a build returns before anything is pushed.
 - [Check job](check-job.md): the pre-push run of the project's checks in a fresh clone, and the pull request text rule (Evidence references, body cap).
 - [The build lane's review cap and in-flight limit](lanes.md): when a new build may start.
-- [When a build over its allowance stops](build-allowance.md): the progress stop, the runaway ceiling and the per-task total, with their causes (not wired into the build job yet).
+- [When a build over its allowance stops](build-allowance.md): the progress stop, the runaway ceiling and the per-task total, with their causes; the build job keeps a stopped job's commits and carries its cause, but nothing watches a running build yet.
 - [Bare mirror](mirror.md): the local copy of each project's repository.
 - [Build clone](build-clone.md): the fresh clone a build works in.
 - [Retried network git calls](network-git.md): how a failed network git call is tried again.
@@ -123,6 +124,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Development setup](development-setup.md): the compose override that watches files and reloads the workers.
 - [Instance and probes](instance-and-probes.md): running an install, and probing it with network access cut.
 - [Connectivity check and outage state](outage.md): when Intakt counts itself as offline.
+- [Disk floors](disk-floors.md): when a folder's free bytes or free inodes are too low for new work.
 - [Persistence](persistence.md): the supported databases.
 - [Job containers](job-containers.md): a fresh container per job, with a network allowlist.
 - [Job images](job-images.md): how a project's job image is made and checked.

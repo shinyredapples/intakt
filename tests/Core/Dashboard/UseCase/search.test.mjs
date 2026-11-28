@@ -50,6 +50,12 @@ class FakeNode {
         this.page.activeElement = this;
     }
 
+    blur() {
+        if (this.page.activeElement === this) {
+            this.page.activeElement = this.page.body;
+        }
+    }
+
     click() {
         return this.page.click(this);
     }
@@ -128,6 +134,8 @@ class FakePage {
         this.results = new FakeResults(this, 'div');
         this.cancel = Object.assign(new FakeNode(this, 'button', { 'data-search-cancel': '' }), { hidden: !cancelShown });
         this.themeToggle = Object.assign(new FakeNode(this, 'button'), { click: () => this.themeClicks++ });
+        // As in a browser, the body is the active element when no control has focus, and focusing it does nothing.
+        this.body = Object.assign(new FakeNode(this, 'body'), { focus: () => {} });
         this.trigger.focus();
     }
 
@@ -657,6 +665,18 @@ test('escape closes the search and gives the focus back to where it was', async 
     assert.ok(!page.isOpen());
     assert.ok(key.defaultPrevented);
     assert.equal(page.activeElement, page.trigger);
+});
+
+test('escape after ctrl k on a page where nothing had focus leaves the hidden field without focus', async () => {
+    const { page, net } = await openPage();
+    page.activeElement = page.body;
+    page.press('k', { ctrlKey: true });
+    await net.answer(0, RECENT);
+
+    page.press('Escape');
+
+    assert.ok(!page.isOpen());
+    assert.equal(page.activeElement, page.body);
 });
 
 test('ctrl k closes an open search', async () => {

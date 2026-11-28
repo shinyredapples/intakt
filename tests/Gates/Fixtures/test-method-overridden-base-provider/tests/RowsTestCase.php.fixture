@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+
+abstract class RowsTestCase extends TestCase
+{
+    /** @return list<list<int>> */
+    public static function testRows(): array
+    {
+        return [[1]];
+    }
+
+    #[DataProvider('testRows')]
+    public function testReadingRowsWorks(int $row = 1): void
+    {
+        self::assertSame(1, $row);
+    }
+}

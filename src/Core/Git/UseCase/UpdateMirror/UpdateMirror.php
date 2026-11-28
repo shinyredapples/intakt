@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\UpdateMirror;
 
+use Intakt\Core\Disk\Contract\DiskHold;
+use Intakt\Core\Disk\Contract\DiskSpace;
+use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
+use Intakt\Core\Disk\Contract\NearestFolder;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\GitCommand;
 use Intakt\Core\Git\Contract\HardenedGit;
@@ -19,6 +23,7 @@ use Symfony\Component\Filesystem\Path;
 use Symfony\Component\Lock\Exception\ExceptionInterface as LockFailure;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Process\Exception\ExceptionInterface as ProcessFailure;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 
 final readonly class UpdateMirror
@@ -37,6 +42,7 @@ final readonly class UpdateMirror
         private Filesystem $filesystem,
         private LockFactory $locks,
         private Mirrors $mirrors,
+        private DiskSpace $disk,
     ) {
     }
 
@@ -52,9 +58,63 @@ final readonly class UpdateMirror
     public function update(string $project, string $remote): string
     {
         $path = $this->mirrors->pathOf($project);
+        $destination = $this->destinationOf($path);
+        $this->holdBelowTheDiskFloors($path, $destination);
+
+        // Asked again, because a mirror removed or published during the reading would send the write to a disk that was not measured; the next update measures again.
+        if ($this->destinationOf($path) !== $destination) {
+            throw MirrorNotUpdated::at($path, 'the mirror changed while its disk was measured');
+        }
+
+        return $this->writeTo($project, $remote, $destination);
+    }
+
+    // Never held below a disk floor, because it serves work already running, which a floor does not cut.
+    /**
+     * @throws ProjectNameRefused
+     * @throws NetworkGitFailed
+     * @throws MirrorNotUpdated
+     * @throws IOException
+     * @throws RepositoryAttributesRefused
+     * @throws ProcessFailure
+     * @throws LockFailure
+     */
+    public function refresh(string $project, string $remote): string
+    {
+        return $this->writeTo($project, $remote, $this->destinationOf($this->mirrors->pathOf($project)));
+    }
+
+    private function destinationOf(string $path): string
+    {
+        // Because the floors guard the folder the update writes to: a fetch fills the mirror itself, which may be mounted on a disk of its own, while a first clone or the replacement of a folder that is no mirror goes to staging in the mirrors folder.
+        return $this->isMirror($path) ? $path : $this->mirrors->directory;
+    }
+
+    private function holdBelowTheDiskFloors(string $path, string $destination): void
+    {
+        $folder = NearestFolder::of($destination);
+
+        try {
+            $hold = $this->disk->holdAt($folder);
+        } catch (FreeSpaceUnreadable $unreadable) {
+            throw MirrorNotUpdated::at($path, $unreadable->getMessage(), $unreadable);
+        } catch (ProcessTimedOutException $timedOut) {
+            // Fixed words and no cause, as for git, so a timeout names df and not the git step around it.
+            throw MirrorNotUpdated::at($path, new FreeSpaceUnreadable($folder, sprintf('df timed out after %s seconds', $timedOut->getExceededTimeout()))->getMessage());
+        }
+
+        if ($hold instanceof DiskHold) {
+            throw MirrorNotUpdated::at($path, $hold->reason());
+        }
+    }
+
+    private function writeTo(string $project, string $remote, string $destination): string
+    {
+        $path = $this->mirrors->pathOf($project);
         $remote = $this->fromMirrorsDirectory($remote);
 
-        if ($this->isMirror($path)) {
+        // Decided by the folder that was measured, never by a new look at the path, so the write lands on the disk the floors were checked on.
+        if ($destination === $path) {
             $this->fill($path, $remote);
 
             return $path;
@@ -63,16 +123,6 @@ final readonly class UpdateMirror
         $this->createMirror($project, $remote, $path);
 
         return $path;
-    }
-
-    private function fromMirrorsDirectory(string $remote): string
-    {
-        // Git reads a relative path from its working directory, which is the mirrors folder for the clone but the mirror for a fetch: resolved once, so the second update names the repository the first one cloned. A colon before any slash is a scheme or a host, which git itself never reads as a path.
-        if ('' === $remote || str_starts_with($remote, '/') || 1 === preg_match('#^[^/]*:#', $remote)) {
-            return $remote;
-        }
-
-        return Path::makeAbsolute($remote, $this->mirrors->directory);
     }
 
     private function isMirror(string $path): bool
@@ -90,6 +140,16 @@ final readonly class UpdateMirror
         }
 
         return $bare->isSuccessful() && 'true' === trim($bare->getOutput());
+    }
+
+    private function fromMirrorsDirectory(string $remote): string
+    {
+        // Git reads a relative path from its working directory, which is the mirrors folder for the clone but the mirror for a fetch: resolved once, so the second update names the repository the first one cloned. A colon before any slash is a scheme or a host, which git itself never reads as a path.
+        if ('' === $remote || str_starts_with($remote, '/') || 1 === preg_match('#^[^/]*:#', $remote)) {
+            return $remote;
+        }
+
+        return Path::makeAbsolute($remote, $this->mirrors->directory);
     }
 
     private function fill(string $repository, string $remote): void

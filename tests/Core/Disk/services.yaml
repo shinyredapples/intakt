@@ -1,0 +1,9 @@
+services:
+    # Readings a test sets in place of the disk's, so a test proves the floors the container binds hold and release work.
+    Intakt\Tests\Core\Disk\ControlledFreeSpaceReader:
+        public: true
+    Intakt\Core\Disk\Infrastructure\FreeSpaceReader: '@Intakt\Tests\Core\Disk\ControlledFreeSpaceReader'
+    # Public under a test name, because the test reads the check itself and not only through the mirror update and the build clone.
+    test.intakt.disk_space:
+        alias: Intakt\Core\Disk\Contract\DiskSpace
+        public: true

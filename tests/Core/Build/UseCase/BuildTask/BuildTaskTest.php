@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
-use Doctrine\DBAL\DriverManager;
+use DateTimeImmutable;
+use Doctrine\DBAL\Connection;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -15,17 +16,21 @@ use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Domain\BugPart;
 use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\ModelRouting;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\Domain\ReadableLines;
 use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
@@ -36,6 +41,7 @@ use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
+use Intakt\Core\Build\UseCase\BuildTask\ParkedTaskNotCleared;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushResult;
@@ -47,7 +53,14 @@ use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Disk\Contract\DiskHold;
+use Intakt\Core\Disk\Contract\DiskSpace;
+use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
+use Intakt\Core\Disk\Contract\NearestFolder;
+use Intakt\Core\Disk\Infrastructure\FlooredDiskSpace;
+use Intakt\Core\Disk\Infrastructure\FreeSpaceReader;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
@@ -145,7 +158,9 @@ use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
+use Intakt\Tests\Core\Build\ParkedTaskTable;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
+use Intakt\Tests\Core\Disk\ControlledFreeSpaceReader;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\ProgramOnPath;
@@ -161,6 +176,7 @@ use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -211,6 +227,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(PushRemoteRefused::class)]
 #[UsesClass(ParkedTaskRecord::class)]
 #[UsesClass(TaskNotParked::class)]
+#[UsesClass(ParkedTaskNotCleared::class)]
 #[UsesClass(BuildQuestion::class)]
 #[UsesClass(QuestionRefused::class)]
 #[UsesClass(PushBranch::class)]
@@ -255,6 +272,11 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(JobCredentials::class)]
 #[UsesClass(UpdateMirror::class)]
 #[UsesClass(MakeBuildClone::class)]
+#[UsesClass(FlooredDiskSpace::class)]
+#[UsesClass(FreeSpaceUnreadable::class)]
+#[UsesClass(NearestFolder::class)]
+#[UsesClass(DiskHold::class)]
+#[UsesClass(ControlledFreeSpaceReader::class)]
 #[UsesClass(TakeCheckedHead::class)]
 #[UsesClass(BranchHead::class)]
 #[UsesClass(MirrorNotUpdated::class)]
@@ -267,6 +289,8 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(Issues::class)]
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
+#[UsesClass(RecordedBuildStops::class)]
+#[UsesClass(BuildLimits::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
 #[UsesClass(BuildVerdict::class)]
@@ -274,6 +298,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(TaskKind::class)]
 #[UsesClass(BugReport::class)]
 #[UsesClass(RegressionEvidence::class)]
+#[UsesClass(ReadableLines::class)]
 #[UsesClass(PrePushResult::class)]
 #[UsesClass(BugPart::class)]
 #[UsesClass(BuilderPrompt::class)]
@@ -342,10 +367,16 @@ final class BuildTaskTest extends TestCase
 
     private RecordingChangeOpening $changes;
 
+    private ?Connection $parkedRows = null;
+
     // A ledger that reads back for the text round, because InMemoryLedger reads nothing and the round counts the task's earlier lines.
     private ?RecordingLedger $textLedger = null;
 
     private ?LockFactory $textLocks = null;
+
+    private ?DiskSpace $disk = null;
+
+    private RecordedBuildStops $stops;
 
     public function testARemoteNamingAnotherGitHubRepositoryThanTheConfiguredOneIsRefusedBeforeAnythingIsRecordedPushedOrAskedOfTheForge(): void
     {
@@ -405,6 +436,50 @@ final class BuildTaskTest extends TestCase
         self::assertStringContainsString("\ngpgsig ", $this->git(['cat-file', 'commit', 'feat/task'], $this->remote->path));
         self::assertSame(1, $this->changes->opened);
         self::assertSame([], glob($this->mirrors.'-hand-backs/*'));
+    }
+
+    public function testABuildJobThatBuiltClearsTheQuestionAnEarlierBuildParkedTheTaskWith(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->parkedRows = ParkedTaskTable::inMemory();
+        $this->parkedRows->insert(ParkedTaskRecord::TABLE, new ParkedTaskRecord('alpha', 7, BuildQuestion::fromHandedBack('{"question":"Which name?","choices":["a","b"],"recommendation":"a"}'), new DateTimeImmutable('2026-11-20 10:00:00'), null)->row(), ParkedTaskRecord::rowTypes());
+        $this->parkedRows->insert(ParkedTaskRecord::TABLE, new ParkedTaskRecord('alpha', 8, BuildQuestion::fromHandedBack('{"question":"Which name?","choices":["a","b"],"recommendation":"a"}'), new DateTimeImmutable('2026-11-20 10:00:00'), null)->row(), ParkedTaskRecord::rowTypes());
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame([BuildStep::Push, null], [$outcome->last, $outcome->failure]);
+        self::assertSame(['alpha:8'], $this->parkedRows->fetchFirstColumn("SELECT project || ':' || task FROM build_parked_task"));
+    }
+
+    public function testAParkedQuestionTheDatabaseDoesNotRemoveFailsTheBuildJobStepWithFixedWordsAndRunsNoLaterStep(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->parkedRows = ParkedTaskTable::unopenable($this->mirrors.'-missing');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertSame('Issue 7 of project "alpha" is still parked: the database did not remove its question', $outcome->failure);
+        self::assertSame(['task', 'mirror', 'clone', 'build_job'], array_column($ledger->payloads(), 'step'));
+        self::assertSame($outcome->failure, $ledger->payloads()[3]['failure']);
+        self::assertNull($this->remoteTip());
+    }
+
+    #[TestWith([BuildStopCause::NoProgress])]
+    #[TestWith([BuildStopCause::RunawayCeiling])]
+    #[TestWith([BuildStopCause::PerTaskTotal])]
+    public function testABuildStoppedWhileItRanHandsBackItsCommitsThroughTheHandBackAndPrePushChecksToThePush(BuildStopCause $cause): void
+    {
+        $stopped = new BuildJob('alpha', $this->clone, 'feat/task', new BuildBrief('x', new Decisions(), null), Tier::Standard, self::IMAGE);
+        $this->runner = $this->runnerAfterWhich($this->committingRunner(), fn () => $this->stops->record($stopped, $cause));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob, BuildStep::HandBackCheck, BuildStep::PrePushCheck, BuildStep::Push], $outcome->passedSteps());
+        self::assertSame("Build task 7\n", $this->git(['log', '-1', '--format=%s', 'feat/task'], $this->remote->path));
+        self::assertNull($this->stops->causeFor($stopped), 'the build job did not read the recorded cause');
     }
 
     public function testThePullRequestTextsFirstLineIsTheTitleAndWhatFollowsTheBlankLineTheBody(): void
@@ -849,6 +924,7 @@ final class BuildTaskTest extends TestCase
     public function testAQuestionTheDatabaseDoesNotStoreEndsAtTheBuildJobStepFailedWithFixedWordsAndRunsNoLaterStep(): void
     {
         new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::QUESTION, '{"question":"PLANT-question?","choices":["a","b"],"recommendation":"a"}');
+        $this->parkedRows = ParkedTaskTable::unopenable($this->mirrors.'-missing');
         $ledger = new InMemoryLedger();
 
         $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
@@ -1009,6 +1085,30 @@ final class BuildTaskTest extends TestCase
         self::assertNotSame(BuildStep::PrePushCheck, $outcome->last);
         self::assertNotNull($this->remoteTip());
         self::assertSame("## Evidence\n\n- Regression tests: `tests/FooTest.php`\n- On the base: failed\n- On the head: passed", $this->changes->text?->body);
+    }
+
+    public function testABugHeadWhoseBodyHasASetextEvidenceHeadingGetsTheRegressionLinesInThatSection(): void
+    {
+        $this->runner = $this->committingRunner(text: "fix: task 7\n\nSummary.\n\n    Evidence\n---\n\nEvidence\n--------\n\n- E1: shown\n\nFollow-ups\n----------\n\n- none\n");
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n"]);
+        $this->regressionTests = $this->regressionRuns(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Failed, RegressionRun::Passed));
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7, ['intakt', 'bug'], ['body' => self::BUG_BODY])])->run($this->request(7, $this->remote->path));
+
+        self::assertContains(BuildStep::Push, $outcome->passedSteps());
+        self::assertSame("Summary.\n\n    Evidence\n---\n\nEvidence\n--------\n\n- E1: shown\n\n- Regression tests: `tests/FooTest.php`\n- On the base: failed\n- On the head: passed\n\nFollow-ups\n----------\n\n- none", $this->changes->text?->body);
+    }
+
+    public function testABugHeadWhoseBodyHasAnEvidenceHeadingAfterAnHtmlBlockGetsTheRegressionLinesInThatSection(): void
+    {
+        $this->runner = $this->committingRunner(text: "fix: task 7\n\n<div>\n## Evidence\n\n## Evidence\n\n- E1: shown\n");
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n"]);
+        $this->regressionTests = $this->regressionRuns(new RegressionRuns(new Paths('tests/FooTest.php'), RegressionRun::Failed, RegressionRun::Passed));
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7, ['intakt', 'bug'], ['body' => self::BUG_BODY])])->run($this->request(7, $this->remote->path));
+
+        self::assertContains(BuildStep::Push, $outcome->passedSteps());
+        self::assertSame("<div>\n## Evidence\n\n## Evidence\n\n- E1: shown\n\n- Regression tests: `tests/FooTest.php`\n- On the base: failed\n- On the head: passed", $this->changes->text?->body);
     }
 
     public function testAFeatureHeadIsPushedWithItsBodyUnchanged(): void
@@ -1254,6 +1354,55 @@ final class BuildTaskTest extends TestCase
         self::assertDirectoryDoesNotExist($this->clone);
     }
 
+    public function testADiskThatFallsBelowAFloorAfterTheBuildJobDoesNotHoldThePrePushCheckOfThatBuild(): void
+    {
+        $reader = new ControlledFreeSpaceReader();
+        $this->disk = new FlooredDiskSpace($reader, 10, 10);
+        $this->runner = $this->runnerAfterWhich($this->committingRunner(), static fn () => $reader->report(0, 100));
+        $checked = false;
+        $this->checkRunner = self::createStub(JobRunner::class);
+        $this->checkRunner->method('run')->willReturnCallback(static function () use (&$checked): JobResult {
+            $checked = true;
+
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([RunCheckJob::RESULT => "failed 2\n", RunCheckJob::LOG => "tests failed\n"]));
+        });
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertTrue($checked, (string) $outcome->failure);
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+    }
+
+    public function testAFreeSpaceReaderThatThrowsAtTheMirrorsFolderEndsAtTheMirrorStepWithItsFailureRecorded(): void
+    {
+        new Filesystem()->mkdir($this->mirrors);
+        $this->disk = $this->diskUnreadableAt($this->mirrors);
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::Mirror, $outcome->last);
+        self::assertStringEndsWith(sprintf('The free space of %s cannot be read: the file system is gone.', $this->mirrors), (string) $outcome->failure);
+        self::assertSame(['task', 'mirror'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertDirectoryDoesNotExist($this->clone);
+    }
+
+    public function testAFreeSpaceReaderThatThrowsAtTheClonesFolderEndsAtTheCloneStepWithItsFailureRecorded(): void
+    {
+        new Filesystem()->mkdir($this->mirrors);
+        $this->disk = $this->diskUnreadableAt(dirname($this->clone));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::Clone, $outcome->last);
+        self::assertStringEndsWith(sprintf('The free space of %s cannot be read: the file system is gone.', dirname($this->clone)), (string) $outcome->failure);
+        self::assertSame(['task', 'mirror', 'clone'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertDirectoryDoesNotExist($this->clone);
+    }
+
     public function testAMirrorLockThatCannotBeAcquiredEndsAtTheMirrorStepWithItsFailureRecorded(): void
     {
         $locks = self::createStub(PersistingStoreInterface::class);
@@ -1356,6 +1505,7 @@ final class BuildTaskTest extends TestCase
     protected function setUp(): void
     {
         $this->locks = new LockFactory(new InMemoryStore());
+        $this->stops = new RecordedBuildStops();
         $this->handBackFiles = new Filesystem();
         $this->changes = new RecordingChangeOpening();
         $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
@@ -1545,15 +1695,15 @@ final class BuildTaskTest extends TestCase
     {
         $configured = self::createStub(ConfiguredRepositories::class);
         $configured->method('nameOf')->willReturn($this->configuredRepository);
-        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
+        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts', $this->stops, new BuildLimits(1, 1, 1, 1));
         $git = new RepositoryGit(new HardenedGit());
         $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
         $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
         $dependencies = new CheckJobsFor($this->mirrors.'-checks')->dependencies($this->checkRunner, new PhpGate());
         $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $dependencies, $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
 
-        // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
-        $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
+        // The parked-task table alone, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
+        $parked = new ParkedTasks($this->parkedRows ??= ParkedTaskTable::inMemory(), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
 
         $texts = new PullRequestTextCheck($checkout, new RoutePullRequestText(new PullRequestTextRoutes($this->textLedger ?? $ledger, $this->textLocks ?? $this->locks)));
 
@@ -1577,14 +1727,28 @@ final class BuildTaskTest extends TestCase
 
     private function checkoutWith(Mirrors $mirrors, PersistingStoreInterface $locks): GitBuildCheckout
     {
-        return new GitBuildCheckout($this->mirrorUpdate($mirrors, $locks), new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors), $mirrors, new TakeCheckedHead(new HardenedGit(), $mirrors));
+        return new GitBuildCheckout($this->mirrorUpdate($mirrors, $locks), new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors, $this->disk()), $mirrors, new TakeCheckedHead(new HardenedGit(), $mirrors));
     }
 
     private function mirrorUpdate(Mirrors $mirrors, PersistingStoreInterface $locks): UpdateMirror
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
 
-        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory($locks), $mirrors);
+        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory($locks), $mirrors, $this->disk());
+    }
+
+    private function disk(): DiskSpace
+    {
+        return $this->disk ?? self::createStub(DiskSpace::class);
+    }
+
+    private function diskUnreadableAt(string $folder): DiskSpace
+    {
+        $reader = self::createStub(FreeSpaceReader::class);
+        $reader->method('freeInodes')->willReturn(PHP_INT_MAX);
+        $reader->method('freeBytes')->willReturnCallback(static fn (string $measured): int => $measured === $folder ? throw new FreeSpaceUnreadable($folder, 'the file system is gone') : PHP_INT_MAX);
+
+        return new FlooredDiskSpace($reader, 1, 1);
     }
 
     private function request(int $issue, string $remote): BuildTaskRequest

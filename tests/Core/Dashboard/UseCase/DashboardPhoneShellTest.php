@@ -28,7 +28,7 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         self::assertSame('Search', $search->filter('.ph-short')->text());
     }
 
-    // A phone's bar holds Now, You and Trends, so Projects is reached through More.
+    // A phone's bar holds Now, You and History, so Projects is reached through More.
     public function testTheMoreItemOpensTheSheetWithProjects(): void
     {
         $page = $this->browser->request('GET', '/projects');
@@ -182,6 +182,24 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         self::assertStringContainsString('display: none', $rules['.search-trigger .ph, .search-trigger kbd, .topbar .grow, .topbar .select'] ?? '');
         self::assertStringContainsString('display: inline', $rules['.search-trigger .ph-short'] ?? '');
         self::assertStringContainsString('display: flex', $rules['.topbar .brand-m'] ?? '');
+    }
+
+    public function testOnPhonesHistoryShowsItsOwnProjectPickerThatADesktopLeavesToTheTopBar(): void
+    {
+        $sheet = $this->sheets('components')[0];
+
+        // Unindented, so the rule stands outside every media block.
+        self::assertMatchesRegularExpression('/^\.filters #history-project \{ display: none; \}$/m', $sheet);
+        self::assertStringContainsString('display: block', $this->phoneRulesOf($sheet)['.filters #history-project'] ?? '');
+        self::assertStringContainsString('height: 48px', $this->phoneRulesOf($sheet)['.filters #history-project'] ?? '');
+    }
+
+    public function testOnPhonesHistoryClipsItsColumnHeadersInsteadOfRemovingThemFromScreenReaders(): void
+    {
+        $headers = $this->phoneRules()['.ledger.history thead'] ?? '';
+
+        self::assertStringContainsString('clip-path: inset(50%)', $headers);
+        self::assertStringNotContainsString('display: none', $headers);
     }
 
     public function testOnPhonesTheTopBarLeavesOutTheOfflineMarkerAndTheReconnectingLineWraps(): void

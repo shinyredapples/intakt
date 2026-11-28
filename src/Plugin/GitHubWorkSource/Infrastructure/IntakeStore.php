@@ -231,6 +231,7 @@ final readonly class IntakeStore
             $connection->commit();
 
             return $written;
+            // Boundary: closes the manager, rolls back and rethrows any failure of the write, because a write that fails in any way must leave no open level on the shared connection.
         } catch (Throwable $failure) {
             $manager->close();
             $this->rollBackAfter($connection, $outer);

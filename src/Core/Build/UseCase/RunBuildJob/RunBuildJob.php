@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildServices;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\QuestionRefused;
@@ -18,7 +19,6 @@ use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
-use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
@@ -49,6 +49,9 @@ final readonly class RunBuildJob
 
     // An exit code, because a builder that can plant files in the output can plant any marker there too, but cannot set the script's exit code.
     public const int OUTPUT_NOT_CLEARED = 3;
+
+    // Covers a failed listing too, because the exception does not say which refusal it was.
+    private const string REFUSED_OUTPUT = "no result: the runner refused the job's output: it could not be listed, or an entry in it is not a plain file or could not be read, or it passed the limit on entries or bytes\n";
 
     // Allowlisted with the gate's registries, because the CLI talks to this host only and the builder installs the project's dependencies.
     private const string VENDOR_HOST = 'api.anthropic.com';
@@ -82,6 +85,8 @@ final readonly class RunBuildJob
         // Under the project folder like the jobs' output directories, because the engine mounts host paths.
         #[Autowire('%kernel.project_dir%/var/prompts')]
         private string $promptFolder,
+        private RecordedBuildStops $stops,
+        public BuildLimits $limits,
     ) {
         // Checked as given, because the compiled container would turn a YAML true into a one-second limit before a typed parameter saw it.
         if (!is_int($toolTimeLimitSeconds)) {
@@ -106,14 +111,35 @@ final readonly class RunBuildJob
     public function run(BuildJob $job): BuildJobOutcome
     {
         $model = $this->modelFor($job);
-        $clone = $this->folder($job->clone);
-        $prompt = $this->promptFileFor($job);
+        $clone = new JobInput($this->folder($job->clone), self::CLONE);
+        // The command is built before the prompt file exists, so a build script that cannot be read leaves no prompt behind.
+        $command = $this->commandOf($job, $model);
+        $prompt = $this->emptyPromptFile();
+
+        $cause = null;
+        $reachedRunner = false;
 
         try {
-            return $this->outcomeOf($this->ranJob($this->specOf($job, $model, [new JobInput($clone, self::CLONE), new JobInput($prompt, self::PROMPT)])));
+            // Written and turned into the spec inside the try, because once the prompt file exists every failure must remove it, a failed write and a refused input included.
+            $this->filesystem->appendToFile($prompt, $this->prompts->textFor($job->brief));
+            $spec = $this->specOf($job, $command, $clone, new JobInput($prompt, self::PROMPT));
+            // Set only here, so whatever fails before the runner is called, of any exception class, never reads the cause.
+            $reachedRunner = true;
+            $outcome = $this->outcomeOfRunning($spec);
+        } catch (JobRefused $failure) {
+            // Cleared, because a job the runner refused never started, so the cause belongs to the build that holds the branch's job id.
+            $reachedRunner = false;
+
+            throw $failure;
         } finally {
+            // Read only for a job the runner was called with and did not refuse, also when that job failed, so its cause never reaches the branch's next build; read before the prompt is removed, so a failed removal cannot keep it.
+            if ($reachedRunner) {
+                $cause = $this->stops->causeFor($job);
+            }
             $this->filesystem->remove($prompt);
         }
+
+        return $outcome->stoppedFor($cause);
     }
 
     private function modelFor(BuildJob $job): string
@@ -138,53 +164,40 @@ final readonly class RunBuildJob
         return $absolute;
     }
 
+    private function commandOf(BuildJob $job, string $model): JobCommand
+    {
+        return new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES), (string) $this->toolTimeLimitSeconds);
+    }
+
     // A file of its own for each run, readable by the orchestrator's user only, so two builds never share one.
-    private function promptFileFor(BuildJob $job): string
+    private function emptyPromptFile(): string
     {
         $this->filesystem->mkdir($this->promptFolder, 0o700);
-        $file = $this->filesystem->tempnam($this->promptFolder, 'prompt-', '.md');
-        $this->filesystem->appendToFile($file, $this->prompts->textFor($job->brief));
 
-        return $file;
+        return $this->filesystem->tempnam($this->promptFolder, 'prompt-', '.md');
     }
 
-    /**
-     * @param list<JobInput> $inputs
-     */
-    private function specOf(BuildJob $job, string $model, array $inputs): JobSpec
+    private function specOf(BuildJob $job, JobCommand $command, JobInput ...$inputs): JobSpec
     {
-        return new JobSpec(
-            $this->idOf($job),
-            $job->image,
-            new JobCommand('/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES), (string) $this->toolTimeLimitSeconds),
-            $inputs,
-            new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
-            JobEgress::to(new EgressHosts(self::VENDOR_HOST, ...$this->gate->registryHosts())),
-        );
+        $egress = JobEgress::to(new EgressHosts(self::VENDOR_HOST, ...$this->gate->registryHosts()));
+
+        return new JobSpec($job->jobId(), $job->image, $command, array_values($inputs), new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS), $egress);
     }
 
-    private function ranJob(JobSpec $spec): ?JobResult
+    private function outcomeOfRunning(JobSpec $spec): BuildJobOutcome
     {
         try {
-            return $this->jobs->run($spec);
+            $result = $this->jobs->run($spec);
         } catch (JobOutputRefused) {
-            // No result, because the job wrote what the runner refuses to read.
-            return null;
-        }
-    }
-
-    // Length-prefixed, so no project and branch pair names another pair's job; one id per pair, so the runner refuses a second build of a branch while one runs.
-    private function idOf(BuildJob $job): JobId
-    {
-        return new JobId('build-'.substr(hash('sha256', strlen($job->project).':'.$job->project.$job->branch), 0, 40));
-    }
-
-    private function outcomeOf(?JobResult $result): BuildJobOutcome
-    {
-        if (!$result instanceof JobResult) {
-            return new BuildJobOutcome(BuildVerdict::NoResult);
+            // The reason is fixed because the job's log is part of what was refused, its standard error is the builder's to write, and the runner's message quotes a name the builder chose.
+            return new BuildJobOutcome(BuildVerdict::NoResult, log: self::REFUSED_OUTPUT);
         }
 
+        return $this->outcomeOf($result);
+    }
+
+    private function outcomeOf(JobResult $result): BuildJobOutcome
+    {
         $log = $result->output->contents(self::LOG) ?? '';
 
         return match ($result->end->cause) {
@@ -192,9 +205,15 @@ final readonly class RunBuildJob
             JobCause::TimedOut => new BuildJobOutcome(BuildVerdict::TimedOut, log: $log),
             // The builder cannot set the script's exit code, so the one code that says its files may still be in the output is trusted; what a build hands back is read from the output only.
             JobCause::Exited => self::OUTPUT_NOT_CLEARED === $result->end->exitCode
-                ? new BuildJobOutcome(BuildVerdict::NoResult, log: $log)
+                ? new BuildJobOutcome(BuildVerdict::NoResult, log: $this->withLineEnd($log)."no result: the build script could not clear the job's output\n")
                 : $this->handedBack($result->output, $log),
         };
+    }
+
+    // The builder's last line may lack its end, and the trusted line that follows must stand on a line of its own.
+    private function withLineEnd(string $log): string
+    {
+        return '' === $log || str_ends_with($log, "\n") ? $log : $log."\n";
     }
 
     private function handedBack(JobOutput $output, string $log): BuildJobOutcome

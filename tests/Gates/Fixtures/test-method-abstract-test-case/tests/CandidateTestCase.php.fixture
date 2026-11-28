@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\TestCase;
+
+abstract class CandidateTestCase extends TestCase
+{
+    public function testVisible(): bool
+    {
+        return true;
+    }
+}

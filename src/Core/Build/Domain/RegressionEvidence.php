@@ -7,7 +7,7 @@ namespace Intakt\Core\Build\Domain;
 use Intakt\Core\HandBack\Contract\RegressionRun;
 use Intakt\Core\HandBack\Contract\RegressionRuns;
 
-// Fixed words and the test paths read from the diff, never the builder's text or a log, because the body goes to the forge as written; only code fences and ATX headings are read, so other Markdown is left alone.
+// Fixed words and the test paths read from the diff, never the builder's text or a log, because the body goes to the forge as written; ReadableLines finds the headings (it skips those inside fences, indented code and HTML blocks) and what is still open where the results go, and the body is otherwise left alone.
 final readonly class RegressionEvidence
 {
     private const string SAFE_PATH = '#^[A-Za-z0-9_./@+ -]+$#';
@@ -22,74 +22,19 @@ final readonly class RegressionEvidence
         // CRLF and bare CR end lines in Markdown too, so a fence or heading split only on LF would be missed.
         $body = str_replace(["\r\n", "\r"], "\n", $body);
         $lines = explode("\n", $body);
-        [$headings, $open] = $this->scanned($lines);
+        $readable = ReadableLines::of($lines);
+        $headings = $readable->headings;
         $evidence = $this->evidenceIn($headings);
-        $closing = null === $open ? '' : "\n".$open;
 
         if (null === $evidence) {
-            return $this->joined(rtrim($body.$closing), "## Evidence\n\n".$this->resultLines(), '');
+            return $this->joined($this->closed($body, $readable->closing()), "## Evidence\n\n".$this->resultLines(), '');
         }
 
         $end = $this->endOf($evidence, $headings, count($lines));
-        $kept = implode("\n", array_slice($lines, 0, $end));
+        $kept = array_slice($lines, 0, $end);
 
-        return $this->joined(rtrim($kept.($end === count($lines) ? $closing : '')), $this->resultLines(), implode("\n", array_slice($lines, $end)));
-    }
-
-    /**
-     * @param list<string> $lines
-     *
-     * @return array{0: array<int, array{int, string}>, 1: ?string}
-     */
-    private function scanned(array $lines): array
-    {
-        $headings = [];
-        $fence = null;
-
-        foreach ($lines as $number => $line) {
-            $inside = null !== $fence;
-            $fence = $this->fenceAfter($line, $fence);
-            $heading = $inside || null !== $fence ? null : $this->headingOf($line);
-
-            if (null !== $heading) {
-                $headings[$number] = $heading;
-            }
-        }
-
-        return [$headings, $fence];
-    }
-
-    private function fenceAfter(string $line, ?string $fence): ?string
-    {
-        if (null === $fence) {
-            return $this->opening($line);
-        }
-
-        return $this->closes($line, $fence) ? null : $fence;
-    }
-
-    private function opening(string $line): ?string
-    {
-        if (1 !== preg_match('/^ {0,3}(`{3,}|~{3,})(.*)$/', $line, $match)) {
-            return null;
-        }
-
-        // A backtick fence's info string holds no backtick, because such a line is an inline code span.
-        return '`' === $match[1][0] && str_contains($match[2], '`') ? null : $match[1];
-    }
-
-    // A fence closes only on the same character repeated at least as often as the opening line, because any other line is still code.
-    private function closes(string $line, string $fence): bool
-    {
-        return 1 === preg_match('/^ {0,3}('.preg_quote($fence[0], '/').'+)[ \t]*$/', $line, $match) && strlen($match[1]) >= strlen($fence);
-    }
-
-    /**
-     * @return ?array{int, string}
-     */
-    private function headingOf(string $line): ?array
-    {
-        return 1 === preg_match('/^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/', $line, $heading) ? [strlen($heading[1]), $heading[2] ?? ''] : null;
+        // The lines up to the section's end are read again, because an element left open there would hide the results even when the body closes it later.
+        return $this->joined($this->closed(implode("\n", $kept), ReadableLines::of($kept)->closing()), $this->resultLines(), implode("\n", array_slice($lines, $end)));
     }
 
     /**
@@ -105,6 +50,12 @@ final readonly class RegressionEvidence
         }
 
         return null;
+    }
+
+    // Only line breaks go before a closer, because the trailing spaces of the last line are content of the code or block it closes.
+    private function closed(string $text, string $closing): string
+    {
+        return '' === $closing ? rtrim($text) : rtrim($text, "\n").$closing;
     }
 
     private function resultLines(): string

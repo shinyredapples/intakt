@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
@@ -18,6 +19,7 @@ use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobCommand;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobInput;
@@ -48,6 +50,8 @@ use Symfony\Component\Process\Process;
 
 // The build script and the use case in one run: the script's own output folder is what the use case reads, so nothing between them is written by the test.
 #[CoversClass(RunBuildJob::class)]
+#[UsesClass(RecordedBuildStops::class)]
+#[UsesClass(BuildLimits::class)]
 #[CoversClass(BuildJobOutcome::class)]
 #[CoversClass(BuildQuestion::class)]
 #[UsesClass(RunBuildJobCommand::class)]
@@ -196,6 +200,6 @@ final class ScriptedQuestionTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->output), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->history->folder.'/prompts');
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->output), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->history->folder.'/prompts', new RecordedBuildStops(), new BuildLimits(1, 1, 1, 1));
     }
 }

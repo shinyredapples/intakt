@@ -23,6 +23,7 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 - `declare(strict_types=1)`: enforced by `bin/check` (`cs`).
 - No `else` after a jump: enforced by `bin/check` (`cs`).
 - No nested `try`: enforced by `bin/check` (`phpstan`).
+- A catch in `src/` names the failures it expects (a library's own exception base or a domain exception; one a user should read implements `ReportableFailure`), never `Exception`, `Error`, `RuntimeException`, `LogicException` or `InvalidArgumentException`; `Throwable` only at a failure boundary that rethrows or records the failure, with a `// Boundary: <what it protects>` line directly above the catch: enforced by `bin/check` (`phpstan`).
 - At most three parameters, unless a vendor method's signature fixes more; constructors are exempt (they hold dependencies or a value's fields): enforced by `bin/check` (`phpstan`).
 - No flag parameters: enforced by `bin/check` (`phpstan`).
 - Constructor first, then public, protected and private methods: enforced by `bin/check` (`cs`).
@@ -61,7 +62,8 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 - A test that ends with an unasserted error log record fails: enforced by `bin/check` (`tests`).
 - Coverage metadata is `#[CoversClass]` on the test class (or `#[CoversNothing]`); strict coverage metadata waits until CI collects coverage.
 - An expected error log is asserted with `AssertsLoggedErrors`, never printed.
-- Every change brings tests named as sentences (`test...`), one behavior each, given/when/then, builders over long setup.
+- Test methods are named as sentences: `test` followed by at least three camel-case words; a data provider is excluded only when every concrete test class that runs it names it as a provider (a `#[Test]` method never is): enforced by `bin/check` (`phpstan`).
+- Every change brings tests, one behavior each, given/when/then, builders over long setup.
 - `#[UsesClass]` where a test exercises other classes. `createStub` by default; `createMock` only to assert a call on an outside boundary.
 - SQLite by default; persistence tests in the `persistence` group. Races proven by forced order, never repetition. No shipped config, real credentials or live providers in tests.
 

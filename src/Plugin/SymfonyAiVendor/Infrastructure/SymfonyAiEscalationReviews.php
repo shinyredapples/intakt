@@ -104,11 +104,11 @@ final readonly class SymfonyAiEscalationReviews implements EscalationReviews
         return $answer instanceof EscalationVerdict && $this->fitsTheSchema($execution->getResult()) ? $answer : null;
     }
 
-    // Boundary: a ledger that cannot take the row is logged by class only, never thrown, because the provider's error carries the queue's delay and its chain may echo part of a key.
     private function leaveUnsettled(UsageReservation $reservation, Throwable $failure, TierRoutedPlatform $platform): void
     {
         try {
             $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
+            // Boundary: a ledger that cannot take the row is logged by class only, never thrown, because the provider's error carries the queue's delay and its chain may echo part of a key.
         } catch (Throwable $unrecorded) {
             $this->logger->error('The failed escalation call could not be left unsettled.', ['call' => $reservation->call, 'failure' => $unrecorded::class]);
         }
