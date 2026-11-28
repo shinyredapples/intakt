@@ -111,10 +111,7 @@ final readonly class PartIssueCalls
         }
 
         if ($status < 200 || $status >= 300) {
-            $failed = new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
-
-            // Only a 4xx answer says GitHub did not act on the request: after any other answer the write may have been stored.
-            throw $status >= self::FIRST_REFUSAL && $status <= self::LAST_REFUSAL ? new WriteRefused($failed) : $failed;
+            throw $this->failedWith($status);
         }
 
         return $this->answeredIssue($stored);
@@ -155,6 +152,14 @@ final readonly class PartIssueCalls
     private function unreachableForWrite(string $failure): ForgeWriteFailed
     {
         return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
+    }
+
+    // A refusal only for a 4xx answer, because it alone says GitHub did not act on the request: after any other answer the write may have been stored.
+    private function failedWith(int $status): ForgeWriteFailed|WriteRefused
+    {
+        $failed = new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
+
+        return $status >= self::FIRST_REFUSAL && $status <= self::LAST_REFUSAL ? new WriteRefused($failed) : $failed;
     }
 
     /**
