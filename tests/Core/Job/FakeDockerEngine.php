@@ -443,11 +443,11 @@ final class FakeDockerEngine
      */
     private function kill(FakeContainer $container, array $options): MockResponse
     {
-        $query = is_array($options['query'] ?? null) ? $options['query'] : [];
+        $signal = (string) (((array) ($options['query'] ?? []))['signal'] ?? 'KILL');
 
         // A signal that is no KILL reaches the job's script, which ends its session and exits on its own, so the job stops with its own status.
-        if (is_string($query['signal'] ?? null) && 'KILL' !== $query['signal']) {
-            $this->signals[$container->job][] = $query['signal'];
+        if ('KILL' !== $signal) {
+            $this->signals[$container->job][] = $signal;
             [$container->running, $container->exitCode] = [false, 0];
 
             return new MockResponse('', ['http_code' => 204]);

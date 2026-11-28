@@ -44,6 +44,13 @@ final class BuildLogReadingTest extends TestCase
         self::assertNotSame(BuildLogReading::of('')->contentFingerprint, BuildLogReading::of(BuildLogLines::edit('c1', 'a', 'b'))->contentFingerprint);
     }
 
+    public function testAMultiEditThatChangesContentChangesTheFingerprint(): void
+    {
+        $log = json_encode(['type' => 'assistant', 'message' => ['id' => 'm', 'content' => [['type' => 'tool_use', 'id' => 'c1', 'name' => 'MultiEdit', 'input' => ['edits' => [['old_string' => 'a', 'new_string' => 'b']]]]]]])."\n";
+
+        self::assertNotSame(BuildLogReading::of('')->contentFingerprint, BuildLogReading::of($log)->contentFingerprint);
+    }
+
     public function testAnEmptyCommitIsNoContentChangeAndARealCommitIs(): void
     {
         $none = BuildLogReading::of('')->contentFingerprint;

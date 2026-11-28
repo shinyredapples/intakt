@@ -70,8 +70,7 @@ final readonly class JobContainers
         }
     }
 
-    // The state decides, never the wait's answer, because the engine answers a wait that failed on its side with 200 while the job still runs.
-    // A watched job is waited for in slices of the watch's interval, and its session is signalled once when the watch asks; the job still runs to its own exit, so what its script bundles after the session is kept.
+    // The state decides, never the wait's answer, because the engine answers a wait that failed on its side with 200 while the job still runs; a watched job is waited for in slices and its session signalled once, and it still runs to its own exit.
     private function awaitEnd(string $container, DateTimeImmutable $deadline, ?LiveOutputWatch $watch): JobEnd
     {
         $signalled = false;

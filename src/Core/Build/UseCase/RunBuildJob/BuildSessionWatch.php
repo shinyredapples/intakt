@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\RunBuildJob;
 
-use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\BuildProgress;
+use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\BuildStopRule;
 use Intakt\Core\Build\Domain\BuildWatch;
 use Intakt\Core\Job\Contract\JobOutput;

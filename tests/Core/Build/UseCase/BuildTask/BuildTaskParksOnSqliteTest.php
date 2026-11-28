@@ -277,7 +277,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
     }
 
     /**
-     * @param list<string> $logs the log of the running job at each look of the watch
+     * @param list<string> $logs
      */
     #[DataProvider('stopsOfTheWatch')]
     public function testARunningBuildJobStoppedByTheWatchIsStoredWithItsStopCauseInTheBuildJobLedgerRow(BuildStopCause $cause, BuildLimits $limits, array $logs): void

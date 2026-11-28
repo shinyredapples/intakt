@@ -185,7 +185,7 @@ final class WatchedBuildJobTest extends TestCase
     }
 
     /**
-     * @param list<string> $logs the log as the job holds it at each look, until the watch asks to end the session
+     * @param list<string> $logs
      */
     private function runWatched(BuildLimits $limits, array $logs): BuildJobOutcome
     {
