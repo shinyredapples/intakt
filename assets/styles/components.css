@@ -1015,6 +1015,8 @@ a.lane:hover { background: var(--tint-2); }
 @media (max-width: 760px) {
   .charts, .multiples, .multiples.two { grid-template-columns: 1fr; }
   .c-table summary { min-height: 44px; }
+  /* The drawing shrinks to the column (358 units at most on a 390 wide phone), so a label drawn at 15 px would show smaller than 15 px. */
+  .c-axis, .c-label { font-size: calc(var(--t15) + 1px); }
 }
 
 /* Waiting on you (UX2): the waiting octopus once at the top, then one card per item with the role who waits, what needs the owner and one tap with a line saying what happens next. Only this page's rules; the frame owns the header and nav. */

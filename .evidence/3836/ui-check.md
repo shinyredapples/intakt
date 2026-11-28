@@ -11,9 +11,11 @@ bin/console intakt:demo:replay fixtures/demo/sample-change-review.json --factor=
 node bin/ui-check http://localhost:7791 > .evidence/3836/ui-check.txt
 ```
 
+The History page had 14 rows of replayed events ("Judge done", "Usage recorded", ...) and Trends had its charts when checked.
+
 `ui-check.txt` is the full output (exit 0). The `history` and `trends` lines, at 1440, 1920 and 390 wide in both themes, show `axe critical 0, serious 0`, and the 390 lines show `phone floor findings 0` (no text under 15 px, no touch target under 44 px). The last line: `UI check: 120 runs, 0 serious or critical axe violations, 0 phone floor findings, 0 page errors.`
 
-The check found no defect on either page, so no code and no test changed.
+`bin/ui-check` reads a chart label's font size before the SVG is scaled to its column, so it cannot see the shrink. A separate measurement (computed font size times the SVG's screen scale, over every `svg text` on `/trends`) found a defect: at 390 wide the 15 px labels rendered at 14.92 px. The fix is `.c-axis, .c-label { font-size: calc(var(--t15) + 1px); }` in the phone rules of `assets/styles/components.css`, with `tests/Core/Dashboard/UseCase/ChartLabelStylesTest.php`. After it, `chart-label-rendered.txt` reads `390 labels 29 min rendered px 15.91` (before: 14.92), and `ui-check.txt` was produced again after the fix.
 
 `assets/vendor/` (git-ignored) was filled from the npm registry's `@hotwired/stimulus@3.2.2` and `@hotwired/turbo@8.0.23`, and axe-core came from npm, because the importmap CDN is not reachable from the build sandbox.
 
