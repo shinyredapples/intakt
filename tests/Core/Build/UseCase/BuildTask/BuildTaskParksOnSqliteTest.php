@@ -29,6 +29,7 @@ use Intakt\Core\Build\Domain\BuildStopCause;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
+use Intakt\Core\Build\UseCase\BuildTask\AskedQuestion;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskCommand;
@@ -95,6 +96,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(BuildTaskRequest::class)]
 #[UsesClass(BuildRun::class)]
 #[UsesClass(EndedStep::class)]
+#[UsesClass(AskedQuestion::class)]
 #[UsesClass(ParkedTasks::class)]
 #[UsesClass(PushRemoteCheck::class)]
 #[UsesClass(ParkedTaskRecord::class)]
