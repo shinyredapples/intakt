@@ -18,6 +18,8 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 #[Exclude]
 final readonly class Finding
 {
+    public const string PROPOSAL = 'Proposal:';
+
     // One home for the example the schema and the reviewer prompt give, so it cannot drift past the title's own rules.
     public const string TITLE_EXAMPLE = 'A large cart loses its discount';
 
@@ -90,6 +92,28 @@ final readonly class Finding
     public function withSeverity(Severity $severity): self
     {
         return clone ($this, ['severity' => $severity]);
+    }
+
+    // Only the owner decides the user guide's structure and the docs gate's limits, so the Technical writer's proposal on them is a P3 follow-up the builder never acts on (docs/design/05-architecture/07-reviews.md#the-technical-writer).
+    public function proposesToOwner(): bool
+    {
+        return Severity::P3 === $this->severity && FixableBy::Owner === $this->fixable_by && $this->namesProposal();
+    }
+
+    public function namesProposal(): bool
+    {
+        return 0 === stripos(ltrim($this->requirement ?? ''), self::PROPOSAL);
+    }
+
+    public function withFixableBy(FixableBy $fixableBy): self
+    {
+        return clone ($this, ['fixable_by' => $fixableBy]);
+    }
+
+    // The requirement too, because it holds the proposal marker the next round reads the routing from.
+    public function withRoutingOf(self $open): self
+    {
+        return clone ($this, ['severity' => $open->severity, 'fixable_by' => $open->fixable_by, 'requirement' => $open->requirement]);
     }
 
     public function withMerged(FindingIds $ids): self

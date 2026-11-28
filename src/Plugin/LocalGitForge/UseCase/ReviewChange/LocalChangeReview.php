@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
 use Closure;
-use Intakt\Core\Git\Contract\Paths;
-use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
@@ -22,11 +20,11 @@ use Intakt\Core\Review\Contract\ReviewProgress;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Plugin\Forge\Contract\Change;
-use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Contract\RepositoryNotFound;
+use Intakt\Plugin\LocalGitForge\Infrastructure\LocalChangeDescription;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Throwable;
@@ -38,6 +36,7 @@ final readonly class LocalChangeReview
         private Panels $panels,
         private ChangeReviews $reviews,
         private CleanupOnStop $onStop = new CleanupOnStop(),
+        private LocalChangeDescription $description = new LocalChangeDescription(),
     ) {
     }
 
@@ -46,7 +45,7 @@ final readonly class LocalChangeReview
     {
         $forge = $this->forgeFor($input);
         $change = $forge->change(new ChangeId($input->change));
-        $request = $this->requestFor($input, $change);
+        $request = $this->requestFor($forge, $input, $change);
 
         return $forge->withSnapshotOf($change->commits->head, fn (string $snapshot): ChangeReview => $this->onStop->during(
             static fn () => $forge->removeSnapshot($snapshot),
@@ -73,7 +72,7 @@ final readonly class LocalChangeReview
         $forge = $this->forgeFor($input);
         $change = $forge->changeAt(new ChangeId($input->change), $head);
 
-        return new HeadIdentity($this->identityOf($input, $change, $this->panelFor($input, $change)), $forge->headMoveSince($reviewed, $change));
+        return new HeadIdentity($this->identityOf($input, $change, $this->panelFor($forge, $input, $change)), $forge->headMoveSince($reviewed, $change));
     }
 
     public function stop(): void
@@ -89,7 +88,7 @@ final readonly class LocalChangeReview
     // Queues the next round without waiting, so the snapshot outlives this call: RemoveKeptSnapshot removes it once the round is judged, DiscardQueuedRoundHandler when the caller's transaction rolls the round back, and this call when the round cannot be queued.
     private function start(LocalGitForge $forge, ReviewChangeInput $input, Change $change): QueuedRound
     {
-        $request = $this->requestFor($input, $change);
+        $request = $this->requestFor($forge, $input, $change);
         $snapshot = $forge->keepSnapshotOf($change->commits->head);
 
         try {
@@ -105,18 +104,18 @@ final readonly class LocalChangeReview
     /**
      * @return Closure(string): ChangeReviewRequest
      */
-    private function requestFor(ReviewChangeInput $input, Change $change): Closure
+    private function requestFor(LocalGitForge $forge, ReviewChangeInput $input, Change $change): Closure
     {
-        $panel = $this->panelFor($input, $change);
+        $panel = $this->panelFor($forge, $input, $change);
         $identity = $this->identityOf($input, $change, $panel);
         $round = new RequestedRound($input->change, $input->round, new ChangeSource($this->absolute($input->repository), $input->base));
 
         return static fn (string $snapshot): ChangeReviewRequest => new ChangeReviewRequest($input->project, $snapshot, $input->task, $change->diff->patch, $round, $identity, $panel);
     }
 
-    private function panelFor(ReviewChangeInput $input, Change $change): Panel
+    private function panelFor(LocalGitForge $forge, ReviewChangeInput $input, Change $change): Panel
     {
-        return $this->panels->panelForChange($input->project, $this->describe($change, $input->labels ?? new Labels()));
+        return $this->panels->panelForChange($input->project, $this->description->of($forge, $change, $input->labels ?? new Labels()));
     }
 
     private function identityOf(ReviewChangeInput $input, Change $change, Panel $panel): VerdictIdentity
@@ -130,12 +129,5 @@ final readonly class LocalChangeReview
         $resolved = realpath($repository);
 
         return false === $resolved ? throw RepositoryNotFound::at($repository) : $resolved;
-    }
-
-    private function describe(Change $change, Labels $labels): ChangeDescription
-    {
-        $paths = array_map(static fn (ChangedFile $file): string => $file->path, [...$change->diff->files]);
-
-        return new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), new Paths(...$paths), $labels);
     }
 }

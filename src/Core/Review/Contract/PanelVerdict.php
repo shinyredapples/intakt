@@ -11,6 +11,7 @@ final readonly class PanelVerdict
     public function __construct(
         public Tier $tier,
         public Verdict $verdict,
+        public ReviewLane $lane = ReviewLane::Code,
     ) {
     }
 

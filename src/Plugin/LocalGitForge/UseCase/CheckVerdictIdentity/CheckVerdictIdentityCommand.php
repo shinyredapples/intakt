@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\UseCase\CheckVerdictIdentity;
 
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Platform\Contract\ReportableFailure;
-use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\Panels;
@@ -16,10 +14,10 @@ use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Contract\VerdictStanding;
 use Intakt\Plugin\Forge\Contract\Change;
-use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
+use Intakt\Plugin\LocalGitForge\Infrastructure\LocalChangeDescription;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Intakt\Plugin\LocalGitForge\Infrastructure\VisiblePath;
@@ -35,6 +33,7 @@ final readonly class CheckVerdictIdentityCommand
         private Panels $panels,
         private NameStatusParser $nameStatus,
         private VisiblePath $paths = new VisiblePath(),
+        private LocalChangeDescription $description = new LocalChangeDescription(),
     ) {
     }
 
@@ -55,7 +54,7 @@ final readonly class CheckVerdictIdentityCommand
     {
         $forge = new LocalGitForge(LocalRepository::existingAt($input->repository, $input->base), $this->nameStatus);
         $change = $forge->change(new ChangeId($input->branch));
-        $current = new VerdictIdentity($change->commits, $this->termsOf($change, $input));
+        $current = new VerdictIdentity($change->commits, $this->termsOf($forge, $change, $input));
         $io->writeln('identity '.$current->recorded());
 
         if (null === $input->reviewed) {
@@ -66,12 +65,9 @@ final readonly class CheckVerdictIdentityCommand
         $this->printStanding($io, $reviewed->standingAt($current, $forge->headMoveSince($reviewed->commits->head, $change)));
     }
 
-    private function termsOf(Change $change, CheckVerdictIdentityInput $input): ReviewTerms
+    private function termsOf(LocalGitForge $forge, Change $change, CheckVerdictIdentityInput $input): ReviewTerms
     {
-        $paths = array_map(static fn (ChangedFile $file): string => $file->path, [...$change->diff->files]);
-        $description = new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), new Paths(...$paths), new Labels());
-
-        return ReviewTerms::of($input->task, $input->checkCommand, $this->panels->panelForChange($input->project, $description));
+        return ReviewTerms::of($input->task, $input->checkCommand, $this->panels->panelForChange($input->project, $this->description->of($forge, $change, new Labels())));
     }
 
     // Reportable here only, because here a person typed the identity, while an unreadable one from storage is a programming error.

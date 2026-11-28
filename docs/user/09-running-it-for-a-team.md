@@ -25,6 +25,8 @@ This chapter's commands run on an install started from a clone with PHP, not in 
 
 Optional `rules` add reviewers to a bigger change or to sensitive paths, for example a security reviewer for anything under `config/`.
 
+To have the Technical writer read your documentation, add a `technical_writer` entry under `review:` ([user manual](../reference/user-manual.md)). Once it joins a change, that change needs its approval as well as the reviewers' quorum.
+
 Step 4 of the setup wizard, **Check the project** (<http://localhost:7781/setup?step=4>), shows each project Intakt has read with its reviewers, and whether its main branch failed to boot.
 
 Reviewer conversations hold your code and diffs. Intakt keeps each one for 30 days after its last message, and longer while its review round is still open (at most an hour per reviewer plus one for the judge). A scheduled run every ten minutes deletes the conversations past that point, so one goes at the next run, not at the exact moment.

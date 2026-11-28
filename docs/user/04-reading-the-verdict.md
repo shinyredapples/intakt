@@ -47,7 +47,7 @@ The owl marks each finding to fix now, to defer to a follow-up, or to reject. It
 
 You fix F1 and F2, commit to the same branch, and press **Start round 2** on the review page. The path grows: Pass 1, Fix, Pass 2.
 
-In the second pass, every reviewer is shown the findings still open, with their ids. It marks the ones it finds fixed as resolved and the ones still there as repeats, under the same id. So F2 is F2 in every round, and you can see at a glance what is left.
+In the second pass, every reviewer is shown the findings still open, with their ids. The Technical writer, which reads only the docs, is shown only the open findings on docs pages. It marks the ones it finds fixed as resolved and the ones still there as repeats, under the same id. So F2 is F2 in every round, and you can see at a glance what is left.
 
 From round two on, a new P1 or P2 is lowered to P3, unless the reviewer marks it a regression or names a requirement it breaks. Late surprises about code you did not touch stay small.
 

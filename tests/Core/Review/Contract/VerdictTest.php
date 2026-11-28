@@ -31,6 +31,12 @@ use Symfony\Component\Validator\Validation;
 #[UsesClass(FindingIds::class)]
 final class VerdictTest extends TestCase
 {
+    public function testAFailureVerdictIsIntaktsAndAReviewersAnswerIsNot(): void
+    {
+        self::assertTrue(Verdict::noTools()->isIntakts());
+        self::assertFalse(new Verdict(Decision::Blocked, [], [], [])->isIntakts());
+    }
+
     public function testAnIncompleteStreamVerdictBlocksAndNamesTheReason(): void
     {
         $verdict = Verdict::incompleteStream('the stream ended early', new Evidence('the call to anthropic, model big', 'cut by: platform'));

@@ -7,6 +7,10 @@ namespace Intakt\Tests\Plugin\LocalGitForge;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
+use Intakt\Core\Review\Contract\DocsPages;
+use Intakt\Core\Review\Contract\PathGlob;
+use Intakt\Core\Review\Infrastructure\DiffPaths;
+use Intakt\Core\Review\Infrastructure\DocsPartOfDiff;
 use Intakt\Plugin\Forge\Contract\BinaryFiles;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
@@ -27,6 +31,7 @@ use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Plugin\Forge\CommitIdCheckThatThrows;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -42,6 +47,10 @@ use RuntimeException;
 #[UsesClass(CommitId::class)]
 #[UsesClass(CommitRange::class)]
 #[UsesClass(Diff::class)]
+#[UsesClass(DiffPaths::class)]
+#[UsesClass(DocsPages::class)]
+#[UsesClass(DocsPartOfDiff::class)]
+#[UsesClass(PathGlob::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(FileContent::class)]
@@ -162,6 +171,29 @@ final class LocalGitForgeTest extends TestCase
 
         self::assertSame([['lib', FileStatus::Modified]], $this->pathsAndStatuses($change));
         self::assertStringContainsString('+Subproject commit '.str_repeat('b', 40), $change->diff->patch);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function prefixSettings(): iterable
+    {
+        yield 'no prefix' => ['diff.noprefix', 'true'];
+        yield 'source prefix' => ['diff.srcPrefix', 'old/'];
+        yield 'destination prefix' => ['diff.dstPrefix', 'new/'];
+    }
+
+    #[DataProvider('prefixSettings')]
+    public function testAChangedPageStillReachesTheWritersDiffWhateverPrefixTheRepositoryConfigures(string $setting, string $value): void
+    {
+        $this->repository->configure($setting, $value);
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('docs/user/cart.md', "The cart keeps a discount.\n");
+
+        $patch = $this->forge()->change(new ChangeId('feature'))->diff->patch;
+
+        self::assertStringContainsString("diff --git a/docs/user/cart.md b/docs/user/cart.md\n", $patch);
+        self::assertStringContainsString('+The cart keeps a discount.', new DocsPartOfDiff()->of($patch));
     }
 
     public function testItReturnsAFileAsItIsAtTheExactHead(): void

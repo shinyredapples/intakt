@@ -153,6 +153,14 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         return FileContent::ofBytes($path, $commit, $this->blob($this->blobAt($commit, $path)));
     }
 
+    // A regular file only, because a gitlink or a symbolic link at a page's path holds no page to read.
+    public function holdsRegularFileAt(CommitId $commit, string $path): bool
+    {
+        $entries = explode("\0", $this->read(['ls-tree', '-z', '--full-tree', $commit->hash, '--', $path]));
+
+        return array_any($entries, static fn (string $entry): bool => 1 === preg_match('/^100(?:644|755) blob [0-9a-f]+\t(.*)$/s', $entry, $match) && $match[1] === $path);
+    }
+
     public function baseCommit(): CommitId
     {
         return $this->commitFrom($this->read(['show-ref', '--verify', '--hash', 'refs/heads/'.$this->repository->baseBranch]));
@@ -204,7 +212,8 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
 
     private function diff(CommitRange $commits): Diff
     {
-        $patch = $this->read([...self::QUOTED_NAMES, 'diff', '--full-index', ...self::DIFF_OPTIONS, ...$this->range($commits)]);
+        // Fixed prefixes, because diff.noprefix, diff.srcPrefix or diff.dstPrefix would change the headers the docs part of the diff is cut by.
+        $patch = $this->read([...self::QUOTED_NAMES, 'diff', '--full-index', '--src-prefix=a/', '--dst-prefix=b/', ...self::DIFF_OPTIONS, ...$this->range($commits)]);
 
         return new Diff($this->binaryFiles->named($patch, $this->blob(...)), $this->changedFiles($commits));
     }

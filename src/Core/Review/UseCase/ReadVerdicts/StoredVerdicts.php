@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\ReadVerdicts;
 
 use Intakt\Core\Review\Contract\PanelVerdict;
+use Intakt\Core\Review\Contract\ReviewLane;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
@@ -32,7 +33,7 @@ final readonly class StoredVerdicts
             $verdict = $this->ofReviewer($reviewer);
 
             if ($verdict instanceof Verdict) {
-                $verdicts[] = new PanelVerdict($reviewer->tier(), $verdict);
+                $verdicts[] = new PanelVerdict($reviewer->tier(), $verdict, ReviewLane::ofRole($reviewer->roleName()));
             }
         }
 

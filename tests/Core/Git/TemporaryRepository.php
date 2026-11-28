@@ -57,6 +57,13 @@ final readonly class TemporaryRepository
         return $this->commit('Point '.$path.' at '.$commit);
     }
 
+    public function removeSubmodule(string $path): string
+    {
+        $this->git('rm', '--cached', '--quiet', $path);
+
+        return $this->commit('Remove '.$path);
+    }
+
     public function commitEmpty(string $subject): string
     {
         return $this->commit($subject);

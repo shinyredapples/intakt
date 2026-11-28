@@ -239,6 +239,21 @@ final class JudgedFindingsTest extends TestCase
         self::assertEquals([$this->finding('a', Severity::P3)], $judged->actList);
     }
 
+    public function testAnOwnersProposalMarkedActIsAFollowUpAndNotOnTheActList(): void
+    {
+        $judged = JudgedFindings::of($this->marks(['a' => Mark::Act]), [$this->proposal('a', FixableBy::Owner)]);
+
+        self::assertSame([], $judged->actList);
+        self::assertEquals([new FollowUp($this->proposal('a', FixableBy::Owner))], $judged->followUps);
+    }
+
+    public function testAProposalABuilderCouldFixMarkedActStaysOnTheActList(): void
+    {
+        $judged = JudgedFindings::of($this->marks(['a' => Mark::Act]), [$this->proposal('a', FixableBy::Builder)]);
+
+        self::assertEquals([$this->proposal('a', FixableBy::Builder)], $judged->actList);
+    }
+
     /**
      * @param array<string, Mark> $marks
      */
@@ -269,5 +284,10 @@ final class JudgedFindingsTest extends TestCase
     private function gateGap(string $id, Severity $severity): Finding
     {
         return new Finding($id, $severity, null, null, null, 'The gate misses this case.', FixableBy::Builder, false, 'cs', null, gate_gap: true);
+    }
+
+    private function proposal(string $id, FixableBy $fixableBy): Finding
+    {
+        return new Finding($id, Severity::P3, 'docs/user/README.md', 1, null, 'Split the long chapter.', $fixableBy, false, 'Proposal: user guide structure', null);
     }
 }

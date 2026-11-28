@@ -51,6 +51,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Review rounds](review-rounds.md): how a round runs its reviewers in parallel and survives a restarted worker.
 - [Review verdicts](review-verdicts.md): what a reviewer returns and how its answer is read.
 - [Quorum policies](quorum-policies.md): how the votes decide the outcome.
+- [Technical writer lane](technical-writer.md): when the Technical writer joins a review, what it reads and how its vote counts.
 - [Finding ledger](finding-ledger.md): how a finding keeps its id across the rounds of one change.
 - [Review job](review-job.md): how one reviewer's CLI runs in a job container.
 - [Reviewer agent](reviewer-agent.md): the reviewer that runs through Symfony AI.

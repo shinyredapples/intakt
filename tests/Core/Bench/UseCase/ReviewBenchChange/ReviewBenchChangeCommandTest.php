@@ -110,7 +110,7 @@ final class ReviewBenchChangeCommandTest extends TestCase
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         $display = $tester->getDisplay();
         self::assertStringContainsString('change: free-shipping', $display);
-        self::assertStringContainsString('reviewer prompt: '.hash('sha256', ReviewerPrompt::INSTRUCTIONS), $display);
+        self::assertStringContainsString('reviewer prompt: '.new HashedReviewPrompts()->hashes()->reviewer, $display);
         self::assertStringContainsString('judge prompt: '.hash('sha256', JudgePrompt::INSTRUCTIONS), $display);
         self::assertStringContainsString("reviewer role-1 (standard)\n  caught: free-shipping-boundary\n  missed: \n  false alarms: 0\n  harness failure: -\n  tokens: 500 in, 40 out, 1 calls\n  time: 3000 ms", $display);
         self::assertStringContainsString('act: F1 src/shipping.js:', $display);
