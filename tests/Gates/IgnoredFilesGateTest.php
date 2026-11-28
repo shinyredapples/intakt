@@ -322,6 +322,126 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertStringContainsString('no git index', $run->noteOf('ignored'));
     }
 
+    public function testEmptyingTheCommittedGitignoreWithoutStagingFailsTheGateForThatRuleFile(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.log\n");
+        $sandbox->write('var/debug.log', "trace\n");
+        $sandbox->git('add', '--force', 'var/debug.log');
+        $sandbox->git('commit', '--quiet', '--message', 'chore: keep the log');
+        $sandbox->write('.gitignore', '');
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([self::differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testDeletingATrackedNestedGitignoreFromTheWorkingTreeFailsTheGateWithItsPath(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.log\n");
+        $sandbox->write('docs/.gitignore', "draft.md\n");
+        $sandbox->commitAll('docs: ignore drafts');
+        unlink($sandbox->root.'/docs/.gitignore');
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([self::differsFromIndex('docs/.gitignore')], $result->findings);
+    }
+
+    public function testAStagedRuleEditWithNothingIgnoredTrackedPasses(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.log\n");
+        $sandbox->write('.gitignore', "*.log\n*.tmp\n");
+        $sandbox->git('add', '.gitignore');
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertTrue($run->passed('ignored'), $run->output());
+    }
+
+    public function testARuleEditKeepingSizeAndModificationTimeFailsTheGateWhenGitDoesNotTrustCtime(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->git('config', 'core.trustctime', 'false');
+        $sandbox->write('.gitignore', "*.log\n");
+        $stamp = time() - 3600;
+        touch($sandbox->root.'/.gitignore', $stamp);
+        $sandbox->commitAll('chore: ignore logs');
+        $sandbox->write('.gitignore', "*.tmp\n");
+        touch($sandbox->root.'/.gitignore', $stamp);
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame('', $sandbox->git('diff', '--name-only')->output, 'git diff trusts the stat data in this scenario');
+        self::assertSame([self::differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testATrackedGitignoreReplacedByASymlinkInTheWorkingTreeFailsTheGate(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.log\n");
+        $sandbox->write('rules.txt', "*.log\n");
+        unlink($sandbox->root.'/.gitignore');
+        $sandbox->symlink('.gitignore', 'rules.txt');
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([self::differsFromIndex('.gitignore')], $result->findings);
+    }
+
+    public function testAnUntrackedSymlinkedGitignoreBesideATrackedFilePasses(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.log\n");
+        $sandbox->write('rules.txt', "*.txt\n");
+        $sandbox->write('logs/keep.txt', "kept\n");
+        $sandbox->commitAll('chore: keep the logs folder');
+        $sandbox->symlink('logs/.gitignore', '../rules.txt');
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertTrue($run->passed('ignored'), $run->output());
+    }
+
+    public function testATrackedSymlinkedGitignoreThatIsUnchangedPasses(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.log\n");
+        $sandbox->write('rules.txt', "*.txt\n");
+        $sandbox->write('logs/keep.txt', "kept\n");
+        $sandbox->symlink('logs/.gitignore', '../rules.txt');
+        $sandbox->commitAll('chore: link the logs rules');
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertTrue($run->passed('ignored'), $run->output());
+    }
+
+    public function testAnUnchangedGitignoreInAFolderNamedLikeAnOptionPasses(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.log\n");
+        $sandbox->write('-rules/.gitignore', "draft.md\n");
+        $sandbox->commitAll('chore: ignore drafts');
+
+        $run = $sandbox->runGate(new IgnoredFilesGate());
+
+        self::assertTrue($run->passed('ignored'), $run->output());
+    }
+
+    public function testAConflictedGitignoreGivesNoDifferingRuleFinding(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.log\n");
+        $blob = trim($sandbox->git('hash-object', '-w', '.gitignore')->output);
+        $entries = '0 '.str_repeat('0', strlen($blob))."\t.gitignore\n".implode('', array_map(static fn (int $stage): string => '100644 '.$blob.' '.$stage."\t.gitignore\n", [1, 2, 3]));
+        $sandbox->runScript('printf %s "$ENTRIES" | git update-index --index-info', ['ENTRIES' => $entries]);
+
+        $result = $sandbox->gateResult(new IgnoredFilesGate());
+
+        self::assertSame([], $result->findings);
+    }
+
+    private static function differsFromIndex(string $path): string
+    {
+        return $path.': working-tree .gitignore differs from the index; stage or revert it so the gate judges the rules that will be committed';
+    }
+
     private function repositoryIgnoring(string $rules): Sandbox
     {
         $sandbox = $this->emptySandbox();
