@@ -21,7 +21,7 @@ Every Developer and reviewer works in a **fresh, throwaway container**:
 - **No keys:** no GitHub token, no signing key, no AI company keys. A Developer couldn't push even if it wanted to.
 - **No way out:** it can reach only the AI company and the package registries, not the rest of the internet and not your network.
 - **Nothing kept:** the container is thrown away afterwards; the next job starts clean.
-- **Read-only inputs:** it gets a copy of the project; the only thing it can hand back is one output folder.
+- **Read-only inputs:** it gets a copy of the project (and a Developer, its small self-check tool); the only thing it can hand back is one output folder.
 
 ## Layer 2: what comes back is data, not commands
 
