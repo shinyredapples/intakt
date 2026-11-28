@@ -8,19 +8,17 @@ use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
 use PHPUnit\Framework\Attributes\CoversNothing;
-use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
-// Covers nothing because the behavior is in config/packages/ai.php, which is not a class; a process of its own because the warning goes to stderr, and serial because its vault is created under config/secrets/, which the workers share.
+// Covers nothing because the behavior is in config/packages/ai.php, which is not a class; a process of its own because the warning goes to stderr.
 #[CoversNothing]
-#[Group('serial')]
 final class KeptKeyBuildWarningTest extends TestCase
 {
-    // Starts with the prefix .gitignore leaves out for test vaults, so a run stopped before tearDown leaves no key git would offer to commit.
-    private const string VAULT_ENVIRONMENT_PREFIX = 'ai_providers_test_kept_key_build_warning';
+    // A runtime environment of its own, so the vault folder is named for this test.
+    private const string VAULT_ENVIRONMENT = 'ai_providers_test_kept_key_build_warning';
 
     // An empty project file under tests/, so the build never reads the install's config/intakt.yaml.
     private const string PROJECT_FILE = __DIR__.'/Fixtures/no-projects.yaml';
@@ -70,28 +68,24 @@ final class KeptKeyBuildWarningTest extends TestCase
 
     protected function tearDown(): void
     {
-        new Filesystem()->remove([$this->vaultDirectory(), $this->keptKeyDirectory()]);
-        $this->removeTheVaultsFolderWhenEmpty();
+        new Filesystem()->remove([$this->secretsDirectory(), $this->keptKeyDirectory()]);
+    }
+
+    // Under the worker's own TMPDIR, so the run leaves the checkout as it found it (the quality check records a pass only for a tree nothing changed in) and none removes another worker's vault; named for the checkout, so two checkouts that share TMPDIR keep theirs apart.
+    private function secretsDirectory(): string
+    {
+        return sys_get_temp_dir().'/kept-key-build-warning-test-secrets-'.hash('xxh128', dirname(__DIR__, 2));
     }
 
     private function vaultDirectory(): string
     {
-        return dirname(__DIR__, 2).'/config/secrets/'.$this->vaultEnvironment();
+        return $this->secretsDirectory().'/'.self::VAULT_ENVIRONMENT;
     }
 
-    // Because the framework keeps its vault env loader whenever config/secrets/ exists, so a folder left empty here would change every container built after this test.
-    private function removeTheVaultsFolderWhenEmpty(): void
-    {
-        $vaults = dirname($this->vaultDirectory());
-        if (is_dir($vaults) && [] === array_diff((array) scandir($vaults), ['.', '..'])) {
-            rmdir($vaults);
-        }
-    }
-
-    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's.
+    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's; named for the checkout, so two checkouts that share TMPDIR keep theirs apart.
     private function keptKeyDirectory(): string
     {
-        return sys_get_temp_dir().'/kept-key-build-warning-test';
+        return sys_get_temp_dir().'/kept-key-build-warning-test-'.hash('xxh128', dirname(__DIR__, 2));
     }
 
     // Every case builds through here, so none can read the operator's project file, vault or decryption key.
@@ -100,10 +94,11 @@ final class KeptKeyBuildWarningTest extends TestCase
         $build = new Process([PHP_BINARY, '-r', self::COMPILE], dirname(__DIR__, 2));
 
         return $build->mustRun(null, [
-            'APP_RUNTIME_ENV' => $this->vaultEnvironment(),
+            'APP_RUNTIME_ENV' => self::VAULT_ENVIRONMENT,
             'INTAKT_CONFIG' => self::PROJECT_FILE,
             'SYMFONY_DECRYPTION_SECRET' => $decryptionSecret,
             'INTAKT_PROVIDER_KEY_DIR' => $this->keptKeyDirectory(),
+            'INTAKT_SECRETS_DIR' => $this->secretsDirectory(),
             'OPENAI_COMPATIBLE_BASE_URL' => false,
             'OPENAI_COMPATIBLE_API_KEY' => false,
             'SHELL_VERBOSITY' => false,
@@ -112,12 +107,6 @@ final class KeptKeyBuildWarningTest extends TestCase
 
     private function assertTheBuildRanWithTheTestsOwnSettings(Process $build): void
     {
-        self::assertSame(self::PROJECT_FILE."\n".$this->vaultEnvironment(), $build->getOutput());
-    }
-
-    // Because every test worker has a TMPDIR of its own, each gets a vault folder of its own and none removes another's.
-    private function vaultEnvironment(): string
-    {
-        return self::VAULT_ENVIRONMENT_PREFIX.'_'.hash('xxh128', sys_get_temp_dir());
+        self::assertSame(self::PROJECT_FILE."\n".self::VAULT_ENVIRONMENT, $build->getOutput());
     }
 }

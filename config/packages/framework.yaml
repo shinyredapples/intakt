@@ -47,6 +47,9 @@ when@dev:
 when@test:
     framework:
         test: true
+        # The folder config/packages/ai.php decides on (INTAKT_SECRETS_DIR in a test, else config/secrets/), so a test's vault stays outside the checkout.
+        secrets:
+            vault_directory: '%intakt.ai.secrets_directory%/%kernel.runtime_environment%'
         # Collects only for a test that calls the client's enableProfiler(), so the suite does not pay for profiles it never reads.
         profiler:
             collect: false

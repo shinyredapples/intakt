@@ -8,6 +8,8 @@ use InvalidArgumentException;
 
 final readonly class Options
 {
+    private const string REUSE = '--reuse';
+
     public ?string $base;
 
     /**
@@ -24,11 +26,15 @@ final readonly class Options
 
     public ?string $testMerge;
 
+    public bool $reuse;
+
     /**
      * @param array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string} $values
+     * @param list<string>                                                                             $flags
      */
-    private function __construct(public Mode $mode, array $values)
+    private function __construct(public Mode $mode, array $values, array $flags)
     {
+        $this->reuse = in_array(self::REUSE, $flags, true);
         $this->base = $values['base'];
         $this->only = $this->names($values['only']);
         $this->skip = $this->names($values['skip']);
@@ -43,6 +49,7 @@ final readonly class Options
     {
         $modes = [];
         $values = ['base' => null, 'only' => null, 'skip' => null, 'root' => null, 'test-merge' => null];
+        $flags = [];
 
         foreach ($arguments as $argument) {
             $mode = self::modeNamedBy($argument);
@@ -52,10 +59,15 @@ final readonly class Options
                 continue;
             }
 
+            if (self::REUSE === $argument) {
+                $flags[] = $argument;
+                continue;
+            }
+
             $values = self::withValue($values, $argument);
         }
 
-        return self::withMode($modes, $values);
+        return self::withMode($modes, $values, $flags);
     }
 
     private static function modeNamedBy(string $argument): ?Mode
@@ -82,24 +94,26 @@ final readonly class Options
             }
         }
 
-        throw new InvalidArgumentException('unknown argument '.$argument.', usage: bin/check [--fast|--journeys] [--base=<ref>] [--only=<gate,...>] [--skip=<gate,...>] [--test-merge=<merge>:<head>], or bin/check --static-gates');
+        throw new InvalidArgumentException('unknown argument '.$argument.', usage: bin/check [--fast|--journeys] [--reuse] [--base=<ref>] [--only=<gate,...>] [--skip=<gate,...>] [--test-merge=<merge>:<head>], or bin/check --static-gates');
     }
 
     /**
      * @param list<Mode>                                                                               $modes
      * @param array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string} $values
+     * @param list<string>                                                                             $flags
      */
-    private static function withMode(array $modes, array $values): self
+    private static function withMode(array $modes, array $values, array $flags): self
     {
         if (!in_array(Mode::Journeys, $modes, true)) {
-            return new self(array_last($modes) ?? Mode::Full, $values);
+            return new self(array_last($modes) ?? Mode::Full, $values, $flags);
         }
 
-        $options = new self(Mode::Journeys, $values);
+        $options = new self(Mode::Journeys, $values, $flags);
         $others = array_filter($modes, static fn (Mode $mode): bool => Mode::Journeys !== $mode);
 
-        if ([] !== $others || [] !== $options->only || [] !== $options->skip || null !== $values['base'] || null !== $values['test-merge']) {
-            throw new InvalidArgumentException('--journeys runs alone, without --fast, --only, --skip, --base or --test-merge');
+        // Because the journeys boot whole installs whose outcome the tree alone does not decide, their pass is never reused.
+        if ([] !== $others || [] !== $options->only || [] !== $options->skip || null !== $values['base'] || null !== $values['test-merge'] || $options->reuse) {
+            throw new InvalidArgumentException('--journeys runs alone, without --fast, --reuse, --only, --skip, --base or --test-merge');
         }
 
         return $options;

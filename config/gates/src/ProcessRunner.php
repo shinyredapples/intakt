@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use Generator;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\InputStream;
@@ -60,6 +61,21 @@ final class ProcessRunner
     public function gitWithPathspecMagic(array $arguments, string $directory): ProcessResult
     {
         return $this->runCall($this->hardened->callWithPathspecMagic($arguments, $directory));
+    }
+
+    // Because a listing too long to hold must be readable in parts, and a reader that stops early ends git with it.
+    /**
+     * @param list<string> $arguments
+     *
+     * @return Generator<int, string>
+     *
+     * @throws RepositoryAttributesRefused
+     */
+    public function gitInParts(array $arguments, string $directory): Generator
+    {
+        $call = $this->hardened->call($arguments, $directory);
+
+        return new OutputInParts($call->command, $call->directory, $call->environment, self::OVERALL_TIMEOUT_SECONDS)->read();
     }
 
     /**

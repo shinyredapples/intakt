@@ -53,6 +53,8 @@ One thing to know about booting: Intakt can start a change in a scratch copy to 
 
 The helper-order check of `bin/check` does not recognize a call from a property hook, a `[$this, 'helper']` callable array or a `$this::helper()` call, so a private helper reached only that way is never reported ([the method-order rules](../reference/user-manual.md#when-bincheck-reports-the-order-of-methods)).
 
+Running `bin/check` again on a tree that has not changed since its last full pass? `bin/check --reuse` spares the gates that already passed on it (the audit still runs), while a run without `--reuse`, as CI and every gating step use, runs every gate. A very large tree is never noted, so `--reuse` runs every selected gate there ([reusing a passed check](../reference/user-manual.md#running-bincheck-again-on-an-unchanged-tree)). After you change an ignored file under `var/` by hand, run without `--reuse`.
+
 `bin/check` refuses a catch in `src/` that takes any failure instead of naming the ones it expects ([generic catches](../reference/user-manual.md#when-bincheck-reports-a-generic-catch)).
 
 The `phpstan` check of `bin/check` wants test methods named as sentences: `test` followed by at least three camel-case words, such as `testTheFormIsSent()`. A data provider is exempt only when every concrete test class that runs it names it as a provider; a class that inherits it without naming it runs it as a plain test, so it is reported (renaming it without the `test` prefix avoids that) ([the test-name rule](../reference/user-manual.md#when-bincheck-reports-a-test-method-name)).

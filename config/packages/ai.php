@@ -71,7 +71,12 @@ use Symfony\Component\Yaml\Yaml;
 return static function (ContainerConfigurator $container): void {
     $environmentValue = ProviderKeySource::environmentValue(...);
 
-    $vault = ProviderKeySource::openVault(__DIR__.'/../secrets/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env()), $environmentValue('SYMFONY_DECRYPTION_SECRET'));
+    // Only the test environment reads a variable for it, so a test's vault lives outside the checkout the quality check fingerprints, and no other install can be pointed away from config/secrets/.
+    $secretsDirectory = ('test' === $container->env() ? $environmentValue('INTAKT_SECRETS_DIR') : null) ?? __DIR__.'/../secrets';
+    // config/packages/framework.yaml points the test environment's vault at it, so the build and the vault's env loader read one folder.
+    $container->parameters()->set(AiServices::SECRETS_DIRECTORY, $secretsDirectory);
+    // The framework's default vault directory and decryption key (SYMFONY_DECRYPTION_SECRET when set, else the vault's own private key file), which config/packages/framework.yaml keeps outside the test environment.
+    $vault = ProviderKeySource::openVault($secretsDirectory.'/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env()), $environmentValue('SYMFONY_DECRYPTION_SECRET'));
 
     // Only the test environment reads a variable for it, so a test keeps its key outside the install's data volume, where the file is the live key, and no other install can be pointed away from it.
     $keptKeyDirectory = ('test' === $container->env() ? $environmentValue('INTAKT_PROVIDER_KEY_DIR') : null) ?? dirname(__DIR__, 2).'/var/data';
