@@ -108,7 +108,7 @@ final class BuildSessionWatch implements JobWatch
         $this->identity = $piece->identity;
         $this->offset += strlen($piece->bytes);
         $lines = explode("\n", $this->partial.$piece->bytes);
-        $this->partial = (string) array_pop($lines);
+        $this->partial = array_pop($lines);
 
         if ($this->skippingLine && [] !== $lines) {
             array_shift($lines);

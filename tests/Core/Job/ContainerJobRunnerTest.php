@@ -12,11 +12,11 @@ use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
+use Intakt\Core\Job\Contract\JobFollowedFile;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobKeptFolder;
 use Intakt\Core\Job\Contract\JobLimits;
-use Intakt\Core\Job\Contract\JobFollowedFile;
 use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobOutputFile;
 use Intakt\Core\Job\Contract\JobOutputRefused;
@@ -376,8 +376,8 @@ final class ContainerJobRunnerTest extends TestCase
     public function testTheFileAWatchFollowsIsHandedBackByItsTailWhenItGrewPastTheOutputsBound(): void
     {
         $this->engine->hang('build-1');
-        $watch = new class($this->root) implements JobWatch {
-            public function __construct(private readonly string $root)
+        $watch = new readonly class($this->root) implements JobWatch {
+            public function __construct(private string $root)
             {
             }
 
