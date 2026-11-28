@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Git\UseCase\UpdateMirror;
 
 use Intakt\Core\Disk\Contract\DiskHold;
 use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
+use Intakt\Core\Disk\Contract\NearestFolder;
 use Intakt\Core\Disk\Infrastructure\FlooredDiskSpace;
 use Intakt\Core\Disk\Infrastructure\FreeSpaceReader;
 use Intakt\Core\Git\Contract\GitCall;
@@ -24,10 +25,12 @@ use Psr\Log\NullLogger;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(UpdateMirror::class)]
 #[CoversClass(MirrorNotUpdated::class)]
+#[CoversClass(NearestFolder::class)]
 #[UsesClass(Mirrors::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(NetworkGit::class)]
@@ -48,14 +51,61 @@ final class UpdateMirrorBelowTheDiskFloorsTest extends TestCase
 
     private ControlledFreeSpaceReader $reader;
 
-    public function testAFirstMirrorUpdateBelowTheByteFloorIsHeldAndLeavesNoMirror(): void
+    public function testAFirstMirrorUpdateBelowTheByteFloorIsMeasuredAtTheNearestFolderThatExistsAndMakesNoFolder(): void
     {
         $this->reader->report(self::BYTES - 1, self::INODES);
 
         $failure = $this->heldUpdate();
 
-        self::assertSame(sprintf('the mirror at %s/alpha.git was not updated: the disk of %1$s holds new work: %d free bytes, below the floor of %d', $this->mirrors, self::BYTES - 1, self::BYTES), $failure->getMessage());
-        self::assertSame(['.', '..'], scandir($this->mirrors));
+        self::assertSame(sprintf('the mirror at %s/alpha.git was not updated: the disk of %s holds new work: %d free bytes, below the floor of %d', $this->mirrors, dirname($this->mirrors), self::BYTES - 1, self::BYTES), $failure->getMessage());
+        self::assertDirectoryDoesNotExist($this->mirrors);
+    }
+
+    public function testAnExistingMirrorIsMeasuredOnItsOwnDiskAndHeldWhenOnlyThatDiskIsBelowTheFloor(): void
+    {
+        $path = $this->update();
+        $before = $this->remote->objectAt('main');
+        $this->remote->commitFile('b.txt', 'two');
+        $reader = self::createStub(FreeSpaceReader::class);
+        $reader->method('freeInodes')->willReturn(self::INODES);
+        $reader->method('freeBytes')->willReturnCallback(static fn (string $folder): int => $folder === $path ? 0 : self::BYTES);
+
+        try {
+            $this->updateReadingThrough($reader);
+            self::fail('The update fetched into a mirror whose own disk is below the floor.');
+        } catch (MirrorNotUpdated $held) {
+            self::assertStringContainsString(sprintf('the disk of %s holds new work', $path), $held->getMessage());
+        }
+
+        self::assertSame($before, $this->mainOf($path));
+    }
+
+    public function testARefreshForWorkAlreadyRunningGoesAheadBelowTheFloors(): void
+    {
+        $this->update();
+        $this->remote->commitFile('b.txt', 'two');
+        $this->reader->report(0, 0);
+
+        $path = $this->updater($this->reader)->refresh('alpha', $this->remote->path);
+
+        self::assertSame($this->remote->objectAt('main'), $this->mainOf($path));
+    }
+
+    public function testAMirrorUpdateWhoseInodeReadTimesOutFailsNamingDfAndNotGit(): void
+    {
+        $reader = self::createStub(FreeSpaceReader::class);
+        $reader->method('freeBytes')->willReturn(self::BYTES);
+        $reader->method('freeInodes')->willThrowException(new ProcessTimedOutException(new Process(['df'], null, null, null, 10), ProcessTimedOutException::TYPE_GENERAL));
+
+        try {
+            $this->updateReadingThrough($reader);
+            self::fail('The update went ahead on a disk whose inodes could not be read.');
+        } catch (MirrorNotUpdated $failure) {
+            self::assertStringEndsWith(sprintf('The free space of %s cannot be read: df timed out after 10 seconds.', dirname($this->mirrors)), $failure->getMessage());
+            self::assertNull($failure->getPrevious());
+        }
+
+        self::assertDirectoryDoesNotExist($this->mirrors);
     }
 
     public function testAMirrorUpdateBelowTheInodeFloorIsHeldAndFetchesNothing(): void
@@ -95,7 +145,7 @@ final class UpdateMirrorBelowTheDiskFloorsTest extends TestCase
             self::assertInstanceOf(FreeSpaceUnreadable::class, $failure->getPrevious());
         }
 
-        self::assertSame(['.', '..'], scandir($this->mirrors));
+        self::assertDirectoryDoesNotExist($this->mirrors);
     }
 
     protected function setUp(): void
@@ -130,10 +180,15 @@ final class UpdateMirrorBelowTheDiskFloorsTest extends TestCase
 
     private function updateReadingThrough(FreeSpaceReader $reader): string
     {
+        return $this->updater($reader)->update('alpha', $this->remote->path);
+    }
+
+    private function updater(FreeSpaceReader $reader): UpdateMirror
+    {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
         $disk = new FlooredDiskSpace($reader, self::BYTES, self::INODES);
 
-        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors), $disk)->update('alpha', $this->remote->path);
+        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors), $disk);
     }
 
     private function mainOf(string $mirror): string

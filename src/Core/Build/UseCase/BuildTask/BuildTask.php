@@ -194,6 +194,17 @@ final readonly class BuildTask
         return null;
     }
 
+    private function refreshMirror(BuildTaskRequest $request): ?string
+    {
+        try {
+            $this->checkout->refreshMirror($request->project, $request->remote);
+        } catch (BuildCheckoutFailed $failure) {
+            return $failure->getMessage();
+        }
+
+        return null;
+    }
+
     private function makeClone(BuildTaskRequest $request): ?string
     {
         try {
@@ -257,7 +268,7 @@ final readonly class BuildTask
      */
     private function prePushCheck(BuildTaskRequest $request, ListedIssue $task, array $results): RegressionRuns|string|null
     {
-        $failure = $this->updateMirror($request);
+        $failure = $this->refreshMirror($request);
 
         if (null !== $failure) {
             return $failure;

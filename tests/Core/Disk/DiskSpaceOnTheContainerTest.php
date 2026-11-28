@@ -8,6 +8,7 @@ use Intakt\Core\Disk\Contract\DiskFloor;
 use Intakt\Core\Disk\Contract\DiskHold;
 use Intakt\Core\Disk\Contract\DiskServices;
 use Intakt\Core\Disk\Contract\DiskSpace;
+use Intakt\Core\Disk\Contract\NearestFolder;
 use Intakt\Core\Disk\Infrastructure\DiskConfiguration;
 use Intakt\Core\Disk\Infrastructure\FlooredDiskSpace;
 use Intakt\Core\Git\Domain\Mirrors;
@@ -32,6 +33,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(TaskBranch::class)]
 #[UsesClass(MirrorNotUpdated::class)]
 #[UsesClass(BuildCloneNotMade::class)]
+#[UsesClass(NearestFolder::class)]
 final class DiskSpaceOnTheContainerTest extends KernelTestCase
 {
     private const int BYTES = DiskConfiguration::DEFAULT_MIN_FREE_BYTES;
@@ -81,6 +83,7 @@ final class DiskSpaceOnTheContainerTest extends KernelTestCase
         self::getContainer()->set(Mirrors::class, new Mirrors($this->scratch.'/mirrors'));
         $reader = self::getContainer()->get(ControlledFreeSpaceReader::class);
         $mirrors = self::getContainer()->get(UpdateMirror::class);
+        new Filesystem()->mkdir($this->scratch.'/mirrors');
 
         $steps = [];
 
@@ -115,6 +118,7 @@ final class DiskSpaceOnTheContainerTest extends KernelTestCase
             $remote->remove();
         }
 
+        new Filesystem()->mkdir($this->scratch.'/clones');
         $steps = [];
         foreach (self::READINGS as $case => [$bytes, $inodes]) {
             $reader->report($bytes, $inodes);

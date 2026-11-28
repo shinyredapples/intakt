@@ -7,6 +7,7 @@ namespace Intakt\Core\Git\UseCase\MakeBuildClone;
 use Intakt\Core\Disk\Contract\DiskHold;
 use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
+use Intakt\Core\Disk\Contract\NearestFolder;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
@@ -16,6 +17,7 @@ use Intakt\Core\Git\Domain\SourceLine;
 use Intakt\Core\Git\Domain\TaskBranch;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ExceptionInterface;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 use Throwable;
 
@@ -152,14 +154,15 @@ final readonly class MakeBuildClone
 
     private function holdBelowTheDiskFloors(string $directory): void
     {
-        // Made first, because the free space of a folder that does not exist cannot be read; outside the cleanup below, so a held clone never removes a folder it did not reserve.
-        $parent = dirname($directory);
-        $this->filesystem->mkdir($parent);
+        $folder = NearestFolder::of(dirname($directory));
 
         try {
-            $hold = $this->disk->holdAt($parent);
+            $hold = $this->disk->holdAt($folder);
         } catch (FreeSpaceUnreadable $unreadable) {
             throw BuildCloneNotMade::at($directory, $unreadable->getMessage(), $unreadable);
+        } catch (ProcessTimedOutException $timedOut) {
+            // Fixed words and no cause, as for git, so a timeout names df and not the git step around it.
+            throw BuildCloneNotMade::at($directory, new FreeSpaceUnreadable($folder, sprintf('df timed out after %s seconds', $timedOut->getExceededTimeout()))->getMessage());
         }
 
         if ($hold instanceof DiskHold) {
@@ -169,6 +172,8 @@ final readonly class MakeBuildClone
 
     private function reserve(string $directory): void
     {
+        $this->filesystem->mkdir(dirname($directory));
+
         // Because a thread-safe PHP resolves the path before mkdir and follows a link, so mkdir on a dangling link makes its target; is_link does not follow it.
         if (is_link($directory) || file_exists($directory)) {
             throw BuildCloneNotMade::at($directory, 'the folder already exists');

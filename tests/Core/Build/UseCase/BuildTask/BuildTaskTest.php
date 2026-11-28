@@ -54,8 +54,10 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Disk\Contract\DiskHold;
 use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
+use Intakt\Core\Disk\Contract\NearestFolder;
 use Intakt\Core\Disk\Infrastructure\FlooredDiskSpace;
 use Intakt\Core\Disk\Infrastructure\FreeSpaceReader;
 use Intakt\Core\Git\Contract\BranchHead;
@@ -157,6 +159,7 @@ use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ParkedTaskTable;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
+use Intakt\Tests\Core\Disk\ControlledFreeSpaceReader;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\ProgramOnPath;
@@ -270,6 +273,9 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(MakeBuildClone::class)]
 #[UsesClass(FlooredDiskSpace::class)]
 #[UsesClass(FreeSpaceUnreadable::class)]
+#[UsesClass(NearestFolder::class)]
+#[UsesClass(DiskHold::class)]
+#[UsesClass(ControlledFreeSpaceReader::class)]
 #[UsesClass(TakeCheckedHead::class)]
 #[UsesClass(BranchHead::class)]
 #[UsesClass(MirrorNotUpdated::class)]
@@ -1334,8 +1340,28 @@ final class BuildTaskTest extends TestCase
         self::assertDirectoryDoesNotExist($this->clone);
     }
 
+    public function testADiskThatFallsBelowAFloorAfterTheBuildJobDoesNotHoldThePrePushCheckOfThatBuild(): void
+    {
+        $reader = new ControlledFreeSpaceReader();
+        $this->disk = new FlooredDiskSpace($reader, 10, 10);
+        $this->runner = $this->runnerAfterWhich($this->committingRunner(), static fn () => $reader->report(0, 100));
+        $checked = false;
+        $this->checkRunner = self::createStub(JobRunner::class);
+        $this->checkRunner->method('run')->willReturnCallback(static function () use (&$checked): JobResult {
+            $checked = true;
+
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([RunCheckJob::RESULT => "failed 2\n", RunCheckJob::LOG => "tests failed\n"]));
+        });
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertTrue($checked, (string) $outcome->failure);
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+    }
+
     public function testAFreeSpaceReaderThatThrowsAtTheMirrorsFolderEndsAtTheMirrorStepWithItsFailureRecorded(): void
     {
+        new Filesystem()->mkdir($this->mirrors);
         $this->disk = $this->diskUnreadableAt($this->mirrors);
         $ledger = new InMemoryLedger();
 
@@ -1350,6 +1376,7 @@ final class BuildTaskTest extends TestCase
 
     public function testAFreeSpaceReaderThatThrowsAtTheClonesFolderEndsAtTheCloneStepWithItsFailureRecorded(): void
     {
+        new Filesystem()->mkdir($this->mirrors);
         $this->disk = $this->diskUnreadableAt(dirname($this->clone));
         $ledger = new InMemoryLedger();
 

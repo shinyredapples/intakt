@@ -7,6 +7,7 @@ namespace Intakt\Core\Git\UseCase\UpdateMirror;
 use Intakt\Core\Disk\Contract\DiskHold;
 use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
+use Intakt\Core\Disk\Contract\NearestFolder;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\GitCommand;
 use Intakt\Core\Git\Contract\HardenedGit;
@@ -22,6 +23,7 @@ use Symfony\Component\Filesystem\Path;
 use Symfony\Component\Lock\Exception\ExceptionInterface as LockFailure;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Process\Exception\ExceptionInterface as ProcessFailure;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 
 final readonly class UpdateMirror
@@ -56,8 +58,30 @@ final readonly class UpdateMirror
     public function update(string $project, string $remote): string
     {
         $path = $this->mirrors->pathOf($project);
-        $remote = $this->fromMirrorsDirectory($remote);
         $this->holdBelowTheDiskFloors($path);
+
+        return $this->bringUpToDate($project, $remote, $path);
+    }
+
+    /**
+     * Never held below a disk floor, because it serves work already running, which a floor does not cut.
+     *
+     * @throws ProjectNameRefused
+     * @throws NetworkGitFailed
+     * @throws MirrorNotUpdated
+     * @throws IOException
+     * @throws RepositoryAttributesRefused
+     * @throws ProcessFailure
+     * @throws LockFailure
+     */
+    public function refresh(string $project, string $remote): string
+    {
+        return $this->bringUpToDate($project, $remote, $this->mirrors->pathOf($project));
+    }
+
+    private function bringUpToDate(string $project, string $remote, string $path): string
+    {
+        $remote = $this->fromMirrorsDirectory($remote);
 
         if ($this->isMirror($path)) {
             $this->fill($path, $remote);
@@ -82,13 +106,16 @@ final readonly class UpdateMirror
 
     private function holdBelowTheDiskFloors(string $path): void
     {
-        // Made first, because the free space of a folder that does not exist cannot be read.
-        $this->filesystem->mkdir($this->mirrors->directory);
+        // The mirror itself when it exists, because it may be mounted on a disk of its own.
+        $folder = NearestFolder::of($path);
 
         try {
-            $hold = $this->disk->holdAt($this->mirrors->directory);
+            $hold = $this->disk->holdAt($folder);
         } catch (FreeSpaceUnreadable $unreadable) {
             throw MirrorNotUpdated::at($path, $unreadable->getMessage(), $unreadable);
+        } catch (ProcessTimedOutException $timedOut) {
+            // Fixed words and no cause, as for git, so a timeout names df and not the git step around it.
+            throw MirrorNotUpdated::at($path, new FreeSpaceUnreadable($folder, sprintf('df timed out after %s seconds', $timedOut->getExceededTimeout()))->getMessage());
         }
 
         if ($hold instanceof DiskHold) {
@@ -135,6 +162,7 @@ final readonly class UpdateMirror
 
     private function createMirror(string $project, string $remote, string $path): void
     {
+        $this->filesystem->mkdir($this->mirrors->directory);
         $attempts = [];
         $staging = '';
 

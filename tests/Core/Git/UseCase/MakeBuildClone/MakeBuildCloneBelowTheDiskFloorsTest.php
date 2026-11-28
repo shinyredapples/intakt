@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Git\UseCase\MakeBuildClone;
 use Intakt\Core\Disk\Contract\DiskHold;
 use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
+use Intakt\Core\Disk\Contract\NearestFolder;
 use Intakt\Core\Disk\Infrastructure\FlooredDiskSpace;
 use Intakt\Core\Disk\Infrastructure\FreeSpaceReader;
 use Intakt\Core\Git\Contract\GitCall;
@@ -27,9 +28,12 @@ use Psr\Log\NullLogger;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
+use Symfony\Component\Process\Process;
 
 #[CoversClass(MakeBuildClone::class)]
 #[CoversClass(BuildCloneNotMade::class)]
+#[CoversClass(NearestFolder::class)]
 #[UsesClass(Mirrors::class)]
 #[UsesClass(TaskBranch::class)]
 #[UsesClass(UpdateMirror::class)]
@@ -56,14 +60,42 @@ final class MakeBuildCloneBelowTheDiskFloorsTest extends TestCase
 
     private ControlledFreeSpaceReader $reader;
 
-    public function testABuildCloneBelowTheByteFloorIsHeldAndItsFolderIsNeverCreated(): void
+    public function testAFirstBuildCloneBelowTheByteFloorIsMeasuredAtTheNearestFolderThatExistsAndMakesNoFolder(): void
     {
         $this->reader->report(self::BYTES - 1, self::INODES);
 
         $failure = $this->heldClone();
 
-        self::assertSame(sprintf('the build clone at %s was not made: the disk of %s holds new work: %d free bytes, below the floor of %d', $this->clone, $this->clones, self::BYTES - 1, self::BYTES), $failure->getMessage());
+        self::assertSame(sprintf('the build clone at %s was not made: the disk of %s holds new work: %d free bytes, below the floor of %d', $this->clone, dirname($this->clones), self::BYTES - 1, self::BYTES), $failure->getMessage());
+        self::assertDirectoryDoesNotExist($this->clones);
+    }
+
+    public function testABuildCloneIsMeasuredAtTheClonesFolderOnceItExists(): void
+    {
+        new Filesystem()->mkdir($this->clones);
+        $this->reader->report(self::BYTES - 1, self::INODES);
+
+        $failure = $this->heldClone();
+
+        self::assertStringContainsString(sprintf('the disk of %s holds new work', $this->clones), $failure->getMessage());
         self::assertFileDoesNotExist($this->clone);
+    }
+
+    public function testABuildCloneWhoseInodeReadTimesOutFailsNamingDfAndNotGit(): void
+    {
+        $reader = self::createStub(FreeSpaceReader::class);
+        $reader->method('freeBytes')->willReturn(self::BYTES);
+        $reader->method('freeInodes')->willThrowException(new ProcessTimedOutException(new Process(['df'], null, null, null, 10), ProcessTimedOutException::TYPE_GENERAL));
+
+        try {
+            $this->makeClone(new FlooredDiskSpace($reader, self::BYTES, self::INODES));
+            self::fail('The clone was made on a disk whose inodes could not be read.');
+        } catch (BuildCloneNotMade $failure) {
+            self::assertStringEndsWith(sprintf('The free space of %s cannot be read: df timed out after 10 seconds.', dirname($this->clones)), $failure->getMessage());
+            self::assertNull($failure->getPrevious());
+        }
+
+        self::assertDirectoryDoesNotExist($this->clones);
     }
 
     public function testABuildCloneBelowTheInodeFloorIsHeldAndItsFolderIsNeverCreated(): void
