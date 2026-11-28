@@ -56,6 +56,21 @@ final readonly class FailedHeads
         $this->recordOnce($headFailure, $failures, $retryAt);
     }
 
+    // Along the whole chain, because the forge chains its credential refusal and the Git steps chain a disk hold as the cause of their own failure, which a step may wrap again.
+    /**
+     * @param class-string<Throwable> $kind
+     */
+    private function causedBy(Throwable $failure, string $kind): bool
+    {
+        for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
+            if ($cause instanceof $kind) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // No failure and no install-wide report, because a hold clears by itself once space is back: counted, a long low-disk spell handed every head over, and the same words on two heads started the failure back-off.
     private function waitForRoomOnTheDisk(string $project, OpenChange $head): void
     {
@@ -113,21 +128,6 @@ final readonly class FailedHeads
         if ($entities instanceof EntityManagerInterface && !$entities->isOpen()) {
             $this->doctrine->resetManager();
         }
-    }
-
-    // Along the whole chain, because the forge chains its credential refusal and the Git steps chain a disk hold as the cause of their own failure, which a step may wrap again.
-    /**
-     * @param class-string<Throwable> $kind
-     */
-    private function causedBy(Throwable $failure, string $kind): bool
-    {
-        for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
-            if ($cause instanceof $kind) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private function recordOnce(HeadFailure $headFailure, int $failures, DateTimeImmutable $retryAt): void

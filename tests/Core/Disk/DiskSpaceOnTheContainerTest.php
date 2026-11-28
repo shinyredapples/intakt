@@ -21,7 +21,6 @@ use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Core\Watcher\Domain\PendingHead;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\FailedHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\PendingHeads;
-use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
@@ -159,11 +158,16 @@ final class DiskSpaceOnTheContainerTest extends KernelTestCase
         new Filesystem()->mkdir($this->scratch.'/mirrors');
 
         $failures = [];
+        $failuresOfTheHeldHead = static function (MirrorNotUpdated $held) use ($failed, $pending, $head): int {
+            $failed->backOff('alpha', $head, $held);
+
+            return $pending->failuresOf('alpha', $head);
+        };
 
         try {
             foreach (self::READINGS as $case => [$bytes, $inodes]) {
                 $reader->report($bytes, $inodes);
-                $failures[$case] = $this->failuresAfter(static fn (): string => $mirrors->update('alpha', $remote->path), $failed, $pending, $head);
+                $failures[$case] = $this->failuresAfter(static fn (): string => $mirrors->update('alpha', $remote->path), $failuresOfTheHeldHead);
             }
         } finally {
             $remote->remove();
@@ -194,14 +198,15 @@ final class DiskSpaceOnTheContainerTest extends KernelTestCase
         return 'went ahead';
     }
 
-    private function failuresAfter(callable $step, FailedHeads $failed, PendingHeads $pending, OpenChange $head): string
+    /**
+     * @param callable(MirrorNotUpdated): int $failuresOfTheHeldHead
+     */
+    private function failuresAfter(callable $step, callable $failuresOfTheHeldHead): string
     {
         try {
             $step();
         } catch (MirrorNotUpdated $held) {
-            $failed->backOff('alpha', $head, $held);
-
-            return sprintf('held, %d failures', $pending->failuresOf('alpha', $head));
+            return sprintf('held, %d failures', $failuresOfTheHeldHead($held));
         }
 
         return 'went ahead';

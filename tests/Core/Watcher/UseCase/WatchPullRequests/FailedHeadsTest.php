@@ -373,7 +373,7 @@ final class FailedHeadsTest extends KernelTestCase
     {
         $this->clock->sleep($seconds);
 
-        return array_values(array_map(static fn (OpenChange $due): string => $due->id->value, $this->pending->dueFor('alpha')));
+        return array_map(static fn (OpenChange $due): string => $due->id->value, $this->pending->dueFor('alpha'));
     }
 
     private function refusingLedger(): Ledger
