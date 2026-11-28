@@ -28,7 +28,7 @@ final readonly class ReviewersAgree
         return $this->everyFindingIsShared($verdicts) && $this->everyFindingPassesTheQuoteCheck($verdicts, $change);
     }
 
-    // A P3 or a follow-up may be deferred, and only the model marks defer or reject; a failed review gave no verdict to agree with.
+    // Sent to the model because a P3 or a follow-up may be deferred and only the model marks defer or reject, and because a failed review gave no verdict to agree with.
     private function needsTheModel(Verdict $verdict): bool
     {
         return [] !== $verdict->follow_ups

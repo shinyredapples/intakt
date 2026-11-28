@@ -157,22 +157,17 @@ final class ReviewersAgreeTest extends TestCase
         ]));
     }
 
+    private function approval(): Verdict
+    {
+        return new Verdict(Decision::Approve, [], [], []);
+    }
+
     /**
      * @param list<Verdict> $verdicts
      */
     private function agree(array $verdicts): bool
     {
         return new ReviewersAgree()->agree($verdicts, self::CHANGE);
-    }
-
-    private function approval(): Verdict
-    {
-        return new Verdict(Decision::Approve, [], [], []);
-    }
-
-    private function changes(Finding ...$findings): Verdict
-    {
-        return new Verdict(Decision::Changes, array_values($findings), [], []);
     }
 
     private function finding(string $text, Severity $severity = Severity::P1, string $id = 'a1'): Finding
@@ -191,5 +186,10 @@ final class ReviewersAgreeTest extends TestCase
             title: 'The cart loses its discount',
             kind: FindingKind::Other,
         );
+    }
+
+    private function changes(Finding ...$findings): Verdict
+    {
+        return new Verdict(Decision::Changes, array_values($findings), [], []);
     }
 }
