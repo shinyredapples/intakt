@@ -24,6 +24,7 @@ final readonly class GitHubBranchCalls
     private const int OK = 200;
     private const int NO_CONTENT = 204;
     private const int UNAUTHORIZED = 401;
+    private const int NOT_FOUND = 404;
 
     public function __construct(
         private GitHubCalls $calls,
@@ -107,6 +108,35 @@ final readonly class GitHubBranchCalls
         if (self::NO_CONTENT !== $status) {
             throw new ForgeWriteFailed(sprintf('GitHub answered %d to a branch deletion.', $status));
         }
+    }
+
+    // Only 200 and 404 answer the question, because any other status leaves open whether the branch exists, and a restore must not push over one.
+    /**
+     * @throws ForgeReadFailed
+     * @throws ForgeRateLimited
+     */
+    public function exists(string $path): bool
+    {
+        try {
+            $status = $this->calls->asInstallation('GET', $path, ['auth_bearer' => $this->bearer(), 'headers' => ['Accept' => 'application/vnd.github+json']])->getStatusCode();
+        } catch (ExceptionInterface $failure) {
+            throw $this->unreachable($failure::class);
+        }
+
+        return match ($status) {
+            self::OK => true,
+            self::NOT_FOUND => false,
+            default => throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null),
+        };
+    }
+
+    // The installation token for a git push, because git reaches GitHub over https with it as the password of an x-access-token login.
+    /**
+     * @throws ForgeReadFailed
+     */
+    public function pushToken(): string
+    {
+        return $this->bearer();
     }
 
     /**

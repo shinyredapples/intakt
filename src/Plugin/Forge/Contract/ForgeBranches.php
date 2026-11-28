@@ -29,4 +29,10 @@ interface ForgeBranches
      * @throws ForgeWriteFailed
      */
     public function delete(ForgeBranch $branch): void;
+
+    // Pushes the archived commit and never makes a ref from its id, because the forge may have collected the commit; a branch that exists is never overwritten.
+    /**
+     * @throws ForgeWriteFailed
+     */
+    public function restore(BranchRestore $restore): void;
 }

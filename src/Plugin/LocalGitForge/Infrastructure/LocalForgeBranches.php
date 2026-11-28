@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 
+use Intakt\Core\Git\Contract\ArchivedHeadPush;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\BranchChange;
 use Intakt\Plugin\Forge\Contract\BranchChangeState;
+use Intakt\Plugin\Forge\Contract\BranchRestore;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\ForgeBranch;
@@ -32,6 +34,7 @@ final readonly class LocalForgeBranches implements ForgeBranches
 
     public function __construct(
         private LocalRepository $repository,
+        private ArchivedHeadPush $archivedHeads,
         private HardenedGit $hardened = new HardenedGit(),
         private WorktreeLocks $locks = new WorktreeLocks(),
         private RebasesAndBisects $rebases = new RebasesAndBisects(),
@@ -79,6 +82,11 @@ final readonly class LocalForgeBranches implements ForgeBranches
         } catch (ForgeReadFailed $failed) {
             throw new ForgeWriteFailed(sprintf('The branch "%s" was not deleted: %s', $branch->name, $failed->getMessage()), $failed->getCode(), $failed);
         }
+    }
+
+    public function restore(BranchRestore $restore): void
+    {
+        new LocalBranchRestore($this->repository, $this->archivedHeads, $this->hardened)->restore($restore);
     }
 
     // Only a files repository, because both the listing check and the delete's HEAD locks read the ref files.

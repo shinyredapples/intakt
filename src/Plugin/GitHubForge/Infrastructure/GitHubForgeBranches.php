@@ -6,8 +6,14 @@ namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
 use DateTimeImmutable;
 use DateTimeZone;
+use Intakt\Core\Git\Contract\ArchivedHead;
+use Intakt\Core\Git\Contract\ArchivedHeadPush;
+use Intakt\Core\Git\Contract\BranchHead;
+use Intakt\Core\Git\Contract\BranchNotPushed;
+use Intakt\Core\Git\Contract\RemoteCredential;
 use Intakt\Plugin\Forge\Contract\BranchChange;
 use Intakt\Plugin\Forge\Contract\BranchChangeState;
+use Intakt\Plugin\Forge\Contract\BranchRestore;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\ForgeBranch;
@@ -23,6 +29,7 @@ final readonly class GitHubForgeBranches implements ForgeBranches
     public function __construct(
         private RepositoryAddress $repository,
         private GitHubBranchCalls $calls,
+        private ArchivedHeadPush $archivedHeads,
     ) {
     }
 
@@ -81,6 +88,17 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         }
 
         $this->calls->delete($this->repository->path().'/git/refs/heads/'.$this->segments($branch->name));
+    }
+
+    // A git push and never a ref made through the REST API, because GitHub may have collected the commit once no branch referenced it.
+    public function restore(BranchRestore $restore): void
+    {
+        try {
+            $this->refuseExisting($restore->name);
+            $this->archivedHeads->push(new ArchivedHead($restore->project, new BranchHead($restore->name, $restore->head->hash)), $this->repository->pushRemote(), new RemoteCredential('x-access-token', $this->calls->pushToken()));
+        } catch (ForgeReadFailed|BranchNotPushed $failed) {
+            throw new ForgeWriteFailed(sprintf('The branch "%s" was not restored: %s', $restore->name, $failed->getMessage()), $failed->getCode(), $failed);
+        }
     }
 
     private function defaultBranch(): string
@@ -231,5 +249,13 @@ final readonly class GitHubForgeBranches implements ForgeBranches
         }
 
         return array_map(fn (mixed $label): string => $this->calls->text(is_array($label) ? $label : [], 'name'), $labels);
+    }
+
+    // A renamed branch GitHub redirects to its new name counts as existing too, so a restore is refused rather than made beside it; the push checks the branch once more under its lock.
+    private function refuseExisting(string $name): void
+    {
+        if ($this->calls->exists($this->repository->path().'/branches/'.$this->segments($name))) {
+            throw new ForgeWriteFailed(sprintf('The branch "%s" was not restored: it exists, and a restore never overwrites a branch.', $name));
+        }
     }
 }

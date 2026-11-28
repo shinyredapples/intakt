@@ -32,6 +32,12 @@ final readonly class ProgramOnPath
         $this->standInFor($program, $argument, 'exec sleep 30');
     }
 
+    // A shell command run before the real program, so another writer's step lands at the exact point between two calls.
+    public function runFirstOn(string $program, string $argument, string $command): void
+    {
+        $this->standInFor($program, $argument, $command);
+    }
+
     // Only the folder of stand-ins, because a program that is not installed is found nowhere.
     public function hideEveryOtherProgram(): void
     {

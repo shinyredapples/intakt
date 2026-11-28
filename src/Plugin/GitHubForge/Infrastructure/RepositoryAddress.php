@@ -29,6 +29,12 @@ final readonly class RepositoryAddress
         return '/repos/'.rawurlencode($this->owner).'/'.rawurlencode($this->repository);
     }
 
+    // Without the token, because git passes the address on its command line and repeats it in its messages; the token reaches git as a header instead.
+    public function pushRemote(): string
+    {
+        return sprintf('https://github.com/%s/%s.git', rawurlencode($this->owner), rawurlencode($this->repository));
+    }
+
     // GitHub's filter for a branch of this repository, because a fork's branch of the same name must not match it.
     public function headOf(string $branch): string
     {

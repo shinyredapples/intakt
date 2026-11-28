@@ -4,8 +4,21 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use Intakt\Core\Git\Contract\ArchivedHead;
+use Intakt\Core\Git\Contract\ArchivedHeadPush;
+use Intakt\Core\Git\Contract\BranchHead;
+use Intakt\Core\Git\Contract\BranchNotPushed;
+use Intakt\Core\Git\Contract\GitCall;
+use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RemoteCredential;
+use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\UseCase\PushBranch\BranchGit;
+use Intakt\Core\Git\UseCase\PushBranch\GuardedRun;
+use Intakt\Core\Git\UseCase\PushBranch\PushArchivedHead;
+use Intakt\Core\Git\UseCase\PushBranch\PushLockName;
 use Intakt\Plugin\Forge\Contract\BranchChange;
 use Intakt\Plugin\Forge\Contract\BranchChangeState;
+use Intakt\Plugin\Forge\Contract\BranchRestore;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\ForgeBranch;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
@@ -29,16 +42,32 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
 use Symfony\Component\HttpClient\RetryableHttpClient;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Process\Process;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 // Recorded GitHub answers keyed by method and URL (a body, or three digits for an HTTP status), with every request kept, because a test must see which pages were read and that no delete was sent.
 #[CoversClass(GitHubForgeBranches::class)]
 #[CoversClass(GitHubBranchCalls::class)]
-#[UsesClass(RepositoryAddress::class)]
+#[CoversClass(RepositoryAddress::class)]
+#[UsesClass(ArchivedHead::class)]
+#[UsesClass(BranchHead::class)]
+#[UsesClass(BranchNotPushed::class)]
+#[UsesClass(BranchRestore::class)]
+#[UsesClass(BranchGit::class)]
+#[UsesClass(GitCall::class)]
+#[UsesClass(GuardedRun::class)]
+#[UsesClass(HardenedGit::class)]
+#[UsesClass(Mirrors::class)]
+#[UsesClass(PushArchivedHead::class)]
+#[UsesClass(PushLockName::class)]
+#[UsesClass(RemoteCredential::class)]
 #[UsesClass(GitHubCalls::class)]
 #[UsesClass(CheckedInstallationTokens::class)]
 #[UsesClass(ForgeBranch::class)]
@@ -567,6 +596,87 @@ final class GitHubForgeBranchesTest extends TestCase
         $this->forge()->delete($this->branch());
     }
 
+    public function testAMissingBranchIsRestoredByARealGitPushIntoARepositoryWithoutItsCommitAndNoRefWriteThroughTheApi(): void
+    {
+        $root = sys_get_temp_dir().'/intakt-github-restore-'.bin2hex(random_bytes(6));
+        $git = static fn (string ...$arguments): string => trim(new Process(['git', ...$arguments], null, ['GIT_DIR' => false, 'GIT_WORK_TREE' => false])->mustRun()->getOutput());
+        $git('init', '--quiet', '--bare', $root.'/archive/alpha.git');
+        $git('init', '--quiet', '--bare', $root.'/github.git');
+        $head = $git('-C', $root.'/archive/alpha.git', '-c', 'user.name=Archive', '-c', 'user.email=archive@example.com', 'commit-tree', $git('-C', $root.'/archive/alpha.git', 'mktree'), '-m', 'archived');
+        $push = new PushArchivedHead(new BranchGit(new HardenedGit(), new GuardedRun()), new LockFactory(new InMemoryStore()), new Mirrors($root.'/archive'));
+
+        try {
+            self::assertSame(1, new Process(['git', '-C', $root.'/github.git', 'cat-file', '-e', $head])->run());
+            $this->forge(new GitHubAddressOnDisk($push, 'https://github.com/acme/widgets.git', 'installation-secret', $root.'/github.git'))->restore(new BranchRestore('alpha', 'intakt/7-old', new CommitId($head)));
+
+            self::assertSame($head, $git('-C', $root.'/github.git', 'rev-parse', 'refs/heads/intakt/7-old'));
+            self::assertSame(['GET '.self::REPOSITORY.'/branches/intakt/7-old'], $this->requests);
+        } finally {
+            new Filesystem()->remove($root);
+        }
+    }
+
+    public function testABranchThatExistsIsNotRestoredAndNothingIsPushed(): void
+    {
+        $this->answers['GET '.self::REPOSITORY.'/branches/intakt/7-old'] = $this->current('intakt/7-old', self::OLDER, 'false');
+        $push = $this->createMock(ArchivedHeadPush::class);
+        $push->expects($this->never())->method('push');
+
+        $this->expectExceptionObject(new ForgeWriteFailed('The branch "intakt/7-old" was not restored: it exists, and a restore never overwrites a branch.'));
+
+        $this->forge($push)->restore($this->restore());
+    }
+
+    public function testABranchGitHubCannotSayExistsIsNotRestoredAndNothingIsPushed(): void
+    {
+        $this->answers['GET '.self::REPOSITORY.'/branches/intakt/7-old'] = '403';
+        $push = $this->createMock(ArchivedHeadPush::class);
+        $push->expects($this->never())->method('push');
+
+        $this->expectExceptionObject(new ForgeWriteFailed('The branch "intakt/7-old" was not restored: GitHub answered 403 to a read.'));
+
+        $this->forge($push)->restore($this->restore());
+    }
+
+    public function testARateLimitedReadBeforeTheRestoreFailsAsRateLimitedAndPushesNothing(): void
+    {
+        $this->answers['GET '.self::REPOSITORY.'/branches/intakt/7-old'] = 'limited';
+        $push = $this->createMock(ArchivedHeadPush::class);
+        $push->expects($this->never())->method('push');
+
+        $this->expectException(ForgeRateLimited::class);
+
+        $this->forge($push)->restore($this->restore());
+    }
+
+    public function testARestoreWhosePushIsRefusedFailsAsAWrite(): void
+    {
+        $push = self::createStub(ArchivedHeadPush::class);
+        $push->method('push')->willThrowException(BranchNotPushed::because('the remote refused the restore of intakt/7-old (git push exited with 1)'));
+
+        $this->expectExceptionObject(new ForgeWriteFailed('The branch "intakt/7-old" was not restored: The branch was not pushed: the remote refused the restore of intakt/7-old (git push exited with 1)'));
+
+        $this->forge($push)->restore($this->restore());
+    }
+
+    public function testARestoreOfABranchNameWithADotLedPartSendsNoCallAndPushesNothing(): void
+    {
+        $push = $this->createMock(ArchivedHeadPush::class);
+        $push->expects($this->never())->method('push');
+
+        try {
+            $this->forge($push)->restore(new BranchRestore('alpha', 'intakt/.hidden', new CommitId(self::HEAD)));
+            self::fail('A branch name git never gives was restored.');
+        } catch (ForgeWriteFailed) {
+            self::assertSame([], $this->requests);
+        }
+    }
+
+    private function restore(): BranchRestore
+    {
+        return new BranchRestore('alpha', 'intakt/7-old', new CommitId(self::HEAD));
+    }
+
     private function defaultBranchIs(string $name): void
     {
         $this->answers['GET '.self::REPOSITORY] = sprintf('{"default_branch":"%s"}', $name);
@@ -577,7 +687,7 @@ final class GitHubForgeBranchesTest extends TestCase
         return self::REPOSITORY.'/branches?per_page=100&page='.$page;
     }
 
-    private function forge(): GitHubForgeBranches
+    private function forge(?ArchivedHeadPush $push = null): GitHubForgeBranches
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $identity = new RecordedInstallation($clock, 'installation-secret')->client();
@@ -589,7 +699,7 @@ final class GitHubForgeBranchesTest extends TestCase
         // Retrying as the scoped client is in the container, so a call that must not be retried shows it.
         $http = new RetryableHttpClient(new MockHttpClient($this->answer(...), 'https://api.github.com'), new GenericRetryStrategy(delayMs: 0), 2);
 
-        return new GitHubForgeBranches(new RepositoryAddress('acme', 'widgets'), new GitHubBranchCalls(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new NextLinks()));
+        return new GitHubForgeBranches(new RepositoryAddress('acme', 'widgets'), new GitHubBranchCalls(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new NextLinks()), $push ?? self::createStub(ArchivedHeadPush::class));
     }
 
     private function pulls(int $page): string

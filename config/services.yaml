@@ -168,6 +168,7 @@ services:
         arguments:
             $directory: '%intakt.git.branch_archive_directory%'
     Intakt\Core\Git\Contract\BranchArchive: '@Intakt\Core\Git\UseCase\ArchiveBranch\MirrorBranchArchive'
+    Intakt\Core\Git\Contract\ArchivedHeadPush: '@Intakt\Core\Git\UseCase\PushBranch\PushArchivedHead'
 
     # Built from the forge's and the vendors' configuration, because its probes are values, not services.
     Intakt\Core\Outage\Infrastructure\ProbedConnectivity:
