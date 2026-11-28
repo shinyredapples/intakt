@@ -122,6 +122,19 @@ final class CompleteListingTest extends KernelTestCase
         self::assertSame(['split into parts, which are built in its place'], $this->reasonsOf($plan));
     }
 
+    public function testASplitPlanRecordedWhileTheListingIsReadStillHoldsItsOriginal(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::task(100)]);
+        $this->reads->during = function (): void {
+            self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplitPlanned, json_encode(['project' => 'alpha', 'task' => '7', 'run' => 'r1', 'parts' => [], 'labels' => []], JSON_THROW_ON_ERROR), SizingRecords::keyOf('alpha', 7)))->succeeded());
+        };
+
+        $plan = $this->planOf();
+
+        self::assertSame([100], array_map(static fn (QueuedIssue $task): int => $task->number(), $plan->ready));
+        self::assertSame(['split into parts, which are built in its place'], $this->reasonsOf($plan));
+    }
+
     public function testAnUnchangedListingKeepsTheStoredStateOfEveryWaitedForIssue(): void
     {
         $this->reads->lists([Issues::task(3), Issues::task(4), Issues::task(10, ['intakt'], ['body' => 'Waits for #3, #4'])]);
