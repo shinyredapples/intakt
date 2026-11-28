@@ -4,7 +4,7 @@ Intakt's agents run on AI models you pay for. This page explains the kinds of ac
 
 ## Kinds of accounts
 
-You can give Intakt any mix of these, per AI company, and it treats them as one pool. To see the accounts you gave it, each once with its state and the roles it serves (Developer or reviewer), run `php bin/console intakt:team`.
+You can give Intakt any mix of these, per AI company, and it treats them as one pool. To see the accounts you gave it, each once with its state and the roles it serves (Developer or reviewer), run `php bin/console intakt:team`. It also shows, for each company, which account the last model call started on and why each other account was left out (at a ceiling, or paused, and until when). When no account had room, it says so and names the earliest time one gets room again.
 
 | Kind | How you pay | What Intakt watches |
 |---|---|---|
