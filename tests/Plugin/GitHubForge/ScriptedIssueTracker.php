@@ -126,6 +126,29 @@ final class ScriptedIssueTracker
         return $this->created($options);
     }
 
+    private function indexIn(string $url): ?int
+    {
+        return 1 === preg_match('~/issues/(\d+)$~', (string) parse_url($url, PHP_URL_PATH), $matches) ? (int) $matches[1] - 1 : null;
+    }
+
+    // An edit keeps what GitHub would store otherwise too, so a test can make GitHub drop the marker on every write.
+    /**
+     * @param array<mixed> $options
+     */
+    private function answerAbout(int $index, string $method, array $options): ResponseInterface
+    {
+        if (!array_key_exists($index, $this->issues)) {
+            return new MockResponse('{"message":"Not Found"}', ['http_code' => 404]);
+        }
+
+        if ('PATCH' === $method) {
+            $body = $options['body'] ?? '';
+            $this->issues[$index] = [...$this->issues[$index], ...(array) json_decode(is_string($body) ? $body : '', true, flags: JSON_THROW_ON_ERROR), ...$this->storedOtherwise];
+        }
+
+        return new MockResponse(json_encode($this->issues[$index], JSON_THROW_ON_ERROR), ['http_code' => 200]);
+    }
+
     private function listing(string $url): ResponseInterface
     {
         parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
@@ -153,28 +176,5 @@ final class ScriptedIssueTracker
         }
 
         return new MockResponse(json_encode($stored, JSON_THROW_ON_ERROR), ['http_code' => 201]);
-    }
-
-    private function indexIn(string $url): ?int
-    {
-        return 1 === preg_match('~/issues/(\d+)$~', (string) parse_url($url, PHP_URL_PATH), $matches) ? (int) $matches[1] - 1 : null;
-    }
-
-    // An edit keeps what GitHub would store otherwise too, so a test can make GitHub drop the marker on every write.
-    /**
-     * @param array<mixed> $options
-     */
-    private function answerAbout(int $index, string $method, array $options): ResponseInterface
-    {
-        if (!array_key_exists($index, $this->issues)) {
-            return new MockResponse('{"message":"Not Found"}', ['http_code' => 404]);
-        }
-
-        if ('PATCH' === $method) {
-            $body = $options['body'] ?? '';
-            $this->issues[$index] = [...$this->issues[$index], ...(array) json_decode(is_string($body) ? $body : '', true, flags: JSON_THROW_ON_ERROR), ...$this->storedOtherwise];
-        }
-
-        return new MockResponse(json_encode($this->issues[$index], JSON_THROW_ON_ERROR), ['http_code' => 200]);
     }
 }

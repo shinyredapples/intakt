@@ -38,8 +38,9 @@ final readonly class PartIssueCalls
             $response = $this->calls->asInstallation('GET', $path, $options);
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
-            $links = array_values($response->getHeaders(false)['link'] ?? []);
-            $target = (string) $response->getInfo('url');
+            $links = $response->getHeaders(false)['link'] ?? [];
+            $answered = $response->getInfo('url');
+            $target = is_string($answered) ? $answered : $path;
         } catch (ExceptionInterface $failure) {
             throw $this->unreachable($failure::class);
         }
