@@ -17,8 +17,10 @@ use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\Decisions;
+use Intakt\Core\Build\Contract\SplitUmbrellas;
 use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Contract\TierChoice;
+use Intakt\Core\Build\Contract\UmbrellaTasks;
 use Intakt\Core\Build\Domain\BugPart;
 use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuilderPrompt;
@@ -51,6 +53,7 @@ use Intakt\Core\Build\UseCase\BuildTask\PullRequestTextCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteRefused;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
+use Intakt\Core\Build\UseCase\BuildTask\TaskAdmission;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobEndFailed;
@@ -199,6 +202,7 @@ use Symfony\Component\Process\Process;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(BuildTask::class)]
+#[CoversClass(TaskAdmission::class)]
 #[CoversClass(BuildTaskOutcome::class)]
 #[CoversClass(BuildTaskRequest::class)]
 #[CoversClass(BuildRun::class)]
@@ -334,6 +338,7 @@ use Symfony\Component\Uid\Uuid;
 final class BuildTaskTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/build.sh';
+    private const string PRECHECK = __DIR__.'/../../../../../docker/job/precheck.sh';
 
     private const string CHECK_SCRIPT = __DIR__.'/../../../../../docker/job/check.sh';
 
@@ -386,6 +391,8 @@ final class BuildTaskTest extends TestCase
 
     private RecordedBuildStops $stops;
 
+    private UmbrellaTasks $umbrellas;
+
     public function testARemoteNamingAnotherGitHubRepositoryThanTheConfiguredOneIsRefusedBeforeAnythingIsRecordedPushedOrAskedOfTheForge(): void
     {
         $this->configuredRepository = 'acme/alpha';
@@ -417,6 +424,29 @@ final class BuildTaskTest extends TestCase
 
         self::assertSame('project "alpha" has no open issue 7', $outcome->failure);
         self::assertSame(['task'], array_column($this->stepsIn($ledger), 'step'));
+    }
+
+    public function testANamedTaskWhoseSplitPlanIsRecordedFailsAtTheTaskStepAndRunsNoOtherStep(): void
+    {
+        $this->umbrellas = new UmbrellaTasks(7);
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::Task, $outcome->last);
+        self::assertSame('issue 7 of project "alpha" is split into parts, which are built in its place', $outcome->failure);
+        self::assertSame([['task', 'issue 7 of project "alpha" is split into parts, which are built in its place']], array_map(static fn (array $step): array => [$step['step'], $step['failure'] ?? null], $this->stepsIn($ledger)));
+    }
+
+    public function testANamedTaskThatIsNotAnUmbrellaGoesOnPastTheTaskStep(): void
+    {
+        $this->umbrellas = new UmbrellaTasks(8);
+        $ledger = new InMemoryLedger();
+
+        (void) $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame('mirror', $this->stepsIn($ledger)[1]['step'] ?? null);
+        self::assertNull($this->stepsIn($ledger)[0]['failure'] ?? null);
     }
 
     public function testATaskWhoseStepsAllPassEndsWithTheBranchPushedSignedFromTheCheckedHead(): void
@@ -1609,6 +1639,7 @@ final class BuildTaskTest extends TestCase
     {
         $this->locks = new LockFactory(new InMemoryStore());
         $this->stops = new RecordedBuildStops();
+        $this->umbrellas = new UmbrellaTasks();
         $this->handBackFiles = new Filesystem();
         $this->changes = new RecordingChangeOpening();
         $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
@@ -1819,7 +1850,7 @@ final class BuildTaskTest extends TestCase
     {
         $configured = self::createStub(ConfiguredRepositories::class);
         $configured->method('nameOf')->willReturn($this->configuredRepository);
-        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts', $this->stops, new BuildLimits(1, 1, 1, 1));
+        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, self::PRECHECK, $this->mirrors.'-prompts', $this->stops, new BuildLimits(1, 1, 1, 1));
         $git = new RepositoryGit(new HardenedGit());
         $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
         $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
@@ -1831,7 +1862,10 @@ final class BuildTaskTest extends TestCase
 
         $texts = new PullRequestTextCheck($checkout, new RoutePullRequestText(new PullRequestTextRoutes($this->textLedger ?? $ledger, $this->textLocks ?? $this->locks)));
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, $this->regressionTests ?? new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
+        $umbrellas = self::createStub(SplitUmbrellas::class);
+        $umbrellas->method('of')->willReturnCallback(fn (string $project): UmbrellaTasks => 'alpha' === $project ? $this->umbrellas : new UmbrellaTasks());
+
+        return new BuildTask(new TaskAdmission($issues, $umbrellas), $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files, $this->regressionTests ?? new NoRegressionTests(), new NullLogger()), $texts, new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.

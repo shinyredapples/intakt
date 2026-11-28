@@ -40,7 +40,7 @@ You will meet these characters on the dashboard. Each one stands where its job h
 You run `intakt:build:size` on a task, and the answer is `split`: the task is too big for one build.
 
 1. Intakt records its plan first. Then it files two to four new issues, the parts. Each part has the task's labels and waits for the parts it builds on.
-2. The task stays open as their umbrella, with one comment naming the parts. Editing it later does not size it again.
+2. The task stays open as their umbrella, with one comment naming the parts. It is never built itself: `intakt:queue:show` lists it as held, and the parts as tasks. Editing it later does not size it again.
 3. If the command stops halfway, run it again. It finishes from the plan and files no part twice.
 4. A task is split only once, and a part is never split again ([details](../reference/user-manual.md#sizing-a-new-task)).
 
@@ -78,9 +78,11 @@ Text that is not a comment does not count: a string, a line indented under a YAM
 
 A comment in the form `TODO(#123): <reason>` that names an issue is allowed ([examples and exceptions](../reference/user-manual.md#when-the-left-undone-gate-reports-a-todo-comment-a-skipped-test-or-a-not-implemented-throw)).
 
-The `ignored` check of `bin/check` refuses a tracked file that `.gitignore` excludes. Untrack it with `git --literal-pathspecs rm --cached -- '<path>'`, the path in single quotes with each `'` in it written as `'\''` (the quotes and the option keep a name such as `build[1].tmp` from matching other files), or keep it with a negated rule in `.gitignore` ([how](../reference/user-manual.md#when-the-ignored-gate-reports-a-tracked-file-that-gitignore-excludes)).
+The `ignored` check of `bin/check` refuses a tracked file that `.gitignore` excludes. Untrack it with `git --literal-pathspecs rm --cached -- '<path>'`, the path in single quotes with each `'` in it written as `'\''` (the quotes and the option keep a name such as `build[1].tmp` from matching other files), or keep it with a negated rule in `.gitignore` ([how](../reference/user-manual.md#when-the-ignored-gate-reports-a-tracked-file-that-gitignore-excludes)). It also fails on a tracked `.gitignore` you changed or deleted without staging, since CI judges the committed rules: stage or revert that file.
 
 One rule to know before your first build: for a project with a `github` entry, the `--remote` of `intakt:build:task` must be that configured GitHub repository's `https://github.com/<owner>/<name>` address, or the command refuses before it does anything ([the `intakt:build:task` options](../reference/user-manual.md#building-one-task)).
+
+Before it hands a change back, the Developer can run Intakt's own check in the build job (`sh /input/precheck.sh`). It reports the refusals Intakt would otherwise give after the hand-back: no new commit on the task's branch, a branch that is not a fast-forward, a new merge commit, a commit git cannot write and a missing `PR.md`. The Developer fixes them in the same session. Intakt's own check after the hand-back still decides ([the builder's own check](../architecture/build-job.md#the-builders-own-check)).
 
 A task with the `bug` label describes the bug in four parts: When, Today, Expected and Must keep working. If one is missing or empty, Intakt builds nothing and parks the task with a question that names the missing part, shown on the task's page in the dashboard ([bug tasks](../reference/user-manual.md#bug-tasks)).
 

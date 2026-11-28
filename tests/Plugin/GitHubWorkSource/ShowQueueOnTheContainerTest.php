@@ -5,6 +5,12 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Build\Contract\UmbrellaTasks;
+use Intakt\Core\Build\Infrastructure\RecordedSplitUmbrellas;
+use Intakt\Core\Build\UseCase\SizeTask\SizingRecords;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Watcher\Contract\EligibilityLabels;
 use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
 use Intakt\Core\Watcher\Contract\ProjectNamesNoEligibilityLabel;
@@ -41,6 +47,7 @@ use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\HttpKernel\KernelInterface;
 
 // The command as an install on SQLite runs it, with the project file read and the recorded issues in GitHub's shape served by the test environment, so the label a project names and the order printed are proven together.
 #[CoversClass(ShowQueueCommand::class)]
@@ -70,6 +77,9 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(WorkQueue::class)]
 #[UsesClass(Task::class)]
 #[UsesClass(HeldTask::class)]
+#[UsesClass(RecordedSplitUmbrellas::class)]
+#[UsesClass(UmbrellaTasks::class)]
+#[UsesClass(SizingRecords::class)]
 final class ShowQueueOnTheContainerTest extends KernelTestCase
 {
     private const array VARIABLES = ['INTAKT_CONFIG', 'BUILD_RECORDING'];
@@ -136,6 +146,18 @@ final class ShowQueueOnTheContainerTest extends KernelTestCase
         self::assertSame("Pick order of project alpha:\n  1. #2 Carries build\nHeld tasks of project alpha:\n  no task is held\n", $tester->getDisplay());
     }
 
+    public function testATaskWhoseSplitPlanIsRecordedIsHeldAsAnUmbrellaAndNotPicked(): void
+    {
+        $kernel = $this->booted('queue_two_tasks_intakt.json', '');
+        $ledger = self::getContainer()->get(Ledger::class);
+        self::assertInstanceOf(Ledger::class, $ledger);
+        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::TaskSplitPlanned, '{"project":"alpha","task":"2","run":"r1","parts":[],"labels":[]}', SizingRecords::keyOf('alpha', 2)))->succeeded());
+
+        $tester = $this->shown($kernel, 'alpha');
+
+        self::assertSame("Pick order of project alpha:\n  no task is ready\nHeld tasks of project alpha:\n  #2 Carries intakt: split into parts, which are built in its place\n", $tester->getDisplay());
+    }
+
     public function testAProjectWithoutAWatchSectionPrintsNoOrderAndFails(): void
     {
         $tester = $this->show('queue_two_tasks_intakt.json', '', 'beta');
@@ -167,6 +189,11 @@ final class ShowQueueOnTheContainerTest extends KernelTestCase
 
     private function show(string $recording, string $watchExtra, string $project): CommandTester
     {
+        return $this->shown($this->booted($recording, $watchExtra), $project);
+    }
+
+    private function booted(string $recording, string $watchExtra): KernelInterface
+    {
         $contents = "projects:\n    alpha:\n        watch: { repository: repos/alpha, base: main, task: Review the pull request.".$watchExtra." }\n";
         new Filesystem()->dumpFile($this->file, $contents);
         $_SERVER['INTAKT_CONFIG'] = $_ENV['INTAKT_CONFIG'] = $this->file;
@@ -178,6 +205,11 @@ final class ShowQueueOnTheContainerTest extends KernelTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         EmptyDatabase::rowsIn(self::getContainer());
 
+        return $kernel;
+    }
+
+    private function shown(KernelInterface $kernel, string $project): CommandTester
+    {
         $tester = new CommandTester(new Application($kernel)->find('intakt:queue:show'));
         $tester->execute(['project' => $project], ['capture_stderr_separately' => true]);
 
