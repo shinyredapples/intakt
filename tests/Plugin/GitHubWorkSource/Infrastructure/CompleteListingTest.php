@@ -113,13 +113,13 @@ final class CompleteListingTest extends KernelTestCase
 
     public function testATaskWhoseSplitPlanTheLedgerRecordsIsHeldAndItsPartsAreReady(): void
     {
-        $this->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplitPlanned, json_encode(["project" => "alpha", "task" => "7", "run" => "r1", "parts" => [], "labels" => []], JSON_THROW_ON_ERROR), SizingRecords::keyOf("alpha", 7)));
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplitPlanned, json_encode(['project' => 'alpha', 'task' => '7', 'run' => 'r1', 'parts' => [], 'labels' => []], JSON_THROW_ON_ERROR), SizingRecords::keyOf('alpha', 7)));
         $this->reads->lists([Issues::task(7), Issues::task(100), Issues::task(101)]);
 
         $plan = $this->planOf();
 
         self::assertSame([100, 101], array_map(static fn (QueuedIssue $task): int => $task->number(), $plan->ready));
-        self::assertSame(["split into parts, which are built in its place"], $this->reasonsOf($plan));
+        self::assertSame(['split into parts, which are built in its place'], $this->reasonsOf($plan));
     }
 
     public function testAnUnchangedListingKeepsTheStoredStateOfEveryWaitedForIssue(): void
