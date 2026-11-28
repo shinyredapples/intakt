@@ -81,6 +81,12 @@ It is Friday afternoon. You started a review half an hour ago, and the page stil
 - **Why:** either the project's mirror holds an `info/attributes` file (git reads it on top of every other attributes source and nothing switches it off), or, for `intakt:check:run`, the ledger could not record a job event.
 - **What to do:** for the first, remove the file named in the message from the mirror and run the command again. For the second, read the reason in the message (for example a full disk) and run the command again once it is fixed.
 
+## A step stops because the disk is low
+
+- **What you see:** a mirror update or a build clone stops with "holds new work", naming the folder, the free space and the floor.
+- **Why:** that disk is below `disk.min_free_bytes` or `disk.min_free_inodes`. Intakt starts no new work there, so nothing fails half-way. A watched pull request held this way waits and is not counted as failing.
+- **What to do:** free space on that disk, then run the step again. Of Intakt's own folders, remove only build folders you have confirmed no build is still using.
+
 ## Docker says the container is unhealthy
 
 - **What you see:** `docker ps` or `docker inspect` shows Intakt as `unhealthy`.
