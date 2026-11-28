@@ -160,7 +160,7 @@ final class SizingASampleTaskTest extends KernelTestCase
         $resolver = new ConfiguredTierResolver(['sample' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'middle']]]], []);
         $platform = MockPlatformFactory::createPlatform(static fn (): string => $answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
-        $usage = new UsageLedger($fixture->kept,new MockClock('2026-11-28 12:00:00 UTC'), new NullLogger(), StoredSerializerFactory::create());
+        $usage = new UsageLedger($fixture->kept, new MockClock('2026-11-28 12:00:00 UTC'), new NullLogger(), StoredSerializerFactory::create());
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return $fixture->sizing(new SymfonyAiSizingVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), new SizingAgent(new SizingPrompt(new Fence())), $usage, $limit));
