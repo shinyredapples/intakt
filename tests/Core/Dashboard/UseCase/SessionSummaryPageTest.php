@@ -115,7 +115,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
-        self::assertSame(['F1 P1 Take the lock first. Open'],$this->linesOf($crawler->filter('.log-summary .ls-findings li')));
+        self::assertSame(['F1 P1 Take the lock first. Open'], $this->linesOf($crawler->filter('.log-summary .ls-findings li')));
     }
 
     public function testAFindingRecordedWithoutATitleOrKindKeepsItsWholeTextAndNoSymbol(): void
