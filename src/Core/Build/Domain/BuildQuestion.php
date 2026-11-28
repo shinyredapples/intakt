@@ -58,6 +58,12 @@ final readonly class BuildQuestion
         );
     }
 
+    // The question with its choices, so the task's author sees what to do on the issue without opening the dashboard.
+    public function asComment(): string
+    {
+        return $this->question."\n\n".implode("\n", array_map(static fn (string $choice): string => '- '.$choice, $this->choices));
+    }
+
     /**
      * @throws QuestionRefused
      */

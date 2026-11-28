@@ -23,5 +23,5 @@ interface SizingVendor
      * @throws ProviderUnreachable
      */
     #[NoDiscard('a verdict that is not read sizes nothing')]
-    public function size(string $project, SizingRequest $request): ?SizingVerdict;
+    public function size(SizingRequest $request): ?SizingVerdict;
 }

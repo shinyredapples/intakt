@@ -33,11 +33,11 @@ final readonly class SymfonyAiSizingVendor implements SizingVendor
     }
 
     #[Override]
-    public function size(string $project, SizingRequest $request): ?SizingVerdict
+    public function size(SizingRequest $request): ?SizingVerdict
     {
-        $answering = $this->answering($project);
+        $answering = $this->answering($request->project);
 
-        return $this->accounts->run($answering->provider, fn (): ?SizingVerdict => $this->verdictOn($answering, $this->usage->reserveForTask($project, new AnsweringTier(self::SIZING_TIER, $answering), $request->task), $request));
+        return $this->accounts->run($answering->provider, fn (): ?SizingVerdict => $this->verdictOn($answering, $this->usage->reserveForTask($request->project, new AnsweringTier(self::SIZING_TIER, $answering), $request->task), $request));
     }
 
     private function answering(string $project): ResolvedModel

@@ -76,7 +76,7 @@ final class SymfonyAiSizingVendorTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
 
-        $verdict = $this->vendor(static fn (): string => self::READY, $ledger)->size('alpha', $this->request());
+        $verdict = $this->vendor(static fn (): string => self::READY, $ledger)->size($this->request());
 
         self::assertSame(SizeTier::Small, $verdict?->size);
         self::assertSame(['started', 'settled'], array_column($ledger->payloads(), 'phase'));
@@ -88,7 +88,7 @@ final class SymfonyAiSizingVendorTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
 
-        $verdict = $this->vendor(static fn (): string => '{"ready": tru', $ledger)->size('alpha', $this->request());
+        $verdict = $this->vendor(static fn (): string => '{"ready": tru', $ledger)->size($this->request());
 
         self::assertNull($verdict);
         self::assertSame(['started', 'settled'], array_column($ledger->payloads(), 'phase'));
@@ -100,7 +100,7 @@ final class SymfonyAiSizingVendorTest extends KernelTestCase
         $limited = static fn (): never => throw new RateLimitExceededException(30);
 
         try {
-            $this->vendor($limited, $ledger)->size('alpha', $this->request());
+            $this->vendor($limited, $ledger)->size($this->request());
             self::fail('A failed sizing call must stay an error, never a verdict.');
         } catch (ProviderRateLimited $rateLimited) {
             self::assertSame(30, $rateLimited->retryAfterSeconds);

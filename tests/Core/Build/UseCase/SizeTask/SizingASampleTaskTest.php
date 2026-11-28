@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\SizeTask;
 
-use DateTimeImmutable;
-use Doctrine\DBAL\Connection;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -28,8 +26,13 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\UntrustedSource;
+use Intakt\Core\Build\UseCase\SizeTask\EligibleTasks;
+use Intakt\Core\Build\UseCase\SizeTask\SizingRecords;
+use Intakt\Core\Watcher\Contract\EligibilityLabels;
+use Intakt\Core\Watcher\Contract\ProjectEligibilityLabel;
+use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
-use Intakt\Plugin\GitHubForge\Contract\IssueReads;
+use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiSizingVendor;
@@ -38,7 +41,6 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
-use Intakt\Tests\Core\Build\ParkedTaskTable;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
@@ -83,13 +85,21 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(AppendResult::class)]
+#[UsesClass(EligibleTasks::class)]
+#[UsesClass(SizingRecords::class)]
+#[UsesClass(EligibilityLabels::class)]
+#[UsesClass(ProjectEligibilityLabel::class)]
+#[UsesClass(ListedIssue::class)]
+#[UsesClass(IssueHistory::class)]
+#[UsesClass(IssueLabels::class)]
+#[UsesClass(LabelApplication::class)]
 final class SizingASampleTaskTest extends KernelTestCase
 {
     public function testASampleTaskIsSizedAndItsVerdictAndTokensAreRecordedAgainstIt(): void
     {
         $ledger = new InMemoryLedger();
 
-        $outcome = $this->sizing('{"ready":true,"missing":[],"size":"medium","estimated_lines":180,"reason":"One change."}', $ledger, ParkedTaskTable::inMemory())->run('sample', 12);
+        $outcome = $this->sizing('{"ready":true,"missing":[],"size":"medium","estimated_lines":180,"reason":"One change."}', new SizingFixture(self::createStub(ManagerRegistry::class), $ledger, 12))->run('sample', 12);
 
         self::assertSame(SizingOutcome::Ready, $outcome);
         self::assertSame(
@@ -102,26 +112,25 @@ final class SizingASampleTaskTest extends KernelTestCase
     public function testASampleTaskWithoutAnAcceptanceConditionIsParkedAndItsVerdictRecorded(): void
     {
         $ledger = new InMemoryLedger();
-        $parked = ParkedTaskTable::inMemory();
+        $fixture = new SizingFixture(self::createStub(ManagerRegistry::class), $ledger, 12);
 
-        $outcome = $this->sizing('{"ready":false,"missing":["acceptance_condition"],"size":"small","estimated_lines":25,"reason":"No done condition."}', $ledger, $parked)->run('sample', 12);
+        $outcome = $this->sizing('{"ready":false,"missing":["acceptance_condition"],"size":"small","estimated_lines":25,"reason":"No done condition."}', $fixture)->run('sample', 12);
 
         self::assertSame(SizingOutcome::Parked, $outcome);
-        self::assertSame(['sample:12'], $parked->fetchFirstColumn("SELECT project || ':' || task FROM build_parked_task"));
-        self::assertSame(['parked', ['acceptance_condition']], [$ledger->payloads()[2]['outcome'], $ledger->payloads()[2]['missing']]);
+        self::assertSame(['sample:12'], $fixture->parked->fetchFirstColumn("SELECT project || ':' || task FROM build_parked_task"));
+        self::assertSame([['sample', 12, "This task is not ready to build. It lacks: an acceptance condition.\n\n- Add the missing items to the task\n- Close the task"]], $fixture->comments->posted);
+        $record = array_last($ledger->payloads());
+        self::assertSame(['parked', ['acceptance_condition']], [$record['outcome'] ?? null, $record['missing'] ?? null]);
     }
 
-    private function sizing(string $answer, InMemoryLedger $ledger, Connection $parked): SizeTask
+    private function sizing(string $answer, SizingFixture $fixture): SizeTask
     {
         $resolver = new ConfiguredTierResolver(['sample' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'middle']]]], []);
         $platform = MockPlatformFactory::createPlatform(static fn (): string => $answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
-        $usage = new UsageLedger($ledger, new MockClock('2026-11-28 12:00:00 UTC'), new NullLogger(), StoredSerializerFactory::create());
+        $usage = new UsageLedger($fixture->ledger, new MockClock('2026-11-28 12:00:00 UTC'), new NullLogger(), StoredSerializerFactory::create());
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
-        $vendor = new SymfonyAiSizingVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), new SizingAgent(new SizingPrompt(new Fence())), $usage, $limit);
-        $reads = self::createStub(IssueReads::class);
-        $reads->method('readOpen')->willReturn(new ListedIssue(12, 'Add a cart page', 'Users see their items on /cart.', new IssueLabels(), 'owner', new DateTimeImmutable('2026-11-20 10:00:00'), null, false));
 
-        return new SizeTask($reads, $vendor, new ParkedTasks($parked, $ledger, self::createStub(ManagerRegistry::class), new MockClock('2026-11-28 12:00:00 UTC')), $ledger);
+        return $fixture->sizing(new SymfonyAiSizingVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), new SizingAgent(new SizingPrompt(new Fence())), $usage, $limit));
     }
 }

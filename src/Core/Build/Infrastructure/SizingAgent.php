@@ -14,7 +14,11 @@ use Symfony\AI\Agent\Execution\ExecutionInterface;
 use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Exception\ValidationException;
+use ReflectionMethod;
+use ReflectionParameter;
 use Symfony\AI\Platform\PlatformInterface;
+use Symfony\AI\Platform\Result\ObjectResult;
+use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 
@@ -51,6 +55,23 @@ final readonly class SizingAgent implements Sizer
             throw $exception;
         }
 
-        return $answer instanceof SizingVerdict ? $answer : null;
+        return $answer instanceof SizingVerdict && $this->holdsOnlyTheVerdictsFields($execution->getResult()) ? $answer : null;
+    }
+
+    // Checked on the answer's JSON, because the mapping drops a field it does not know, and an answer with a field the schema does not ask for is a steered one.
+    private function holdsOnlyTheVerdictsFields(ResultInterface $result): bool
+    {
+        $fields = $result instanceof ObjectResult ? json_decode($result->getText() ?? '', true) : null;
+
+        if (!is_array($fields)) {
+            return false;
+        }
+
+        $expected = array_map(static fn (ReflectionParameter $parameter): string => $parameter->name, new ReflectionMethod(SizingVerdict::class, '__construct')->getParameters());
+        $answered = array_keys($fields);
+        sort($expected);
+        sort($answered);
+
+        return $expected === $answered;
     }
 }

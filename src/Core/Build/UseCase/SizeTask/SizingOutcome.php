@@ -10,4 +10,6 @@ enum SizingOutcome: string
     case Parked = 'parked';
     // The answer was no valid verdict, so nothing was parked and nothing split.
     case Invalid = 'invalid';
+    // A ready or parked verdict on the same text is already recorded, so no call was made.
+    case AlreadySized = 'already_sized';
 }

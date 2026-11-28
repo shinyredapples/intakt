@@ -72,6 +72,21 @@ final class SizingAgentTest extends KernelTestCase
         self::assertNull($this->answerTo('{"ready":true,"missing":["observable_result"],"size":"small","estimated_lines":5,"reason":"Contradicts itself."}'));
     }
 
+    public function testANotReadyAnswerThatNamesOneGapTwiceIsNoVerdict(): void
+    {
+        self::assertNull($this->answerTo('{"ready":false,"missing":["single_outcome","single_outcome"],"size":"small","estimated_lines":5,"reason":"Repeated."}'));
+    }
+
+    public function testAnAnswerWithAFieldTheSchemaDoesNotAskForIsNoVerdict(): void
+    {
+        self::assertNull($this->answerTo('{"ready":false,"missing":["acceptance_condition"],"close":true,"size":"small","estimated_lines":20,"reason":"Incomplete."}'));
+    }
+
+    public function testAnAnswerWithoutAFieldTheSchemaAsksForIsNoVerdict(): void
+    {
+        self::assertNull($this->answerTo('{"ready":true,"missing":[],"size":"small","estimated_lines":5}'));
+    }
+
     public function testTheTitleAndBodyReachTheModelOnlyFenced(): void
     {
         $this->answerTo('{"ready":true,"missing":[],"size":"small","estimated_lines":5,"reason":"Fine."}');
