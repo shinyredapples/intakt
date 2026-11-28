@@ -17,6 +17,7 @@ use Intakt\Core\Dashboard\Domain\ProjectCard;
 use Intakt\Core\Dashboard\Infrastructure\LiveProjectCards;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\ProjectCards;
+use Intakt\Core\Dashboard\Infrastructure\ProjectCardsNotSent;
 use Intakt\Core\Dashboard\Infrastructure\ProjectCardsRoundUpdates;
 use Intakt\Core\Dashboard\Infrastructure\ProjectCardsWatcherUpdates;
 use Intakt\Core\Dashboard\UseCase\ListProjects\ListProjectsController;
@@ -30,6 +31,7 @@ use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Tests\Core\Dashboard\Infrastructure\PublishedLiveEvents;
+use Intakt\Tests\Core\Dashboard\Infrastructure\RefusingLiveEvents;
 use Intakt\Tests\Journeys\Support\StreamedPage;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -52,6 +54,7 @@ use Symfony\Component\Uid\Uuid;
 use Twig\Environment;
 
 #[CoversClass(LiveProjectCards::class)]
+#[CoversClass(ProjectCardsNotSent::class)]
 #[CoversClass(ProjectCardsRoundUpdates::class)]
 #[CoversClass(ProjectCardsWatcherUpdates::class)]
 #[CoversClass(WatcherLedger::class)]
@@ -271,6 +274,31 @@ final class ProjectsPageLiveUpdatesTest extends DashboardPageTestCase
             [['alpha', 'beta']],
             array_map(static fn (LiveEvent $event): array => new Crawler($event->turboStream)->filter('article[data-project]')->each(static fn (Crawler $card): string => (string) $card->attr('data-project')), $events->events),
         );
+    }
+
+    public function testCardsTheHubDidNotTakeAreSentOnceMore(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $hub = new RefusingLiveEvents(1);
+        $log = new BufferingLogger();
+
+        $this->cardsOfAnotherWorker($hub, $log)->publishLatest();
+
+        self::assertSame(1, $hub->refused);
+        self::assertCount(1, $hub->events);
+        self::assertSame([], $log->cleanLogs());
+    }
+
+    public function testCardsTheHubRefusedTwiceAreLoggedAsNotPublished(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $hub = new RefusingLiveEvents(2);
+        $log = new BufferingLogger();
+
+        $this->cardsOfAnotherWorker($hub, $log)->publishLatest();
+
+        self::assertSame([], $hub->events);
+        self::assertSame(['The project cards were not published.'], array_column($log->cleanLogs(), 1));
     }
 
     public function testAToolCallPushesNoCards(): void

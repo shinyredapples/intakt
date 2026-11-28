@@ -52,7 +52,7 @@ final readonly class LiveProjectCards
                 if ($this->publishedAndUnchanged($lock)) {
                     return;
                 }
-                // Boundary: a worker that yielded while this one held the lock counts on it to publish, so a failed read or render is tried once more before the failure is passed on.
+                // Boundary: a worker that yielded while this one held the lock counts on it to publish, so a failed read, render or send is tried once more before the failure is passed on.
             } catch (Throwable $failure) {
                 if ($retried) {
                     throw $failure;
@@ -78,7 +78,11 @@ final readonly class LiveProjectCards
     private function publishedOnce(): string
     {
         $cards = $this->cards->now();
-        $this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $this->twig->render(self::TEMPLATE, ['projects' => $cards])));
+
+        // A send the hub did not take fails like a failed render, because a worker that yielded counts on these cards reaching the open pages.
+        if (!$this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $this->twig->render(self::TEMPLATE, ['projects' => $cards])))) {
+            throw new ProjectCardsNotSent();
+        }
 
         return $this->signatureOf($cards);
     }
