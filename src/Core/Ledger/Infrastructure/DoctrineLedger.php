@@ -89,7 +89,7 @@ final readonly class DoctrineLedger implements Ledger
         $mapping->addRootEntityFromClassMetadata(EventRecord::class, 'event');
         $sql = 'SELECT '.$mapping->generateSelectClause().' FROM ledger_event event'
             .' WHERE event.kind = :kind AND event.subject = :subject'
-            .' AND '.$this->bytesOf('event.kind', $platform).' = :kind AND '.$this->bytesOf('event.subject', $platform).' = :subject'
+            .' AND '.$this->sameBytes('event.kind', ':kind', $platform).' AND '.$this->sameBytes('event.subject', ':subject', $platform)
             .' ORDER BY event.position DESC';
 
         $record = $manager->createNativeQuery($platform->modifyLimitQuery($sql, 1), $mapping)
@@ -186,13 +186,13 @@ final readonly class DoctrineLedger implements Ledger
         return new RecordedEvents(array_values(array_filter(array_map($this->eventOf(...), array_values($records)))));
     }
 
-    // Chosen by platform, because the supported engines have no common spelling of a byte comparison.
-    private function bytesOf(string $column, AbstractPlatform $platform): string
+    // Chosen by platform, because the supported engines have no common spelling of a byte comparison. MySQL converts both sides to utf8mb4 first, because a column may store another character set than the connection sends.
+    private function sameBytes(string $column, string $parameter, AbstractPlatform $platform): string
     {
         return match (true) {
-            $platform instanceof SQLitePlatform => $column.' COLLATE BINARY',
-            $platform instanceof PostgreSQLPlatform => $column.' COLLATE "C"',
-            $platform instanceof AbstractMySQLPlatform => 'CAST('.$column.' AS BINARY)',
+            $platform instanceof SQLitePlatform => $column.' COLLATE BINARY = '.$parameter,
+            $platform instanceof PostgreSQLPlatform => $column.' COLLATE "C" = '.$parameter,
+            $platform instanceof AbstractMySQLPlatform => 'CAST(CONVERT('.$column.' USING utf8mb4) AS BINARY) = CAST(CONVERT('.$parameter.' USING utf8mb4) AS BINARY)',
             default => throw NotSupported::new('newestOfKindAbout'),
         };
     }

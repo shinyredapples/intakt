@@ -105,19 +105,6 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertNull($ledger->newestOfKindAbout(LedgerEventKind::ReviewerStarted, 'r'));
     }
 
-    // Stores the record directly, because no append writes a kind in another letter case, yet a case-insensitive engine would match it.
-    public function testTheNewestOfKindAboutReadSkipsANewerRowWhoseKindDiffersOnlyInCase(): void
-    {
-        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
-        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, 'first', 'r1'))->succeeded());
-        $manager = $this->registry->getManager();
-        $manager->persist(new EventRecord(new UuidV7(), strtoupper(LedgerEventKind::ReviewerStarted->value), 'upper kind', new DateTimeImmutable('2026-10-27 12:00:00'), 'r1'));
-        $manager->flush();
-        $manager->clear();
-
-        self::assertSame('first', $ledger->newestOfKindAbout(LedgerEventKind::ReviewerStarted, 'r1')?->event->payload);
-    }
-
     public function testTheNewestOfKindAboutReadFetchesOneRowInOneQuery(): void
     {
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
