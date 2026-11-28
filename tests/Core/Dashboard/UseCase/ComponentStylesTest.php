@@ -263,6 +263,11 @@ final class ComponentStylesTest extends WebTestCase
         self::assertMatchesRegularExpression('/scroll-padding-bottom:\s*calc\(var\(--bar\)/', $rules['html'] ?? '');
     }
 
+    public function testOnDesktopsFocusScrollsAControlAGapAwayFromTheWindowsBottomEdge(): void
+    {
+        self::assertMatchesRegularExpression('/^html \{ scroll-padding-bottom: var\(--s8\); \}$/m', $this->componentSheet());
+    }
+
     public function testADismissedTermHidesItsTipAfterTheRuleThatShowsItOnFocusAndHover(): void
     {
         $sheet = $this->componentSheet();
