@@ -8,4 +8,7 @@ namespace Intakt\Core\Build\Contract;
 interface SplitUmbrellas
 {
     public function of(string $project): UmbrellaTasks;
+
+    // From the finished splits only, because an umbrella closes once its parts are closed, and a split that stopped before its end has filed only some of them.
+    public function finishedOf(string $project): FinishedSplits;
 }

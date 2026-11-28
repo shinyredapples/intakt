@@ -10,10 +10,14 @@ use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueComments;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubTaskCloses;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubTaskComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\NextLinks;
+use Intakt\Plugin\GitHubForge\Infrastructure\PartIssueCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use Psr\Log\NullLogger;
 use Symfony\Component\Clock\MockClock;
@@ -43,6 +47,16 @@ final class ScriptedIssue
 
     // Answered after the comment is kept, because GitHub can store a comment and still answer 502.
     public ?int $answerToAStoredPost = null;
+
+    public string $state = 'open';
+
+    /** @var list<array<mixed>> */
+    public array $changes = [];
+
+    public ?int $closeRefusal = null;
+
+    // The state GitHub answers a change with, when it is not the state it keeps.
+    public ?string $answeredState = null;
 
     public static function task(): TaskIssue
     {
@@ -77,6 +91,23 @@ final class ScriptedIssue
 
     public function comments(): GitHubIssueComments
     {
+        [$calls, $tokens] = $this->calls();
+
+        return new GitHubIssueComments($calls, $tokens, $this->repositories(), self::APP_ID);
+    }
+
+    public function closes(): GitHubTaskCloses
+    {
+        [$calls, $tokens] = $this->calls();
+
+        return new GitHubTaskCloses(new GitHubTaskComments($this->comments()), new PartIssueCalls($calls, $tokens, new NextLinks()), $this->repositories());
+    }
+
+    /**
+     * @return array{GitHubCalls, CheckedInstallationTokens}
+     */
+    private function calls(): array
+    {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $identity = new RecordedInstallation($clock, 'installation-secret')->client();
         $jwt = new AppJwt(self::APP_ID, AppKey::generate()->private, $clock);
@@ -84,9 +115,13 @@ final class ScriptedIssue
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');
         $readings = FreshReadings::at($clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
-        $calls = new GitHubCalls(new MockHttpClient($this->answer(...), 'https://api.github.com'), $readings, $tokens);
 
-        return new GitHubIssueComments($calls, new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories([self::PROJECT => ['github' => 'acme/widget']]), self::APP_ID);
+        return [new GitHubCalls(new MockHttpClient($this->answer(...), 'https://api.github.com'), $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens)];
+    }
+
+    private function repositories(): WatchedRepositories
+    {
+        return new WatchedRepositories([self::PROJECT => ['github' => 'acme/widget']]);
     }
 
     /**
@@ -97,6 +132,10 @@ final class ScriptedIssue
         $this->requests[] = $method.' '.$url;
         if (null !== $this->refusal) {
             return new MockResponse('{"message":"Refused"}', ['http_code' => $this->refusal]);
+        }
+
+        if ('PATCH' === $method) {
+            return $this->changed($options);
         }
 
         if ('GET' === $method) {
@@ -116,5 +155,21 @@ final class ScriptedIssue
         }
 
         return new MockResponse(json_encode($stored, JSON_THROW_ON_ERROR), ['http_code' => 201]);
+    }
+
+    /**
+     * @param array<mixed> $options
+     */
+    private function changed(array $options): ResponseInterface
+    {
+        if (null !== $this->closeRefusal) {
+            return new MockResponse('{"message":"Refused"}', ['http_code' => $this->closeRefusal]);
+        }
+
+        $body = $options['body'] ?? '';
+        $this->changes[] = (array) json_decode(is_string($body) ? $body : '', true, flags: JSON_THROW_ON_ERROR);
+        $this->state = 'closed';
+
+        return new MockResponse(json_encode(['number' => self::NUMBER, 'state' => $this->answeredState ?? $this->state], JSON_THROW_ON_ERROR), ['http_code' => 200]);
     }
 }
