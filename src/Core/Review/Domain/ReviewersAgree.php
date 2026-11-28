@@ -13,12 +13,10 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class ReviewersAgree
 {
-    // A code span is consumed whole, so white space inside it is never collapsed: findings about "A B" and "A  B" name different literals.
-    // An escaped backtick is consumed first, because in prose it opens no code span (CommonMark).
-    // Unicode mode makes a nonbreaking space prose white space too.
+    // Spans are consumed whole because "A B" and "A  B" name different literals, an escaped backtick first because it opens no span (CommonMark), Unicode mode because a nonbreaking space is prose white space too.
     private const string ESCAPED_BACKTICK_OR_CODE_SPAN_OR_WHITE_SPACE = '/\\\\`|(`+)(?!`).*?(?<!`)\1(?!`)|\s+/su';
 
-    // One verdict agrees with itself: a panel where one reviewer answered leaves the model nothing to reconcile, and every kept P1 or P2 is acted on either way.
+    // One verdict agrees with itself, because a panel where one reviewer answered leaves the model nothing to reconcile.
     /**
      * @param list<Verdict> $verdicts
      */
@@ -78,8 +76,7 @@ final readonly class ReviewersAgree
      */
     private function keysOf(Verdict $verdict): array
     {
-        // Serialized as a length-prefixed list, so the boundaries between severity, file and words cannot be forged by a finding's text, valid UTF-8 or not.
-        // The file counts, because the same wording at another file is another finding; the line does not, because reviewers point at neighboring lines of one defect.
+        // Serialized, so a finding's text cannot forge the boundaries; the file counts because the same wording elsewhere is another finding, the line does not because reviewers point at neighboring lines of one defect.
         $keys = array_map(
             fn (Finding $finding): string => serialize([$finding->severity->value, $finding->file, $this->words($finding->text)]),
             $verdict->findings,
@@ -90,8 +87,7 @@ final readonly class ReviewersAgree
         return $keys;
     }
 
-    // Never lower-cased, because case counts in code and a reviewer's wording is compared as given.
-    // Text that is not valid UTF-8 is compared byte for byte, so two different broken texts never collapse into one.
+    // Never lower-cased, because case counts in code; text that is not valid UTF-8 stays byte for byte, so two different broken texts never collapse into one.
     private function words(string $text): string
     {
         $words = preg_replace_callback(

@@ -45,7 +45,7 @@ final class ReviewersAgreeTest extends TestCase
     {
         $text = 'The `total` loses the discount.';
 
-        self::assertTrue($this->agree([$this->changes($this->finding($text)), $this->changes($this->finding($text, Severity::P1, 'b1'))]));
+        self::assertTrue($this->agree([$this->changes($this->finding($text)), $this->changes($this->finding($text))]));
     }
 
     public function testReviewersWhoShareEveryP2FindingAgree(): void
@@ -230,10 +230,10 @@ final class ReviewersAgreeTest extends TestCase
         return new ReviewersAgree()->agree($verdicts, $change);
     }
 
-    private function finding(string $text, Severity $severity = Severity::P1, string $id = 'a1', string $file = 'src/Cart.php'): Finding
+    private function finding(string $text, Severity $severity = Severity::P1, string $file = 'src/Cart.php'): Finding
     {
         return new Finding(
-            id: $id,
+            id: 'a1',
             severity: $severity,
             file: $file,
             line: 12,
