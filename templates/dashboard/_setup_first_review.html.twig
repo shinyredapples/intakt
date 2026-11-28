@@ -6,7 +6,7 @@
     <a class="btn {{ review_button }}" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: first_review.round}) }}">Open the review</a>
     {%- elseif first_review.sampleCanStart %}
     <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_FIRST_REVIEW')) }}" class="start-first-review">
-        <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartFirstReviewController::TOKEN_ID')) }}">
+        <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartFirstReview\\StartFirstReviewController::TOKEN_ID')) }}">
         {{ include('dashboard/components/button.html.twig', {kind: review_button, type: 'submit', label: 'Start the first review'}, with_context = false) }}
         <p class="next">Two reviewers read the sample change; its live page opens.</p>
     </form>

@@ -31,7 +31,7 @@ use Intakt\Core\Dashboard\UseCase\RunSetup\RunSetupController;
 use Intakt\Core\Dashboard\UseCase\RunSetup\SetupSteps;
 use Intakt\Core\Dashboard\UseCase\StartReview\ReviewStarts;
 use Intakt\Core\Dashboard\UseCase\StartReview\StartAnswer;
-use Intakt\Core\Dashboard\UseCase\StartReview\StartFirstReviewController;
+use Intakt\Core\Dashboard\UseCase\StartFirstReview\StartFirstReviewController;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Platform\Infrastructure\HeldCredentialRedactor;

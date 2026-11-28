@@ -51,7 +51,7 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 - Typed objects across module boundaries, never arrays; array shapes only inside a module.
 - `DateTimeImmutable` in UTC, `hrtime()` for elapsed time.
 - A handler that ignores its message names it with `handles:` and takes no parameter, because Rector removes an unused one.
-- Routes, commands, listeners and MCP tools use Symfony's attributes; route names are `<module>_<use_case>`.
+- Routes, commands, listeners and MCP tools use Symfony's attributes; route names are `<module>_<use_case>` (the route-name half is enforced by `bin/check` (`tests`)).
 - Logging, Doctrine mapping and the dependency policy: see [Conventions](docs/architecture/conventions.md).
 
 ## Tests
