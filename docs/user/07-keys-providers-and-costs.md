@@ -50,7 +50,7 @@ Each reviewer names a tier. So one changed line moves every reviewer on that tie
 
 A build went past its allowance but keeps fixing tests. It may go on while it makes progress. Two limits are meant to stop it even then: the runaway ceiling for one build, and the per-task total across its continuations. A build stopped by either keeps the commits it made, and they are checked and pushed like any other.
 
-Planned: Intakt does not watch a running build for these limits yet. Today a build ends when its session's time runs out, and it keeps its commits the same way. You can already set the limits, and they take effect once the watch is built; the [user manual](../reference/user-manual.md#the-build-limits) lists them with their defaults.
+Planned: Intakt does not watch a running build for these limits yet, so today a build ends when its session's time runs out and keeps its commits the same way. You can already set the limits ([user manual](../reference/user-manual.md#the-build-limits)). Once the watch stops a build, the ledger line of its build job step names why: no progress, the runaway ceiling or the per-task total. It names why also when the job then fails at its end, for example because Docker failed, beside the same failure text as before.
 
 ## When a provider says "slow down"
 

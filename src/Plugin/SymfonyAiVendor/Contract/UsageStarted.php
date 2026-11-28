@@ -23,6 +23,9 @@ final readonly class UsageStarted
         // The reviewer's id, so a bench can add up one reviewer's calls; left out when null, because the judge's rows and rows written before it was kept never had it.
         #[Context(normalizationContext: [AbstractObjectNormalizer::SKIP_NULL_VALUES => true])]
         public ?string $reviewer = null,
+        // The task a sizing call was made for, so its tokens are charged to the task; left out when null, because no other call names one.
+        #[Context(normalizationContext: [AbstractObjectNormalizer::SKIP_NULL_VALUES => true])]
+        public ?string $task = null,
     ) {
     }
 }

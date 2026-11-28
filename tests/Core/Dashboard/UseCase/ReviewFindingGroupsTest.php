@@ -94,6 +94,16 @@ final class ReviewFindingGroupsTest extends DashboardPageTestCase
         self::assertSame([0, 0], [$crawler->filter('#review-to-fix details')->count(), $crawler->filter('#review-to-fix .fix-row svg:not(.fix-chev)')->count()]);
     }
 
+    public function testARowOfAFindingWithATitleAndKindShowsTheKindInWordsBeforeTheTitle(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixWithTitleAndKind('round-1', 'Total off by one', 'logic');
+
+        $row = $this->browser->request('GET', '/reviews/round-1')->filter('#review-to-fix .fix-row');
+
+        self::assertSame(['Logic: Total off by one', 1], [$row->filter('.fix-title')->text(), $row->filter('.fix-title .kind-sym svg')->count()]);
+    }
+
     public function testEachRowOpensItsFindingsPage(): void
     {
         $this->givenFindingsToFixRated(['F1' => 'P3', 'F2' => 'P1']);

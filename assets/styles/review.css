@@ -117,3 +117,4 @@
 @media (min-width: 1024px) { .file-map:has(.file-map-quotes):has(.file-map-file) { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); } }
 .finding-back { margin-top: var(--s24); }
 .finding-back a { display: inline-flex; align-items: center; min-height: 44px; }
+.kind-sym { display: inline-block; vertical-align: -3px; margin-right: 6px; }

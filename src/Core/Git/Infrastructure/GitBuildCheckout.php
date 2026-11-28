@@ -43,6 +43,18 @@ final readonly class GitBuildCheckout implements BuildCheckout
     }
 
     #[Override]
+    public function refreshMirror(string $project, string $remote): void
+    {
+        try {
+            $this->mirrors->refresh($project, $remote);
+        } catch (ProcessFailure $stopped) {
+            throw BuildCheckoutFailed::stopped($stopped);
+        } catch (IOException|RepositoryAttributesRefused|LockFailure|ReportableFailure $failure) {
+            throw BuildCheckoutFailed::because($failure);
+        }
+    }
+
+    #[Override]
     public function makeClone(string $project, string $branch, string $directory): void
     {
         try {
