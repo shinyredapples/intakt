@@ -140,7 +140,8 @@ final class RankedReviewOnStoredReadingsTest extends KernelTestCase
         self::assertNotContains(LedgerEventKind::AccountCooledDown, $this->fixture->ledgerKinds());
         self::assertEquals(2, $this->fixture->entities->getConnection()->fetchOne('SELECT COUNT(*) FROM budget_window_reading'));
         $pick = $this->picks()->latestOf(Provider::ClaudeCode);
-        self::assertEquals(new Account(Provider::ClaudeCode, 'team'), $pick?->picked);
+        self::assertNotNull($pick);
+        self::assertEquals(new Account(Provider::ClaudeCode, 'team'), $pick->picked);
         self::assertEquals([new LeftOutAccount(new Account(Provider::ClaudeCode, Account::DEFAULT), LeftOutCause::AtWeeklyCeiling, $this->fixture->clock->now()->modify('+2 days'))], $pick->leftOut);
     }
 
@@ -180,11 +181,6 @@ final class RankedReviewOnStoredReadingsTest extends KernelTestCase
         self::assertSame(ReadingOutcome::Recorded, $this->measured->record($reading));
     }
 
-    private function picks(): LedgerAccountPicks
-    {
-        return new LedgerAccountPicks($this->fixture->ledger(), $this->fixture->ledgerPayloads(), StoredSerializerFactory::create(), new NullLogger());
-    }
-
     private function vendorOnTwoAccounts(): Vendor
     {
         $clock = $this->fixture->clock;
@@ -201,6 +197,11 @@ final class RankedReviewOnStoredReadingsTest extends KernelTestCase
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $clock, $servers);
 
         return new AccountLimitedVendor($vendor, $resolver, $cooldowns);
+    }
+
+    private function picks(): LedgerAccountPicks
+    {
+        return new LedgerAccountPicks($this->fixture->ledger(), $this->fixture->ledgerPayloads(), StoredSerializerFactory::create(), new NullLogger());
     }
 
     private function answering(string $name): PlatformInterface

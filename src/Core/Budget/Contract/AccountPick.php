@@ -9,7 +9,7 @@ use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// One start's pick as the ledger holds it: the account the call went to first, or none, and every account left out with its cause.
+// Read back from the ledger rather than kept in memory, because the Team page runs in another process than the start that picked (design: Budget and model planner, Order of use, D6).
 #[Exclude]
 final readonly class AccountPick
 {

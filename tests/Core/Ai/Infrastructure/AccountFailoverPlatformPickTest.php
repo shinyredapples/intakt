@@ -37,6 +37,7 @@ use Symfony\Component\Clock\MockClock;
 
 // Recorded readings drive each start, so the recorded pick is the one measured room gives.
 #[CoversClass(AccountFailoverPlatform::class)]
+#[CoversClass(CoolingAccounts::class)]
 #[CoversClass(MeasuredRoomRanking::class)]
 #[UsesClass(AccountPlatform::class)]
 #[UsesClass(ModelWaits::class)]

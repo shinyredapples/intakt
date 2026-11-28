@@ -67,8 +67,8 @@ final class LedgerAccountPicksTest extends TestCase
     {
         $picks = $this->picks();
         $picks->record(Provider::ClaudeCode, new RankedAccounts([], [
-            $this->leftOut(Account::DEFAULT, LeftOutCause::AtWeeklyCeiling, '2026-11-30T12:00:00+00:00'),
-            $this->leftOut('team', LeftOutCause::AtShortWindowCeiling, '2026-11-28T15:00:00+00:00'),
+            $this->leftOut(Account::DEFAULT, LeftOutCause::AtWeeklyCeiling, new DateTimeImmutable('2026-11-30T12:00:00+00:00')),
+            $this->leftOut('team', LeftOutCause::AtShortWindowCeiling, new DateTimeImmutable('2026-11-28T15:00:00+00:00')),
             new LeftOutAccount(new Account(Provider::ClaudeCode, 'spare'), LeftOutCause::CoolingDown, null),
         ]));
 
@@ -151,11 +151,11 @@ final class LedgerAccountPicksTest extends TestCase
 
     private function teamPickedWhileDefaultIsAtItsWeeklyCeiling(): RankedAccounts
     {
-        return new RankedAccounts([new Account(Provider::ClaudeCode, 'team')], [$this->leftOut(Account::DEFAULT, LeftOutCause::AtWeeklyCeiling, '2026-11-30T12:00:00+00:00')]);
+        return new RankedAccounts([new Account(Provider::ClaudeCode, 'team')], [$this->leftOut(Account::DEFAULT, LeftOutCause::AtWeeklyCeiling, new DateTimeImmutable('2026-11-30T12:00:00+00:00'))]);
     }
 
-    private function leftOut(string $name, LeftOutCause $cause, string $resetsAt): LeftOutAccount
+    private function leftOut(string $name, LeftOutCause $cause, DateTimeImmutable $resetsAt): LeftOutAccount
     {
-        return new LeftOutAccount(new Account(Provider::ClaudeCode, $name), $cause, new DateTimeImmutable($resetsAt));
+        return new LeftOutAccount(new Account(Provider::ClaudeCode, $name), $cause, $resetsAt);
     }
 }
