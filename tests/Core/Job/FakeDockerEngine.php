@@ -42,7 +42,7 @@ final class FakeDockerEngine
     /** @var array<string, int> */
     private array $waits = [];
 
-    /** @var array<string, list<string>> */
+    /** @var array<string, list<mixed>> */
     private array $signals = [];
 
     /** @var array<string, list<string>> */
@@ -124,7 +124,7 @@ final class FakeDockerEngine
     }
 
     /**
-     * @return list<string>
+     * @return list<mixed>
      */
     public function signalsOf(string $job): array
     {
@@ -443,7 +443,7 @@ final class FakeDockerEngine
      */
     private function kill(FakeContainer $container, array $options): MockResponse
     {
-        $signal = (string) (((array) ($options['query'] ?? []))['signal'] ?? 'KILL');
+        $signal = ((array) ($options['query'] ?? []))['signal'] ?? 'KILL';
 
         // A signal that is no KILL reaches the job's script, which ends its session and exits on its own, so the job stops with its own status.
         if ('KILL' !== $signal) {

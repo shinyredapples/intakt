@@ -6,7 +6,7 @@ namespace Intakt\Core\Build\UseCase\RunBuildJob;
 
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Collects what the events of one log show, one event at a time, in the order the CLI wrote them.
+// Taken in the order the CLI wrote the events, because a result only closes the call that came before it.
 #[Exclude]
 final class BuildLogTally
 {
@@ -18,7 +18,7 @@ final class BuildLogTally
     /** @var list<string> */
     private array $changes = [];
 
-    /** @var array<string, bool> call id => whether the call runs the tests or the checks */
+    /** @var array<string, bool> */
     private array $open = [];
 
     /** @var array<string, string> */

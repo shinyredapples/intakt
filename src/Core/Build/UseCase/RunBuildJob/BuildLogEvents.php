@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\RunBuildJob;
 
-// Reads the shapes of the CLI's stream-json events, none of which can be trusted: a field of another type counts as absent.
+// Typed reads, because the log is the builder's to write, so a field of another type must count as absent and never reach a calculation.
 final readonly class BuildLogEvents
 {
     private const array USAGE_COUNTS = ['input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens'];
@@ -77,7 +77,7 @@ final readonly class BuildLogEvents
         }
 
         $before = self::withoutWhitespace(self::textAt($input, 'old_string'));
-        // A MultiEdit carries its changes in a list of its own.
+        // Read from the list a MultiEdit carries, because its changes are not in the fields of a single edit.
         $edits = self::arrayAt($input, 'edits');
         $after = self::withoutWhitespace(self::textAt($input, 'new_string').self::textAt($input, 'content').([] === $edits ? '' : json_encode($edits, JSON_THROW_ON_ERROR)));
 
