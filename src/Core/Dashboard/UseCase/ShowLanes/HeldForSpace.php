@@ -51,18 +51,15 @@ final readonly class HeldForSpace
     }
 
     /**
-     * The mirrors folder and each mirror in it, because a mirror can sit on a disk of its own and UpdateMirror measures that one.
-     *
      * @return list<string>
      */
     private function folders(): array
     {
+        // Needed because a mirror can sit on a disk of its own, which UpdateMirror measures.
         $folders = [NearestFolder::of($this->mirrorsDirectory)];
-        foreach (glob($this->mirrorsDirectory.'/*', GLOB_ONLYDIR) ?: [] as $mirror) {
-            $folders[] = $mirror;
-        }
+        $mirrors = glob($this->mirrorsDirectory.'/*', GLOB_ONLYDIR);
 
-        return $folders;
+        return false === $mirrors ? $folders : [...$folders, ...$mirrors];
     }
 
     /**
@@ -122,11 +119,6 @@ final readonly class HeldForSpace
         return $pair;
     }
 
-    private function exactBytes(int $bytes): string
-    {
-        return number_format($bytes).(1 === $bytes ? ' byte' : ' bytes');
-    }
-
     private function bytes(int $bytes): string
     {
         $size = (float) $bytes;
@@ -144,5 +136,10 @@ final readonly class HeldForSpace
         }
 
         return (str_ends_with($number, '.0') ? substr($number, 0, -2) : $number).' '.self::UNITS[$unit];
+    }
+
+    private function exactBytes(int $bytes): string
+    {
+        return number_format($bytes).(1 === $bytes ? ' byte' : ' bytes');
     }
 }
