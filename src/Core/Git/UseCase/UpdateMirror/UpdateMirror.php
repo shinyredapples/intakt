@@ -63,9 +63,8 @@ final readonly class UpdateMirror
         return $this->bringUpToDate($project, $remote, $path);
     }
 
+    // Never held below a disk floor, because it serves work already running, which a floor does not cut.
     /**
-     * Never held below a disk floor, because it serves work already running, which a floor does not cut.
-     *
      * @throws ProjectNameRefused
      * @throws NetworkGitFailed
      * @throws MirrorNotUpdated
@@ -77,6 +76,25 @@ final readonly class UpdateMirror
     public function refresh(string $project, string $remote): string
     {
         return $this->bringUpToDate($project, $remote, $this->mirrors->pathOf($project));
+    }
+
+    private function holdBelowTheDiskFloors(string $path): void
+    {
+        // The mirror itself when it exists, because it may be mounted on a disk of its own.
+        $folder = NearestFolder::of($path);
+
+        try {
+            $hold = $this->disk->holdAt($folder);
+        } catch (FreeSpaceUnreadable $unreadable) {
+            throw MirrorNotUpdated::at($path, $unreadable->getMessage(), $unreadable);
+        } catch (ProcessTimedOutException $timedOut) {
+            // Fixed words and no cause, as for git, so a timeout names df and not the git step around it.
+            throw MirrorNotUpdated::at($path, new FreeSpaceUnreadable($folder, sprintf('df timed out after %s seconds', $timedOut->getExceededTimeout()))->getMessage());
+        }
+
+        if ($hold instanceof DiskHold) {
+            throw MirrorNotUpdated::at($path, $hold->reason());
+        }
     }
 
     private function bringUpToDate(string $project, string $remote, string $path): string
@@ -102,25 +120,6 @@ final readonly class UpdateMirror
         }
 
         return Path::makeAbsolute($remote, $this->mirrors->directory);
-    }
-
-    private function holdBelowTheDiskFloors(string $path): void
-    {
-        // The mirror itself when it exists, because it may be mounted on a disk of its own.
-        $folder = NearestFolder::of($path);
-
-        try {
-            $hold = $this->disk->holdAt($folder);
-        } catch (FreeSpaceUnreadable $unreadable) {
-            throw MirrorNotUpdated::at($path, $unreadable->getMessage(), $unreadable);
-        } catch (ProcessTimedOutException $timedOut) {
-            // Fixed words and no cause, as for git, so a timeout names df and not the git step around it.
-            throw MirrorNotUpdated::at($path, new FreeSpaceUnreadable($folder, sprintf('df timed out after %s seconds', $timedOut->getExceededTimeout()))->getMessage());
-        }
-
-        if ($hold instanceof DiskHold) {
-            throw MirrorNotUpdated::at($path, $hold->reason());
-        }
     }
 
     private function isMirror(string $path): bool

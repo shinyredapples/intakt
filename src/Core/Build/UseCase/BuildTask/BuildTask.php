@@ -194,17 +194,6 @@ final readonly class BuildTask
         return null;
     }
 
-    private function refreshMirror(BuildTaskRequest $request): ?string
-    {
-        try {
-            $this->checkout->refreshMirror($request->project, $request->remote);
-        } catch (BuildCheckoutFailed $failure) {
-            return $failure->getMessage();
-        }
-
-        return null;
-    }
-
     private function makeClone(BuildTaskRequest $request): ?string
     {
         try {
@@ -277,6 +266,17 @@ final readonly class BuildTask
         $checked = $this->prePushChecks->resultOf($request, $this->bundleIn($results), TaskKind::fromLabels(new Labels(...$task->labels)));
 
         return $checked->failure ?? $this->textChecks->failureOf($request, $task->body, $this->bodyOf($this->textIn($results))) ?? $checked->runs;
+    }
+
+    private function refreshMirror(BuildTaskRequest $request): ?string
+    {
+        try {
+            $this->checkout->refreshMirror($request->project, $request->remote);
+        } catch (BuildCheckoutFailed $failure) {
+            return $failure->getMessage();
+        }
+
+        return null;
     }
 
     /**
