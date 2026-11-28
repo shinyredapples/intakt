@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Budget\Infrastructure;
 
+use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\AccountPick;
@@ -55,7 +56,7 @@ final readonly class LedgerAccountPicks implements AccountPicks
 
     private function payloadOf(Provider $provider, RankedAccounts $pick): AccountPicked
     {
-        $leftOut = array_map(static fn (LeftOutAccount $left): PickedLeftOut => new PickedLeftOut($left->account->name, $left->cause, $left->resetsAt), $pick->leftOut);
+        $leftOut = array_map(static fn (LeftOutAccount $left): PickedLeftOut => new PickedLeftOut($left->account->name, $left->cause, $left->resetsAt?->format(DATE_ATOM)), $pick->leftOut);
 
         return new AccountPicked($provider, array_first($pick->inOrder)?->name, $leftOut);
     }
@@ -73,8 +74,25 @@ final readonly class LedgerAccountPicks implements AccountPicks
             return null;
         }
 
-        $leftOut = array_map(static fn (PickedLeftOut $left): LeftOutAccount => new LeftOutAccount(new Account($provider, $left->account), $left->cause, $left->resetsAt), $row->leftOut);
+        $resets = array_map(self::resetOf(...), $row->leftOut);
+        if (in_array(false, $resets, true)) {
+            return null;
+        }
+
+        $leftOut = array_map(static fn (PickedLeftOut $left, ?DateTimeImmutable $reset): LeftOutAccount => new LeftOutAccount(new Account($provider, $left->account), $left->cause, $reset), $row->leftOut, $resets);
 
         return new AccountPick($provider, null === $row->picked ? null : new Account($provider, $row->picked), $leftOut, $recorded->recordedAt);
+    }
+
+    // A reset that does not format back to its own text is refused, because PHP rolls February 30 over into March and accepts other offset forms.
+    private static function resetOf(PickedLeftOut $left): DateTimeImmutable|false|null
+    {
+        if (null === $left->resetsAt) {
+            return null;
+        }
+
+        $reset = DateTimeImmutable::createFromFormat(DATE_ATOM, $left->resetsAt);
+
+        return false !== $reset && $reset->format(DATE_ATOM) === $left->resetsAt ? $reset : false;
     }
 }

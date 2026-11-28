@@ -153,6 +153,8 @@ final class LedgerAccountPicksTest extends TestCase
         yield 'left-out accounts keyed by name' => ['{"provider":"claude_code","picked":null,"left_out":{"spare":{"account":"spare","cause":"weekly-ceiling","resets_at":null}}}'];
         yield 'a relative reset' => ['{"provider":"claude_code","picked":null,"left_out":[{"account":"spare","cause":"weekly-ceiling","resets_at":"tomorrow"}]}'];
         yield 'a reset without its offset' => ['{"provider":"claude_code","picked":null,"left_out":[{"account":"spare","cause":"weekly-ceiling","resets_at":"2026-11-30 12:00:00"}]}'];
+        yield 'an impossible reset date' => ['{"provider":"claude_code","picked":null,"left_out":[{"account":"spare","cause":"weekly-ceiling","resets_at":"2026-02-30T12:00:00+00:00"}]}'];
+        yield 'a reset with an offset outside the stored form' => ['{"provider":"claude_code","picked":null,"left_out":[{"account":"spare","cause":"weekly-ceiling","resets_at":"2026-11-30T12:00:00+0000"}]}'];
         yield 'no left-out list' => ['{"provider":"claude_code","picked":"team"}'];
     }
 
