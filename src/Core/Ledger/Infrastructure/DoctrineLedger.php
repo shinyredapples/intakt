@@ -7,9 +7,15 @@ namespace Intakt\Core\Ledger\Infrastructure;
 use Closure;
 use DateTimeZone;
 use Doctrine\DBAL\Exception;
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
+use Doctrine\DBAL\Platforms\AbstractPlatform;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Exception\EntityManagerClosed;
+use Doctrine\ORM\Query\ResultSetMappingBuilder;
 use Doctrine\ORM\QueryBuilder;
+use LogicException;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -73,17 +79,20 @@ final readonly class DoctrineLedger implements Ledger
         return $this->eventsOf(array_filter($this->recordsOf(['kind' => $kind->value, 'subject' => $subject]), static fn (EventRecord $record): bool => $record->subject() === $subject));
     }
 
-    // A newest row whose subject differs only in case means the collation ignores case, so the exact subject's rows are read and filtered as readOfKindAbout() does.
+    // The plain comparison lets the index find the rows, and a byte comparison beside it keeps the exact subject before the limit, because a collation that ignores case would otherwise let a newer case variant take the one row.
     public function newestOfKindAbout(LedgerEventKind $kind, string $subject): ?RecordedEvent
     {
-        $newest = array_first($this->registry->getManager()->getRepository(EventRecord::class)->findBy(['kind' => $kind->value, 'subject' => $subject], ['position' => 'DESC'], 1));
-        if (!$newest instanceof EventRecord) {
-            return null;
-        }
+        $manager = $this->registry->getManager();
+        assert($manager instanceof EntityManagerInterface);
+        $mapping = new ResultSetMappingBuilder($manager);
+        $mapping->addRootEntityFromClassMetadata(EventRecord::class, 'r');
+        $platform = $manager->getConnection()->getDatabasePlatform();
+        $sql = sprintf('SELECT %s FROM %s r WHERE r.kind = :kind AND r.subject = :subject AND %s ORDER BY r.position DESC',$mapping->generateSelectClause(), $manager->getClassMetadata(EventRecord::class)->getTableName(), self::exactSubjectOn($platform));
 
-        $events = $newest->subject() === $subject ? $this->eventsOf([$newest]) : $this->readOfKindAbout($kind, $subject);
+        /** @var list<EventRecord> $newest */
+        $newest = $manager->createNativeQuery($platform->modifyLimitQuery($sql, 1), $mapping)->setParameters(['kind' => $kind->value, 'subject' => $subject])->getResult();
 
-        return array_last(iterator_to_array($events, false));
+        return array_first(iterator_to_array($this->eventsOf($newest), false));
     }
 
     public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
@@ -181,6 +190,17 @@ final readonly class DoctrineLedger implements Ledger
         }
 
         return new RecordedEvents($events);
+    }
+
+    // Each platform the install supports spells a byte comparison its own way, and none ignores case.
+    private static function exactSubjectOn(AbstractPlatform $platform): string
+    {
+        return match (true) {
+            $platform instanceof SQLitePlatform => 'r.subject = :subject COLLATE BINARY',
+            $platform instanceof AbstractMySQLPlatform => 'CAST(r.subject AS BINARY) = CAST(:subject AS BINARY)',
+            $platform instanceof PostgreSQLPlatform => 'r.subject = :subject COLLATE "C"',
+            default => throw new LogicException(sprintf('The ledger cannot compare subjects exactly on %s.', $platform::class)),
+        };
     }
 
     // The id takes its time from the same moment, so the id of an event carries when it was stored.

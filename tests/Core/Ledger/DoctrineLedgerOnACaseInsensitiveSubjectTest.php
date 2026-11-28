@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ledger;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Driver;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Platforms\SQLServerPlatform;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
@@ -17,6 +19,7 @@ use Intakt\Core\Ledger\Domain\EventRecord;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
 use Intakt\Tests\Support\KernelTestCase;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -34,6 +37,7 @@ use Symfony\Component\Clock\MockClock;
 final class DoctrineLedgerOnACaseInsensitiveSubjectTest extends KernelTestCase
 {
     private DoctrineLedger $ledger;
+    private EntityManagerInterface $manager;
 
     public function testAReadAboutASubjectThatDiffersOnlyInCaseReadsNothing(): void
     {
@@ -65,14 +69,39 @@ final class DoctrineLedgerOnACaseInsensitiveSubjectTest extends KernelTestCase
         self::assertSame('second', $this->ledger->newestOfKindAbout(LedgerEventKind::AccountPicked, 'r1')?->event->payload);
     }
 
+    public function testTheNewestEventAboutTheExactSubjectLoadsOnlyThatRowWhenALaterOneDiffersOnlyInCase(): void
+    {
+        foreach (['first' => 'r1', 'second' => 'r1', 'other case' => 'R1'] as $payload => $subject) {
+            self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::AccountPicked, $payload, $subject))->succeeded());
+        }
+        $this->manager->clear();
+
+        $this->ledger->newestOfKindAbout(LedgerEventKind::AccountPicked, 'r1');
+
+        self::assertCount(1, $this->manager->getUnitOfWork()->getIdentityMap()[EventRecord::class] ?? []);
+    }
+
+    public function testTheNewestEventOnADatabaseWithoutAKnownExactComparisonIsRefused(): void
+    {
+        $driver = self::createStub(Driver::class);
+        $driver->method('getDatabasePlatform')->willReturn(new SQLServerPlatform());
+        $registry = self::createStub(ManagerRegistry::class);
+        $registry->method('getManager')->willReturn($this->managerOn(new Connection([], $driver)));
+
+        $this->expectException(LogicException::class);
+
+        new DoctrineLedger($registry, new MockClock('2026-11-22 12:00:00'))->newestOfKindAbout(LedgerEventKind::AccountPicked, 'r1');
+    }
+
     protected function setUp(): void
     {
         $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
         $connection->executeStatement('CREATE TABLE ledger_event (position INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, id CHAR(36) NOT NULL, kind VARCHAR(32) NOT NULL, payload CLOB NOT NULL, recorded_at DATETIME NOT NULL, subject VARCHAR(255) DEFAULT NULL COLLATE NOCASE)');
         $connection->executeStatement('CREATE INDEX ledger_event_subject ON ledger_event (kind, subject, position)');
 
+        $this->manager = $this->managerOn($connection);
         $registry = self::createStub(ManagerRegistry::class);
-        $registry->method('getManager')->willReturn($this->managerOn($connection));
+        $registry->method('getManager')->willReturn($this->manager);
         $this->ledger = new DoctrineLedger($registry, new MockClock('2026-11-22 12:00:00'));
     }
 
