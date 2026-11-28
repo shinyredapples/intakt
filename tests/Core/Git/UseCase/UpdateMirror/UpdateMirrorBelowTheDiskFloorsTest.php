@@ -80,6 +80,36 @@ final class UpdateMirrorBelowTheDiskFloorsTest extends TestCase
         self::assertSame($before, $this->mainOf($path));
     }
 
+    public function testAFolderThatIsNoMirrorIsHeldWhenOnlyTheMirrorsFolderWhereItsReplacementIsClonedIsBelowTheFloor(): void
+    {
+        new Filesystem()->mkdir($this->mirrors.'/alpha.git');
+        $reader = self::createStub(FreeSpaceReader::class);
+        $reader->method('freeInodes')->willReturn(self::INODES);
+        $reader->method('freeBytes')->willReturnCallback(fn (string $folder): int => $folder === $this->mirrors ? 0 : self::BYTES);
+
+        try {
+            $this->updateReadingThrough($reader);
+            self::fail('The update cloned into staging in a mirrors folder whose disk is below the floor.');
+        } catch (MirrorNotUpdated $held) {
+            self::assertStringContainsString(sprintf('the disk of %s holds new work', $this->mirrors), $held->getMessage());
+        }
+
+        self::assertSame(['alpha.git'], array_values(array_diff(scandir($this->mirrors), ['.', '..'])));
+        self::assertFileDoesNotExist($this->mirrors.'/alpha.git/HEAD');
+    }
+
+    public function testAFolderThatIsNoMirrorIsReplacedWhenOnlyThatFolderReadsBelowTheFloor(): void
+    {
+        new Filesystem()->mkdir($this->mirrors.'/alpha.git');
+        $reader = self::createStub(FreeSpaceReader::class);
+        $reader->method('freeInodes')->willReturn(self::INODES);
+        $reader->method('freeBytes')->willReturnCallback(fn (string $folder): int => $folder === $this->mirrors.'/alpha.git' ? 0 : self::BYTES);
+
+        $path = $this->updateReadingThrough($reader);
+
+        self::assertSame($this->remote->objectAt('main'), $this->mainOf($path));
+    }
+
     public function testARefreshForWorkAlreadyRunningGoesAheadBelowTheFloors(): void
     {
         $this->update();

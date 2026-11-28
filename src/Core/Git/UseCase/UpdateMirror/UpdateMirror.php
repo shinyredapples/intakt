@@ -80,8 +80,8 @@ final readonly class UpdateMirror
 
     private function holdBelowTheDiskFloors(string $path): void
     {
-        // The mirror itself when it exists, because it may be mounted on a disk of its own.
-        $folder = NearestFolder::of($path);
+        // Where the update writes: a fetch fills the mirror itself, which may be mounted on a disk of its own, while a first clone or the replacement of a folder that is no mirror goes to staging in the mirrors folder.
+        $folder = NearestFolder::of($this->isMirror($path) ? $path : $this->mirrors->directory);
 
         try {
             $hold = $this->disk->holdAt($folder);
