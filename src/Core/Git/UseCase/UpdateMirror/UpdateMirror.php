@@ -58,11 +58,15 @@ final readonly class UpdateMirror
     public function update(string $project, string $remote): string
     {
         $path = $this->mirrors->pathOf($project);
-        $mirror = $this->isMirror($path);
-        $this->holdBelowTheDiskFloors($path, $mirror);
-        $this->mustStillBe($path, $mirror);
+        $destination = $this->destinationOf($path);
+        $this->holdBelowTheDiskFloors($path, $destination);
 
-        return $this->bringUpToDate($project, $remote, $path, $mirror);
+        // Asked again, because a mirror removed or published during the reading would send the write to a disk that was not measured; the next update measures again.
+        if ($this->destinationOf($path) !== $destination) {
+            throw MirrorNotUpdated::at($path, 'the mirror changed while its disk was measured');
+        }
+
+        return $this->writeTo($project, $remote, $destination);
     }
 
     // Never held below a disk floor, because it serves work already running, which a floor does not cut.
@@ -77,15 +81,18 @@ final readonly class UpdateMirror
      */
     public function refresh(string $project, string $remote): string
     {
-        $path = $this->mirrors->pathOf($project);
-
-        return $this->bringUpToDate($project, $remote, $path, $this->isMirror($path));
+        return $this->writeTo($project, $remote, $this->destinationOf($this->mirrors->pathOf($project)));
     }
 
-    private function holdBelowTheDiskFloors(string $path, bool $mirror): void
+    private function destinationOf(string $path): string
     {
         // Because the floors guard the folder the update writes to: a fetch fills the mirror itself, which may be mounted on a disk of its own, while a first clone or the replacement of a folder that is no mirror goes to staging in the mirrors folder.
-        $folder = NearestFolder::of($mirror ? $path : $this->mirrors->directory);
+        return $this->isMirror($path) ? $path : $this->mirrors->directory;
+    }
+
+    private function holdBelowTheDiskFloors(string $path, string $destination): void
+    {
+        $folder = NearestFolder::of($destination);
 
         try {
             $hold = $this->disk->holdAt($folder);
@@ -101,19 +108,13 @@ final readonly class UpdateMirror
         }
     }
 
-    private function mustStillBe(string $path, bool $mirror): void
+    private function writeTo(string $project, string $remote, string $destination): string
     {
-        // Because the measured folder follows from that answer: a mirror removed or published during the reading would send the write to a disk that was not measured. The next update measures again.
-        if ($this->isMirror($path) !== $mirror) {
-            throw MirrorNotUpdated::at($path, 'the mirror changed while its disk was measured');
-        }
-    }
-
-    private function bringUpToDate(string $project, string $remote, string $path, bool $mirror): string
-    {
+        $path = $this->mirrors->pathOf($project);
         $remote = $this->fromMirrorsDirectory($remote);
 
-        if ($mirror) {
+        // Decided by the folder that was measured, never by a new look at the path, so the write lands on the disk the floors were checked on.
+        if ($destination === $path) {
             $this->fill($path, $remote);
 
             return $path;
@@ -122,16 +123,6 @@ final readonly class UpdateMirror
         $this->createMirror($project, $remote, $path);
 
         return $path;
-    }
-
-    private function fromMirrorsDirectory(string $remote): string
-    {
-        // Git reads a relative path from its working directory, which is the mirrors folder for the clone but the mirror for a fetch: resolved once, so the second update names the repository the first one cloned. A colon before any slash is a scheme or a host, which git itself never reads as a path.
-        if ('' === $remote || str_starts_with($remote, '/') || 1 === preg_match('#^[^/]*:#', $remote)) {
-            return $remote;
-        }
-
-        return Path::makeAbsolute($remote, $this->mirrors->directory);
     }
 
     private function isMirror(string $path): bool
@@ -149,6 +140,16 @@ final readonly class UpdateMirror
         }
 
         return $bare->isSuccessful() && 'true' === trim($bare->getOutput());
+    }
+
+    private function fromMirrorsDirectory(string $remote): string
+    {
+        // Git reads a relative path from its working directory, which is the mirrors folder for the clone but the mirror for a fetch: resolved once, so the second update names the repository the first one cloned. A colon before any slash is a scheme or a host, which git itself never reads as a path.
+        if ('' === $remote || str_starts_with($remote, '/') || 1 === preg_match('#^[^/]*:#', $remote)) {
+            return $remote;
+        }
+
+        return Path::makeAbsolute($remote, $this->mirrors->directory);
     }
 
     private function fill(string $repository, string $remote): void
