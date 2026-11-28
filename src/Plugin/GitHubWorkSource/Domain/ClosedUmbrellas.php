@@ -10,8 +10,8 @@ use Intakt\Core\Build\Contract\FinishedSplit;
 final readonly class ClosedUmbrellas
 {
     /**
-     * @param list<FinishedSplit>  $closed
-     * @param array<int, string>   $stayedOpen the reason of each umbrella the forge did not close, by its number
+     * @param list<FinishedSplit> $closed
+     * @param array<int, string>  $stayedOpen the reason of each umbrella the forge did not close, by its number
      */
     public function __construct(
         public array $closed,
