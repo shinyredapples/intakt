@@ -152,6 +152,18 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         self::assertSame(['build1.tmp: tracked, but .gitignore excludes it'], $result->findings);
     }
 
+    public function testTheDocumentedUntrackCommandWithAShellQuotedGlobNameUntracksOnlyThatFile(): void
+    {
+        $sandbox = $this->repositoryIgnoring("*.tmp\n!build1.tmp\n");
+        $sandbox->write('build[1].tmp', "data\n");
+        $sandbox->write('build1.tmp', "data\n");
+        $sandbox->git('add', '--force', '--', 'build[1].tmp', 'build1.tmp');
+
+        $sandbox->runScript("git --literal-pathspecs rm --cached -- 'build[1].tmp'");
+
+        self::assertSame("build1.tmp\n", $sandbox->git('ls-files', '--', '*.tmp')->output);
+    }
+
     public function testAQuotedPathTypedBetweenDollarQuotesUntracksTheFileItNames(): void
     {
         $sandbox = $this->repositoryIgnoring("*.tmp\n");
