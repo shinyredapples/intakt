@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Build\Infrastructure;
 
 use Intakt\Core\Build\Contract\BuildServices;
 use Intakt\Core\Build\Domain\BuildLimits;
+use Intakt\Core\Build\Domain\BuildLimitsRefused;
 use Intakt\Core\Build\Infrastructure\CheckBuildLimitsPass;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -16,6 +17,7 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 
 #[CoversClass(CheckBuildLimitsPass::class)]
 #[UsesClass(BuildLimits::class)]
+#[UsesClass(BuildLimitsRefused::class)]
 final class CheckBuildLimitsPassTest extends TestCase
 {
     public function testWholeNumberLimitsPassTheContainerBuild(): void
@@ -111,6 +113,18 @@ final class CheckBuildLimitsPassTest extends TestCase
         $this->expectExceptionMessageIs('The build limits under parameters: are refused: The runaway ceiling of 999 tokens is below the allowance of 1000 tokens.');
 
         new CheckBuildLimitsPass()->process($container);
+    }
+
+    public function testTheRefusalOfTheBuildLimitsIsKeptAsTheCauseOfTheContainerBuildFailure(): void
+    {
+        $container = $this->containerWith([BuildServices::CEILING_TOKENS => 999]);
+
+        try {
+            new CheckBuildLimitsPass()->process($container);
+            self::fail('The container build accepted a runaway ceiling below the allowance.');
+        } catch (InvalidArgumentException $refused) {
+            self::assertInstanceOf(BuildLimitsRefused::class, $refused->getPrevious());
+        }
     }
 
     /**

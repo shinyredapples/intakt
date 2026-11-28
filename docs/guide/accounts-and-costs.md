@@ -14,7 +14,7 @@ You can give Intakt any mix of these, per AI company, and it treats them as one 
 
 This part is planned, not built yet ([details](../design/05-architecture/06-budget-and-model-planner.md#order-of-use)). An API key is used only after your subscriptions: when none of them has room left. You don't have to set a cap. You can set a weekly one for one account or for the whole install; without one, the money on the account is the limit. If the AI company says the balance is gone or a payment failed, Intakt stops using that account, shows why on the board, and tells you once, because only you can top it up.
 
-Planned as well: if a subscription can bill **overage** (extra usage past its allowance), Intakt asks at setup, treats the account like an API key past the limit, and applies your spending cap if you set one. Some companies' terms restrict automated use of consumer plans; Intakt says which plans its terms allow, next to each account.
+Planned as well: if a subscription can bill **overage** (extra usage past its allowance), Intakt asks at setup, checks with the company whether overage is really on (the company's answer wins over yours), treats the account like an API key past the limit, and applies your spending cap if you set one. If overage runs out of credit or fails to bill, only the overage is set aside; the subscription keeps working. Some companies' terms restrict automated use of consumer plans; Intakt says which plans its terms allow, next to each account.
 
 You can add more than one account of the same kind from the same company, for example two subscriptions. Intakt watches each one separately, and all of them work at the same time (see [every account works at once](#every-account-works-at-once), planned).
 

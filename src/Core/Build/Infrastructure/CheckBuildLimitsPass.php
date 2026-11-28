@@ -6,6 +6,7 @@ namespace Intakt\Core\Build\Infrastructure;
 
 use Intakt\Core\Build\Contract\BuildServices;
 use Intakt\Core\Build\Domain\BuildLimits;
+use Intakt\Core\Build\Domain\BuildLimitsRefused;
 use InvalidArgumentException;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -27,7 +28,7 @@ final readonly class CheckBuildLimitsPass implements CompilerPassInterface
 
         try {
             new BuildLimits(...$limits);
-        } catch (InvalidArgumentException $refused) {
+        } catch (BuildLimitsRefused $refused) {
             throw new InvalidArgumentException(sprintf('The build limits under parameters: are refused: %s', $refused->getMessage()), $refused->getCode(), previous: $refused);
         }
     }
