@@ -9,6 +9,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Budget\Contract\InstallWideFailures;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Watcher\Domain\HeadFailure;
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
@@ -41,12 +42,25 @@ final readonly class FailedHeads
 
     public function backOff(string $project, OpenChange $head, Throwable $failure): void
     {
+        if (self::causedBy($failure, NewWorkHeld::class)) {
+            $this->waitForRoomOnTheDisk($project, $head);
+
+            return;
+        }
+
         $failures = $this->pending->failuresOf($project, $head) + 1;
         $headFailure = new HeadFailure($project, $head, $this->causeOf($failure));
         $retryAt = $this->retryAt($failures);
 
         $this->reportToTheInstall($this->itemOf($project, $head), $failure);
         $this->recordOnce($headFailure, $failures, $retryAt);
+    }
+
+    // No failure and no install-wide report, because a hold clears by itself once space is back: counted, a long low-disk spell handed every head over, and the same words on two heads started the failure back-off.
+    private function waitForRoomOnTheDisk(string $project, OpenChange $head): void
+    {
+        $this->logger->info('A head waits for room on the disk.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash]);
+        $this->pending->waitUntil($project, $head, $this->clock->now()->modify(sprintf('+%d seconds', self::FIRST_WAIT_SECONDS)));
     }
 
     // Scrubbed first, because a message may carry bytes of a path or a tool's output that are not UTF-8, and the ledger line must still be written; redacted as a log line is, because the cause is stored and shown on a card.
@@ -82,7 +96,7 @@ final readonly class FailedHeads
 
     private function reportCauseOf(string $item, Throwable $failure): void
     {
-        if ($this->forgeRefusedCredentials($failure)) {
+        if (self::causedBy($failure, ForgeCredentialsRefused::class)) {
             $this->installWide->forgeCredentialsRefused($failure);
 
             return;
@@ -101,11 +115,14 @@ final readonly class FailedHeads
         }
     }
 
-    // Along the whole chain, because the forge chains the refusal as the cause of its read or write failure, which a step may wrap again.
-    private function forgeRefusedCredentials(Throwable $failure): bool
+    // Along the whole chain, because the forge chains its credential refusal and the Git steps chain a disk hold as the cause of their own failure, which a step may wrap again.
+    /**
+     * @param class-string<Throwable> $kind
+     */
+    private static function causedBy(Throwable $failure, string $kind): bool
     {
         for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
-            if ($cause instanceof ForgeCredentialsRefused) {
+            if ($cause instanceof $kind) {
                 return true;
             }
         }

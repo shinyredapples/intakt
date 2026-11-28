@@ -14,6 +14,10 @@ use Intakt\Core\Budget\Domain\SharedHoldRecord;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
 use Intakt\Core\Dashboard\Domain\FailingHead;
+use Intakt\Core\Disk\Contract\DiskFloor;
+use Intakt\Core\Disk\Contract\DiskHold;
+use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Ledger\Contract\AppendResult;
@@ -69,6 +73,9 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(SharedHold::class)]
 #[UsesClass(WatcherEventNotRecorded::class)]
 #[UsesClass(ForgeCredentialsRefused::class)]
+#[UsesClass(NewWorkHeld::class)]
+#[UsesClass(DiskHold::class)]
+#[UsesClass(FreeSpaceUnreadable::class)]
 final class FailedHeadsTest extends KernelTestCase
 {
     use AssertsLoggedErrors;
@@ -203,6 +210,51 @@ final class FailedHeadsTest extends KernelTestCase
         self::assertSame([], $this->holds->sharedInEffect());
     }
 
+    public function testAHeadHeldByTheDiskWaitsAMinuteWithoutCountingAFailure(): void
+    {
+        [$head] = $this->twoQueuedHeads();
+        $ledger = new DashboardLedger();
+
+        $this->failedHeads($ledger)->backOff('alpha', $head, $this->diskHold());
+
+        self::assertSame(0, $this->pending->failuresOf('alpha', $head));
+        self::assertSame([], new LedgerFailingHeads($ledger)->now());
+        self::assertNotContains($head->id->value, $this->dueAfter(59));
+        self::assertContains($head->id->value, $this->dueAfter(1));
+    }
+
+    public function testAHeadHeldByTheDiskAfterThreeFailuresInARowIsNotHandedOver(): void
+    {
+        [$head] = $this->twoQueuedHeads();
+        $this->pending->backOff(new HeadFailure('alpha', $head, 'RuntimeException: down'), 3, $this->clock->now());
+        $ledger = new DashboardLedger();
+
+        $this->failedHeads($ledger)->backOff('alpha', $head, $this->diskHold());
+
+        self::assertSame(3, $this->pending->failuresOf('alpha', $head));
+        self::assertSame([], new LedgerFailingHeads($ledger)->now());
+    }
+
+    public function testTwoHeadsHeldByTheDiskWithTheSameWordsStartNoFailureBackOff(): void
+    {
+        [$first, $second] = $this->twoQueuedHeads();
+        $failedHeads = $this->failedHeads(new DashboardLedger());
+
+        $failedHeads->backOff('alpha', $first, $this->diskHold());
+        $failedHeads->backOff('alpha', $second, $this->diskHold());
+
+        self::assertSame([], $this->holds->sharedInEffect());
+    }
+
+    public function testAnUnreadableDiskStillCountsAsAFailureOfTheHead(): void
+    {
+        [$head] = $this->twoQueuedHeads();
+
+        $this->failedHeads(new DashboardLedger())->backOff('alpha', $head, new RuntimeException('the mirror was not updated', 0, new FreeSpaceUnreadable('var/mirrors', 'df failed')));
+
+        self::assertSame(1, $this->pending->failuresOf('alpha', $head));
+    }
+
     public function testAHandOverTheLedgerRefusesStartsTheFailureBackOffAndFailsTheTick(): void
     {
         [$head] = $this->twoQueuedHeads();
@@ -304,6 +356,24 @@ final class FailedHeadsTest extends KernelTestCase
         $this->pending->enqueue('alpha', $heads);
 
         return $heads;
+    }
+
+    // Wrapped twice, as a step's failure around a mirror update's failure around the hold, so only a walk along the chain finds it.
+    private function diskHold(): RuntimeException
+    {
+        $held = new NewWorkHeld(new DiskHold(DiskFloor::Bytes, 'var/mirrors', 999, 1000));
+
+        return new RuntimeException('the build checkout failed', 0, new RuntimeException('the mirror was not updated: '.$held->getMessage(), 0, $held));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function dueAfter(int $seconds): array
+    {
+        $this->clock->sleep($seconds);
+
+        return array_values(array_map(static fn (OpenChange $due): string => $due->id->value, $this->pending->dueFor('alpha')));
     }
 
     private function refusingLedger(): Ledger

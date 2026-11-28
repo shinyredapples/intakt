@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Git\UseCase\UpdateMirror;
 
 use Intakt\Core\Disk\Contract\DiskHold;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
 use Intakt\Core\Disk\Contract\NearestFolder;
@@ -104,7 +105,7 @@ final readonly class UpdateMirror
         }
 
         if ($hold instanceof DiskHold) {
-            throw MirrorNotUpdated::at($path, $hold->reason());
+            throw MirrorNotUpdated::at($path, $hold->reason(), new NewWorkHeld($hold));
         }
     }
 

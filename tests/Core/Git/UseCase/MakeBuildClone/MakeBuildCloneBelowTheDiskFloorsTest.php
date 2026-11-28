@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\UseCase\MakeBuildClone;
 
+use Intakt\Core\Disk\Contract\DiskFloor;
 use Intakt\Core\Disk\Contract\DiskHold;
 use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Disk\Contract\FreeSpaceUnreadable;
 use Intakt\Core\Disk\Contract\NearestFolder;
+use Intakt\Core\Disk\Contract\NewWorkHeld;
 use Intakt\Core\Disk\Infrastructure\FlooredDiskSpace;
 use Intakt\Core\Disk\Infrastructure\FreeSpaceReader;
 use Intakt\Core\Git\Contract\GitCall;
@@ -42,6 +44,7 @@ use Symfony\Component\Process\Process;
 #[UsesClass(GitCall::class)]
 #[UsesClass(FlooredDiskSpace::class)]
 #[UsesClass(DiskHold::class)]
+#[UsesClass(NewWorkHeld::class)]
 #[UsesClass(FreeSpaceUnreadable::class)]
 #[UsesClass(ControlledFreeSpaceReader::class)]
 final class MakeBuildCloneBelowTheDiskFloorsTest extends TestCase
@@ -106,6 +109,16 @@ final class MakeBuildCloneBelowTheDiskFloorsTest extends TestCase
 
         self::assertStringEndsWith(sprintf('%d free inodes, below the floor of %d', self::INODES - 1, self::INODES), $failure->getMessage());
         self::assertFileDoesNotExist($this->clone);
+    }
+
+    public function testAHeldBuildCloneNamesTheDiskHoldAsItsCause(): void
+    {
+        $this->reader->report(self::BYTES, self::INODES - 1);
+
+        $cause = $this->heldClone()->getPrevious();
+
+        self::assertInstanceOf(NewWorkHeld::class, $cause);
+        self::assertSame(DiskFloor::Inodes, $cause->hold->floor);
     }
 
     public function testAHeldBuildCloneIsMadeOnceTheReadingsAreAtTheFloors(): void
