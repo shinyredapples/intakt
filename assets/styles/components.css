@@ -227,7 +227,7 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   font: 400 var(--t13)/1.4 var(--f-body); pointer-events: none;
 }
 .term:hover .term-tip, .term:focus .term-tip { display: block; }
-/* After the one above, equal in weight, so Escape (assets/term-dismiss.js) closes the tip of the focused term. */
+/* After the one above, equal in weight, so Escape (assets/term-dismiss.js) closes the tip of the term that holds focus. */
 .term[data-dismissed] .term-tip { display: none; }
 /* No dotted underline and the text's own size, because the "?" already marks the word as explained and the UI check counts text under 15 px at 390 wide. */
 .term-ask { text-decoration: none; }
