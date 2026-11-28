@@ -515,6 +515,75 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
         self::assertSame('tests/HiddenConsumerTest.php:20 intakt.testMethodSentence Test method Intakt\Sample\HiddenConsumerTest::testData()'.self::FINDING, $this->ruleFindingsIn($sandbox));
     }
 
+    public function testATestMethodAnotherClassHidesDoesNotMakeAShortPublicAliasAnExternalProvider(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/ExternalConsumerTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        use PHPUnit\Framework\Attributes\DataProviderExternal;
+
+        trait ExternalRowSource
+        {
+            public static function rows(): array { return [[1]]; }
+        }
+
+        trait ExternalConsumerChecks
+        {
+            #[DataProviderExternal(ExternalTargetTest::class, 'testData')]
+            public function testItUsesRows(int $row): void {}
+        }
+
+        final class ExternalTargetTest extends \PHPUnit\Framework\TestCase
+        {
+            use ExternalRowSource { rows as testData; }
+        }
+
+        final class ExternalConsumerTest extends \PHPUnit\Framework\TestCase
+        {
+            use ExternalConsumerChecks {
+                testItUsesRows as private;
+                testItUsesRows as consume;
+            }
+        }
+        PHP_WRAP);
+
+        self::assertStringContainsString('tests/ExternalConsumerTest.php:20 intakt.testMethodSentence Test method Intakt\Sample\ExternalTargetTest::testData()', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAPublicAliasOfAHiddenTraitTestMakesTheProviderItNamesExempt(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/PublicConsumerTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        use PHPUnit\Framework\Attributes\DataProvider;
+
+        trait PublicConsumerChecks
+        {
+            #[DataProvider('testData')]
+            public function consume(int $row): void {}
+
+            public static function rows(): array { return [[1]]; }
+        }
+
+        final class PublicConsumerTest extends \PHPUnit\Framework\TestCase
+        {
+            use PublicConsumerChecks {
+                consume as private;
+                consume as testItUsesRows;
+                rows as testData;
+            }
+        }
+        PHP_WRAP);
+
+        self::assertStringNotContainsString('PublicConsumerTest::testData()', $this->ruleFindingsIn($sandbox));
+    }
+
     public function testAShortTestMethodOfATraitUnderSourceUsedWithoutAliasPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('test-method-src-trait-without-alias');

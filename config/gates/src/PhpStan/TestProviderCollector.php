@@ -17,7 +17,7 @@ use PHPUnit\Framework\Attributes\DataProviderExternal;
 use PHPUnit\Framework\TestCase;
 
 /**
- * @phpstan-type Providers array{references: list<array{string, string, string, string}>, runs: list<array{string, string, string}>}
+ * @phpstan-type Providers array{references: list<array{string, string, string, string, string, bool}>, runs: list<array{string, string, string}>}
  *
  * @implements Collector<InClassNode, Providers>
  */
@@ -45,11 +45,10 @@ final readonly class TestProviderCollector implements Collector
         }
 
         $native = $class->getNativeReflection();
-        // because PHPUnit ignores a provider attribute on a method it does not run as a test, such as a private helper
-        $tests = array_values(array_filter($native->getMethods(), PhpUnitTestMethod::isRun(...)));
-        // each reference names the test that makes it, because reflection may call public a test that a trait `use` block hides (upstream/phpstan-trait-alias-drops-visibility/), and the rule drops what the composed trait methods show is not run
-        $references = array_merge(...array_map(fn (ReflectionMethod $test): array => array_map(static fn (array $reference): array => [...$reference, $test->getName()], [...$this->providersInTheClass($test, $native), ...$this->externalProviders($test)]), $tests));
-        $runs = $this->staticRuns($tests, $class->getName());
+        // each reference names the class and the test that make it with the visibility reflection gives the test, because reflection may give a trait method the visibility of another adaptation in its `use` block (upstream/phpstan-trait-alias-drops-visibility/), so the rule asks the composed trait methods first and PHPUnit ignores a provider attribute on a method it does not run
+        $named = array_values(array_filter($native->getMethods(), PhpUnitTestMethod::isNamedOrMarked(...)));
+        $references = array_merge(...array_map(fn (ReflectionMethod $test): array => array_map(static fn (array $reference): array => [...$reference, $class->getName(), $test->getName(), $test->isPublic()], [...$this->providersInTheClass($test, $native), ...$this->externalProviders($test)]), $named));
+        $runs = $this->staticRuns(array_values(array_filter($named, PhpUnitTestMethod::isRun(...))), $class->getName());
 
         return [] === $references && [] === $runs ? null : ['references' => $references, 'runs' => $runs];
     }

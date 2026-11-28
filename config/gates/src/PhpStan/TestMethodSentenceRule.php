@@ -135,7 +135,7 @@ final readonly class TestMethodSentenceRule implements Rule
         };
     }
 
-    // because a test the class takes from a trait is run only when the composition of its `use` blocks keeps it public, the same source that decides which alias is judged
+    // because a test the consuming class takes from a trait is run only when the composition of its `use` blocks keeps it public, the same source that decides which alias is judged, and reflection decides only for a test no trait brings in
     /**
      * @param array<string, array{class: Place, methods: array<string, ComposedTraitMethod>}> $compositions
      *
@@ -146,7 +146,7 @@ final readonly class TestMethodSentenceRule implements Rule
         $providers = array_merge(...array_values($node->get(TestProviderCollector::class)));
         $references = array_filter(
             array_merge(...array_column($providers, 'references')),
-            static fn (array $reference): bool => ($compositions[strtolower($reference[2])]['methods'][strtolower($reference[3])] ?? null)?->isRunAsTest() ?? true,
+            static fn (array $reference): bool => ($compositions[strtolower($reference[3])]['methods'][strtolower($reference[4])] ?? null)?->isRunAsTest() ?? $reference[5],
         );
 
         return [
