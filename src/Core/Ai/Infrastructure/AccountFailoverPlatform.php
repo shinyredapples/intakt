@@ -177,7 +177,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             return;
         }
 
-        $this->logger->info('Account {first} of {provider} is cooling down or ranks lower by measured room, so the call goes to account {next}.',['provider' => $this->provider->value, 'first' => $first, 'next' => $next]);
+        $this->logger->info('Account {first} of {provider} is cooling down or ranks lower by measured room, so the call goes to account {next}.', ['provider' => $this->provider->value, 'first' => $first, 'next' => $next]);
     }
 
     // Judged across calls through the shared cooldowns, because two accounts whose rejections land a moment apart would otherwise each be free in turn and the call would wait forever (one worker's rejection beside another's).

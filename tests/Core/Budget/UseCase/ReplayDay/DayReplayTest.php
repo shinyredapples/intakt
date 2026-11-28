@@ -67,7 +67,7 @@ final class DayReplayTest extends TestCase
         $this->play('2026-11-02T08:00 read claude_code.main weekly 95 2026-11-04T08:00');
         $this->play('2026-11-02T08:00 read claude_code.team five-hour 95 2026-11-02T10:00');
 
-        self::assertSame('ranked none; left out claude_code.main weekly-ceiling until 2026-11-04T08:00, claude_code.team short-window-ceiling until 2026-11-02T10:00',$this->play('2026-11-02T08:00 rank claude_code.main claude_code.team'));
+        self::assertSame('ranked none; left out claude_code.main weekly-ceiling until 2026-11-04T08:00, claude_code.team short-window-ceiling until 2026-11-02T10:00', $this->play('2026-11-02T08:00 rank claude_code.main claude_code.team'));
     }
 
     /**
