@@ -4,7 +4,7 @@
 
 ### Sizing
 
-The sizing call is not a method of `Vendor`: `SizingVendor::size(project, SizingRequest)` is its own interface in the same `Contract/`, implemented by `SymfonyAiSizingVendor` (standard tier, no account failover wrapper yet), so the test doubles of `Vendor` need no sizing method. Its `started` usage row names the task (`UsageStarted::$task`), see [Task sizing](task-sizing.md).
+The sizing call is not a method of `Vendor`: `SizingVendor::size(SizingRequest)` (the request names the project) is its own interface in the same `Contract/`, implemented by `SymfonyAiSizingVendor` (standard tier, no account failover wrapper yet), so the test doubles of `Vendor` need no sizing method. Its `started` usage row names the task (`UsageStarted::$task`), see [Task sizing](task-sizing.md).
 
 ### Token figures
 
