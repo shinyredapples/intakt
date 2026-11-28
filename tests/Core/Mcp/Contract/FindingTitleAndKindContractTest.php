@@ -48,14 +48,16 @@ final class FindingTitleAndKindContractTest extends KernelTestCase
     {
         $events = array_filter(iterator_to_array($this->fixture->ledger()->readInOrder()), static fn (RecordedEvent $event): bool => LedgerEventKind::JudgeDone === $event->event->kind);
         self::assertCount(1, $events);
-        $payload = json_decode(array_values($events)[0]->event->payload, true, 8, JSON_THROW_ON_ERROR);
+        $recorded = array_first($events);
+        self::assertInstanceOf(RecordedEvent::class, $recorded);
+        $payload = json_decode($recorded->event->payload, true, 8, JSON_THROW_ON_ERROR);
         self::assertIsArray($payload);
         $findings = $payload['findings'] ?? null;
         self::assertIsArray($findings);
 
-        $entry = array_values(array_filter($findings, static fn (mixed $finding): bool => is_array($finding) && 'F1' === ($finding['id'] ?? null)))[0] ?? null;
+        $entry = array_find($findings, static fn (mixed $finding): bool => is_array($finding) && 'F1' === ($finding['id'] ?? null));
         self::assertIsArray($entry);
-        self::assertSame(['F1', ['F2'], 'A large cart loses its discount', 'logic'], [$entry['id'] ?? null, $entry['merged'] ?? null, $entry['title'] ?? null, $entry['kind'] ?? null]);
+        self::assertSame(['F1', ['F2'], 'A large cart loses its discount', 'logic'], [$entry['id'], $entry['merged'], $entry['title'], $entry['kind']]);
     }
 
     public function testTheVerdictsCarryEachFindingsTitleAndKindAsTheReviewerGaveThem(): void
