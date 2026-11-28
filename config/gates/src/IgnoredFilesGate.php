@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-use ValueError;
-
 // Refuses tracked files that the `.gitignore` files exclude; local excludes (.git/info/exclude, core.excludesFile) do not count, because they differ per clone.
 final readonly class IgnoredFilesGate implements Gate
 {
@@ -68,20 +66,28 @@ final readonly class IgnoredFilesGate implements Gate
         // Because ls-files reads the working-tree rules, an unstaged edit could hide a tracked file that CI, judging the committed rules, rejects; blob ids, not stat data, so an edit that keeps size and mtime still counts.
         $staged = $this->stagedRuleFiles($workspace);
         $present = array_filter(array_keys($staged), static fn (string $path): bool => is_file($workspace->root.'/'.$path) && !is_link($workspace->root.'/'.$path));
-        $hashes = $this->workingTreeBlobs($workspace, array_values($present));
+        $hashes = $this->workingTreeBlobs($workspace, array_values(array_filter($present, static fn (string $path): bool => null !== $staged[$path])));
 
-        return array_keys($staged)
-            |> (static fn (array $paths): array => array_filter($paths, static fn (string $path): bool => ($hashes[$path] ?? null) !== $staged[$path]))
-            |> (fn (array $paths): array => array_filter($paths, fn (string $path): bool => !isset($hashes[$path]) || !$this->sameRulesAfterCheckoutConversion($workspace, $path, $staged[$path])))
-            |> array_values(...);
+        $differing = [];
+        foreach ($staged as $path => $blob) {
+            $same = null === $blob
+                ? !in_array($path, $present, true)
+                : isset($hashes[$path]) && ($hashes[$path] === $blob || $this->sameRulesAfterCheckoutConversion($workspace, $path, $blob));
+
+            if (!$same) {
+                $differing[] = $path;
+            }
+        }
+
+        return $differing;
     }
 
     /**
-     * @return array<string, string>
+     * @return array<string, ?string>
      */
     private function stagedRuleFiles(Workspace $workspace): array
     {
-        // Because git reads no .gitignore that is a symbolic link or a submodule (gitlink), neither here nor in CI, such an entry carries no rules to compare; only stage 0, so a conflicted file is not compared three times.
+        // Because git reads no .gitignore that is a symbolic link or a submodule (gitlink) in CI, such an entry stages no rules (null), yet a regular file put in its place locally is read as rules; only stage 0, so a conflicted file is not compared three times.
         $result = $workspace->git(['ls-files', '-s', '-z']);
 
         if (!$result->succeeded()) {
@@ -90,8 +96,8 @@ final readonly class IgnoredFilesGate implements Gate
 
         $staged = [];
         foreach (explode("\0", $result->output) as $entry) {
-            if (1 === preg_match('/\A(?<mode>\d+) (?<blob>[0-9a-f]+) 0\t(?<path>(?:.*\/)?\.gitignore)\z/s', $entry, $match) && !in_array($match['mode'], ['120000', '160000'], true)) {
-                $staged[$match['path']] = $match['blob'];
+            if (1 === preg_match('/\A(?<mode>\d+) (?<blob>[0-9a-f]+) 0\t(?<path>(?:.*\/)?\.gitignore)\z/s', $entry, $match)) {
+                $staged[$match['path']] = in_array($match['mode'], ['120000', '160000'], true) ? null : $match['blob'];
             }
         }
 
@@ -133,7 +139,7 @@ final readonly class IgnoredFilesGate implements Gate
         return null !== $decoded && $this->cleaned($decoded) === $this->cleaned($result->output);
     }
 
-    // Because git stores a file whose working-tree-encoding names a charset as UTF-8 and checks it out in that charset; check-attr only reports and runs no filter, --cached reads the staged attributes (those CI checks out with) past the hardened empty attribute source, and a charset PHP cannot decode leaves the file differing rather than guessed.
+    // Because git stores a file whose working-tree-encoding names a charset as UTF-8 and checks it out in that charset with iconv; check-attr only reports and runs no filter, --cached reads the staged attributes (those CI checks out with) past the hardened empty attribute source, and an unknown charset, an invalid byte or a decode that does not encode back to the same bytes leaves the file differing, since git reads the raw bytes as rules.
     private function decodedFromItsWorkingTreeEncoding(Workspace $workspace, string $path, string $text): ?string
     {
         $result = $workspace->git(['check-attr', '--cached', '-z', 'working-tree-encoding', '--', $path]);
@@ -148,13 +154,17 @@ final readonly class IgnoredFilesGate implements Gate
             return $text;
         }
 
+        // Warnings silenced, because iconv reports an unknown charset or an invalid byte both as a warning and as false.
+        set_error_handler(static fn (): bool => true);
+
         try {
-            $decoded = mb_convert_encoding($text, 'UTF-8', $encoding);
-        } catch (ValueError) {
-            return null;
+            $decoded = iconv($encoding, 'UTF-8', $text);
+            $lossless = false !== $decoded && iconv('UTF-8', $encoding, $decoded) === $text;
+        } finally {
+            restore_error_handler();
         }
 
-        return false === $decoded ? null : $decoded;
+        return $lossless ? $decoded : null;
     }
 
     // Because git drops the carriage return before each line break of a .gitignore and its ident clean conversion collapses the `$Id: <object id> $` it wrote to `$Id$`, neither changes the rules; any other `$Id: ... $` text is a rule edit.
