@@ -77,8 +77,8 @@ function routedSite(pages, statuses = {}) {
     };
 }
 
-// Turbo 8.0.23's events around a render of the whole page, as the stand-ins use them: the answer on the element that asked for it (the root element for a visit, the form for a form), then the render on the root element.
-const TURBO = '<script>function turboVisit(url, init, askedOn, then) { fetch(url, init).then((answer) => { (askedOn ?? document.documentElement).dispatchEvent(new CustomEvent("turbo:before-fetch-response", { bubbles: true, detail: { fetchResponse: { statusCode: answer.status } } })); return answer.text().then(() => { history.pushState({}, "", answer.url); document.body.innerHTML = "<main><h1>The demo run</h1></main>"; document.documentElement.dispatchEvent(new Event("turbo:render", { bubbles: true })); then(); }); }); }</script>';
+// Turbo 8.0.23's events around a render of the whole page, as the stand-ins use them: the answer on the element that asked for it (the root element for a visit, the form for a form) with the address it came from after redirects, then the render on the root element.
+const TURBO = '<script>function turboVisit(url, init, askedOn, then) { fetch(url, init).then((answer) => { (askedOn ?? document.documentElement).dispatchEvent(new CustomEvent("turbo:before-fetch-response", { bubbles: true, detail: { fetchResponse: { statusCode: answer.status, response: { url: answer.url } } } })); return answer.text().then(() => { history.pushState({}, "", answer.url); document.body.innerHTML = "<main><h1>The demo run</h1></main>"; document.documentElement.dispatchEvent(new Event("turbo:render", { bubbles: true })); then(); }); }); }</script>';
 
 const [FIRST_RUN] = JOURNEYS;
 
@@ -500,11 +500,66 @@ test('the first journey passes when /demo answers HTTP 200 and follows to the re
 });
 
 test('a /demo document that answered HTTP 500 and a Turbo fetch of /demo answered HTTP 200 that nothing renders fails the first journey at step 3', async () => {
-    const turboFetch = 'fetch(location.href, { headers: { \'X-Turbo-Request-Id\': \'r\' } }).then((answer) => { document.documentElement.dispatchEvent(new CustomEvent(\'turbo:before-fetch-response\', { bubbles: true, detail: { fetchResponse: { statusCode: answer.status } } })); return answer.text(); }).then(() => location.assign(\'/reviews/r1\'));';
+    const turboFetch = 'fetch(location.href, { headers: { \'X-Turbo-Request-Id\': \'r\' } }).then((answer) => { document.documentElement.dispatchEvent(new CustomEvent(\'turbo:before-fetch-response\', { bubbles: true, detail: { fetchResponse: { statusCode: answer.status, response: { url: answer.url } } } })); return answer.text(); }).then(() => location.assign(\'/reviews/r1\'));';
     const pages = demoSite({ demo: `<h1>The demo run</h1><script>${turboFetch}</script>` });
 
     const result = await runJourney(routedSite(pages, { '/demo': [500] }), ORIGIN, FIRST_RUN, scratch(), 1);
 
     assert.equal(result.failure.step, 'reach /demo and see the demo run');
     assert.match(result.failure.error, /it led to http:\/\/localhost\/demo \(HTTP 500\), then /);
+});
+
+// A page answer of the root element, as Turbo 8.0.23 dispatches it, and a render of the whole page without a fetch of its own.
+const TURBO_EVENTS = '<script>function turboAnswer(code, url) { document.documentElement.dispatchEvent(new CustomEvent("turbo:before-fetch-response", { bubbles: true, detail: { fetchResponse: { statusCode: code, response: { url: new URL(url, location.href).href } } } })); }'
+    + ' function turboRender() { document.documentElement.dispatchEvent(new Event("turbo:render", { bubbles: true })); }'
+    + ' function turboRestore() { document.documentElement.dispatchEvent(new CustomEvent("turbo:visit", { bubbles: true, detail: { action: "restore", url: location.href } })); }</script>';
+
+test('a /demo document answered HTTP 500, an unrendered Turbo answer of another address and a later render of /demo without a fetch fail the first journey at step 3', async () => {
+    const pages = demoSite({ demo: `${TURBO_EVENTS}<h1>The demo run</h1><script>turboAnswer(200, '/elsewhere'); turboRender(); setTimeout(() => location.assign('/reviews/r1'), 100);</script>` });
+
+    const result = await runJourney(routedSite(pages, { '/demo': [500] }), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.match(result.failure.error, /it led to http:\/\/localhost\/demo \(no answer seen\), then /);
+});
+
+test('a /demo document answered HTTP 500, a Turbo answer of /demo and a restoration of /demo from the cache fail the first journey at step 3', async () => {
+    const pages = demoSite({ demo: `${TURBO_EVENTS}<h1>The demo run</h1><script>turboAnswer(200, location.href); turboRestore(); turboRender(); setTimeout(() => location.assign('/reviews/r1'), 100);</script>` });
+
+    const result = await runJourney(routedSite(pages, { '/demo': [500] }), ORIGIN, FIRST_RUN, scratch(), 1);
+
+    assert.equal(result.failure.step, 'reach /demo and see the demo run');
+    assert.match(result.failure.error, /it led to http:\/\/localhost\/demo \(no answer seen\), then /);
+});
+
+test('a demo page that shows the verdict and the finding and pushes a review address without rendering it fails the first journey at step 4', async () => {
+    const shown = '<h1>The demo run</h1><h2>Changes needed</h2><a href="/reviews/r1/record#f1">The check changed from <code>amount &gt;= 100</code> to <code>amount &gt; 100</code>.</a>'
+        + '<script>setTimeout(() => history.pushState({}, \'\', \'/reviews/r1\'), 300);</script>';
+    // The step's own wait for the review page is as long as its wait for the verdict, so it is cut short here.
+    const verdict = seeRoleSince('/demo', 'heading', 'Changes needed', 1_000);
+    const journey = { name: FIRST_RUN.name, steps: FIRST_RUN.steps.with(3, { name: FIRST_RUN.steps[3].name, run: verdict.run }) };
+
+    const result = await runJourney(routedSite(demoSite({ demo: shown })), ORIGIN, journey, scratch(), 1);
+
+    assert.equal(result.failure.step, 'wait for the verdict of the demo run');
+    assert.equal(result.failure.error, 'the review page http://localhost/reviews/r1 was not shown with a success status within 1 s; the press led to http://localhost/demo (HTTP 200), then http://localhost/reviews/r1 (no answer seen)');
+});
+
+test('a last setup step that redirects to a page answered HTTP 404 fails the first journey at step 1 naming where it led', async () => {
+    const server = createServer((request, response) => {
+        if (request.url === '/setup?step=5') return response.writeHead(302, { location: '/gone' }).end();
+
+        return response.writeHead(404, { 'content-type': 'text/html' }).end('Not found');
+    });
+    await new Promise((resolve) => server.listen(0, 'localhost', resolve));
+    try {
+        const address = `http://localhost:${server.address().port}`;
+        const result = await runJourney(browser, address, FIRST_RUN, scratch(), 1);
+
+        assert.equal(result.failure.step, 'open the last setup step and see the start');
+        assert.equal(result.failure.error, `/setup?step=5 led to ${address}/gone`);
+    } finally {
+        server.closeAllConnections();
+        server.close();
+    }
 });

@@ -129,7 +129,7 @@ More cases, and the exact wording of every reason, are in the [complete referenc
 
 ## Trying the install the way a stranger does
 
-`bin/install-check` runs, in a temporary folder, every command of the README's install block as written, including its `git clone` (pointed at the repository you name). Then it plays the demo run in a browser, checks every dashboard page, removes the played demo run and, when the clone has `bin/journey-check`, walks the journeys, which start by playing the demo run again. If the removal fails, the journeys are skipped. A `cd` in one README line carries to the next. It never uses your own checkout, and the README's commands never see your keys or a GitHub token.
+`bin/install-check` runs, in a temporary folder, every command of the README's install block as written, including its `git clone` (pointed at the repository you name). Then it plays the demo run in a browser and checks every dashboard page. When the clone has `bin/journey-check`, it removes the played demo run and walks the journeys, which play the demo run again. Without it, the removal and the journeys are both skipped. If the removal fails, the journeys are skipped. A `cd` in one README line carries to the next. It never uses your own checkout, and the README's commands never see your keys or a GitHub token.
 
 When you have set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, it also runs one review with that key: it writes the key to the clone's `.env.local` and starts the container again, as the README's key path does.
 

@@ -146,10 +146,10 @@ function open(pathOnSite) {
     run: async (page, address) => {
       const response = await page.goto(address + pathOnSite);
       if (response === null) throw new Error(`no page was loaded for ${pathOnSite}`);
-      if (!response.ok()) throw new Error(`HTTP ${response.status()} for ${pathOnSite}`);
-      // Another page may show the same heading and button, so a redirect or any other address than the one opened fails the step.
+      // Another page may show the same heading and button, so a redirect or any other address than the one opened fails the step; it is checked before the status, so a redirect to an error names where it led.
       const reached = withoutFragment(page.url());
       if (response.request().redirectedFrom() !== null || reached !== address + pathOnSite) throw new Error(`${pathOnSite} led to ${originAndPath(reached)}`);
+      if (!response.ok()) throw new Error(`HTTP ${response.status()} for ${pathOnSite}`);
     },
   };
 }
@@ -259,21 +259,28 @@ async function listenToReports(page) {
 
 // Runs in the page. Event names as Turbo 8.0.23 (importmap.php) dispatches them: turbo:before-fetch-response carries the answer of a fetch on the element that asked for it, and turbo:render follows only a render of the whole page.
 // A Drive visit asks on the root element and a Drive form (the Play the demo run button) on its form; a frame's request or a link prefetch asks on the frame or the link, so these are left out, as is a form inside a frame.
-// A preview from Turbo's cache is no answer, and a status is used once, so a render without an answer of its own never takes an older one.
+// A preview from Turbo's cache is no answer, and a status is used once and only by a render of the address it came from (after redirects, so the form post that redirects to /demo counts), so a render without an answer of its own never takes an older one.
+// A restoration from Turbo's cache fetches nothing, so it drops any earlier answer; other visits keep it, as Turbo starts the visit for a form's redirect after the form's answer arrived.
 const REPORTER = `(() => {
   if (window.__journeyCheckReporter) return;
   window.__journeyCheckReporter = true;
   const report = (code) => { try { window.${REPORT_BINDING}?.(location.href, code ?? null); } catch {} };
   const askedForThePage = (target) => target === document.documentElement || (target instanceof HTMLFormElement && target.closest('turbo-frame') === null);
+  const withoutFragment = (address) => String(address).split('#')[0];
   let answer = null;
   document.addEventListener('turbo:before-fetch-response', (event) => {
-    if (askedForThePage(event.target)) answer = event.detail?.fetchResponse?.statusCode ?? null;
+    if (!askedForThePage(event.target)) return;
+    const response = event.detail?.fetchResponse;
+    answer = { code: response?.statusCode ?? null, address: withoutFragment(response?.response?.url ?? '') };
+  }, true);
+  document.addEventListener('turbo:visit', (event) => {
+    if (event.detail?.action === 'restore') answer = null;
   }, true);
   document.addEventListener('turbo:render', () => {
     if (document.documentElement.hasAttribute('data-turbo-preview')) return;
-    const code = answer;
+    const own = answer !== null && answer.address === withoutFragment(location.href) ? answer.code : null;
     answer = null;
-    report(code);
+    report(own);
   });
   report(performance.getEntriesByType('navigation')[0]?.responseStatus);
 })()`;
@@ -333,7 +340,7 @@ function seeRoleSince(pathOnSite, role, name, timeout = STEP_TIMEOUT_MS) {
       const trail = TRAILS.get(page);
       if (trail === undefined) throw new Error(`no press came before ${pathOnSite}`);
       const deadline = performance.now() + timeout;
-      const { review, visits } = await waitForReviewPage(page, address, pathOnSite, timeout);
+      const { review, visits } = await waitForReviewPage(page, address, pathOnSite, timeout, deadline);
       // The locator's own timeout is only an upper bound, so the deadline is checked before the look starts and again once it matched.
       const left = deadline - performance.now();
       if (left <= 0) throw new Error(`the step's ${timeout} ms ran out before the look on ${originAndPath(review)} could start`);
@@ -349,15 +356,22 @@ function seeRoleSince(pathOnSite, role, name, timeout = STEP_TIMEOUT_MS) {
 }
 
 // The demo page stays until a queue worker starts the run, so it may take as long as what is looked for; any other address ends the wait at once.
+// Turbo pushes the review address before the answer replaces the demo page's content, so the wait goes on, within the same deadline, until the review page reported a document or a render of its own; any status but a success fails.
 // The review page it judged and the trail's length are taken together, so a move after the judgement (back to the demo page included) counts as a move.
-async function waitForReviewPage(page, address, pathOnSite, timeout) {
+async function waitForReviewPage(page, address, pathOnSite, timeout, deadline) {
   const expected = new URL(address + pathOnSite);
   const trail = TRAILS.get(page);
   await holdsWithin(trail, () => !isAt(page.url(), expected), timeout);
   const at = withoutFragment(page.url());
-  const visits = trail.visits.length;
   expectReviewPagesSince(page, address, pathOnSite);
   if (!isReviewPage(at, address)) throw new Error(`the page stayed at ${originAndPath(at)}, not on a review page`);
+  const reported = await holdsWithin(trail, () => trail.statuses.has(at), Math.max(0, deadline - performance.now()));
+  if (!reported || !isSuccess(trail.statuses.get(at))) {
+    throw new Error(`the review page ${originAndPath(at)} was not shown with a success status within ${timeout / 1000} s; the press led to ${describe(trail)}`);
+  }
+  const visits = trail.visits.length;
+  expectReviewPagesSince(page, address, pathOnSite);
+  if (withoutFragment(page.url()) !== at) throw new Error(`the page moved on to ${originAndPath(page.url())} before ${originAndPath(at)} was shown`);
 
   return { review: at, visits };
 }

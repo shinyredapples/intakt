@@ -36,6 +36,13 @@ function scratch() {
 
 // The page doubles never load a document, so the report the journey check installs is accepted and never called.
 const REPORTS_UNUSED = { exposeBinding: async () => {}, addInitScript: async () => {}, evaluate: async () => {} };
+// A page double whose every address reports HTTP 200 once it is reached, as a document or a render there would.
+function reportingVisits(page, origin) {
+    let reportTo = () => {};
+    const visit = (path) => { page.at = origin + path; page.emit('framenavigated', page); reportTo({ frame: page }, page.at, 200); };
+
+    return { visit, reports: { exposeBinding: async (name, callback) => { reportTo = callback; }, addInitScript: async () => {}, evaluate: async () => {} } };
+}
 
 // Stands in for a browser whose page cannot find the button and cannot take a screenshot either.
 function browserWithBrokenPage() {
@@ -232,40 +239,40 @@ for (const [position, shown] of [[3, 'the verdict'], [4, 'the finding']]) {
 test('a verdict seen on the review page right before the page leaves and returns fails step 4', async () => {
     const origin = 'http://localhost';
     const page = new EventEmitter();
-    let at = `${origin}/setup?step=5`;
-    const visit = (path) => { at = origin + path; page.emit('framenavigated', page); };
+    page.at = `${origin}/setup?step=5`;
+    const { visit, reports } = reportingVisits(page, origin);
     const locator = {
         filter: () => locator,
         first: () => locator,
         click: async () => { visit('/demo'); visit('/reviews/r1'); },
         waitFor: async () => { visit('/demo'); visit('/reviews/r1'); },
     };
-    Object.assign(page, { url: () => at, mainFrame: () => page, getByRole: () => locator, ...REPORTS_UNUSED });
+    Object.assign(page, { url: () => page.at, mainFrame: () => page, getByRole: () => locator, ...reports });
     const { steps } = JOURNEYS[0];
     await steps[1].run(page, origin);
 
     await assert.rejects(steps[3].run(page, origin), /the page moved on to http:\/\/localhost\/reviews\/r1 while http:\/\/localhost\/reviews\/r1 was looked at/);
 });
 
-// Forces the order with a stand-in clock: the review page is reached, then the step's time runs out before the look starts, or the look matches only after it ran out.
+// Forces the order with a stand-in clock (the step's start, the wait for the review page's report, the look's start, the match): the review page is reached and shown, then the step's time runs out before the look starts, or the look matches only after it ran out.
 for (const [when, clock, error] of [
-    ['before the look starts', [0, 1001], /the step's 1000 ms ran out before the look on http:\/\/localhost\/reviews\/r1 could start/],
-    ['while the look runs', [0, 500, 1001], /the match on http:\/\/localhost\/reviews\/r1 came after the step's 1000 ms/],
+    ['before the look starts', [0, 0, 1001], /the step's 1000 ms ran out before the look on http:\/\/localhost\/reviews\/r1 could start/],
+    ['while the look runs', [0, 0, 500, 1001], /the match on http:\/\/localhost\/reviews\/r1 came after the step's 1000 ms/],
 ]) {
     test(`a deadline that ends ${when} fails the look on the review page`, async (t) => {
         const times = [...clock];
         t.mock.method(performance, 'now', () => times.length > 1 ? times.shift() : times[0]);
         const origin = 'http://localhost';
         const page = new EventEmitter();
-        let at = `${origin}/setup?step=5`;
-        const visit = (path) => { at = origin + path; page.emit('framenavigated', page); };
+        page.at = `${origin}/setup?step=5`;
+        const { visit, reports } = reportingVisits(page, origin);
         const locator = {
             filter: () => locator,
             first: () => locator,
             click: async () => { visit('/demo'); visit('/reviews/r1'); },
             waitFor: async () => {},
         };
-        Object.assign(page, { url: () => at, mainFrame: () => page, getByRole: () => locator, ...REPORTS_UNUSED });
+        Object.assign(page, { url: () => page.at, mainFrame: () => page, getByRole: () => locator, ...reports });
         await JOURNEYS[0].steps[1].run(page, origin);
 
         await assert.rejects(seeRoleSince('/demo', 'heading', 'Changes needed', 1000).run(page, origin), error);
