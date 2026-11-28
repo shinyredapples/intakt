@@ -134,7 +134,7 @@ final readonly class JobOutputDirectories
         $handle = false === $listed ? false : @fopen($path, 'r+b');
         $opened = false === $handle ? false : fstat($handle);
 
-        if (false !== $handle && false !== $opened && false !== $listed && $this->isTheListedPlainFile($opened, $listed)) {
+        if (!in_array(false, [$handle, $opened, $listed], true) && $this->isTheListedPlainFile($opened, $listed)) {
             return $handle;
         }
 
@@ -147,7 +147,7 @@ final readonly class JobOutputDirectories
 
     /**
      * @param array{dev: int, ino: int, mode: int} $opened
-     * @param array{dev: int, ino: int} $listed
+     * @param array{dev: int, ino: int}            $listed
      */
     private function isTheListedPlainFile(array $opened, array $listed): bool
     {
