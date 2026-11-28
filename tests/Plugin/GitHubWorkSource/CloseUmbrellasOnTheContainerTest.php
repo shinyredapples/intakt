@@ -125,7 +125,7 @@ final class CloseUmbrellasOnTheContainerTest extends KernelTestCase
         new Filesystem()->remove([$this->file, $this->recording]);
     }
 
-    // Recorded as the split records it: the plan, each part's number under the repository it was filed in, then the finished split.
+    // In the order the split records them, because the close reads the finished split and asks the filed parts by repository.
     private function bootedWithASplitOf7Into201And202(): KernelInterface
     {
         $contents = "projects:\n    alpha:\n        watch: { repository: repos/alpha, base: main, task: Review the pull request., github: acme/widget }\n";

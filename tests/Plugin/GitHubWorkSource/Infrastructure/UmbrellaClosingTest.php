@@ -62,7 +62,7 @@ final class UmbrellaClosingTest extends TestCase
 
     public function testThePartsComeFromTheFinishedSplitAndNeverFromAWaitsForLineOrAComment(): void
     {
-        // Only the plan: the umbrella's comment and any `Waits for #201` in its text name parts, and #201 is closed, yet nothing the ledger finished names them.
+        // Only the plan, because a comment or a `Waits for #201` line naming a closed part must not close the umbrella while no finished split names it.
         $this->ledger->append(new LedgerEvent(LedgerEventKind::TaskSplitPlanned, '{"project":"alpha","task":"7","run":"r1","parts":[],"labels":[]}', 'split-7'));
 
         $result = $this->closeOver(7);

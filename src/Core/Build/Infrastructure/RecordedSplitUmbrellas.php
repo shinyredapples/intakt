@@ -30,7 +30,7 @@ final readonly class RecordedSplitUmbrellas implements SplitUmbrellas
             $numbers[] = $this->taskIn($fields);
         }
 
-        return new UmbrellaTasks(...array_filter($numbers));
+        return new UmbrellaTasks(...array_filter($numbers, static fn (int $number): bool => 0 !== $number));
     }
 
     // A record whose parts are not a JSON list of issue numbers names no split, because closing an umbrella on parts nobody can read would close it while a part is open.
@@ -66,7 +66,7 @@ final readonly class RecordedSplitUmbrellas implements SplitUmbrellas
         return $records;
     }
 
-    // Zero when the task is no positive number written as text, which no issue has.
+    // Zero for anything but a positive number written as text, because no issue has number zero, so the caller drops such a record.
     private function taskIn(stdClass $fields): int
     {
         $task = $fields->task ?? null;

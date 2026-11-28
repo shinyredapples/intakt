@@ -14,7 +14,7 @@ final class RecordedTaskCloses implements TaskCloses
     /** @var list<array{project: string, number: int, comment: KeyedComment}> */
     public array $closed = [];
 
-    // The failure every close answers with, when a test makes GitHub refuse it.
+    // Settable, because a test makes GitHub refuse every close to prove the umbrella stays open and is named.
     public ?ForgeWriteFailed $refusal = null;
 
     public function closeAsCompleted(string $project, int $number, KeyedComment $comment): void

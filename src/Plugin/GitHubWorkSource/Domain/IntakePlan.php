@@ -14,7 +14,7 @@ final readonly class IntakePlan
      * @param array<int, list<int>> $dependsOn
      * @param list<int>             $openPullRequests
      * @param array<int, list<int>> $closingPullRequests
-     * @param list<int>             $open                every item the complete listing shows open, eligible or not
+     * @param list<int>             $open
      */
     public function __construct(
         public array $ready,
