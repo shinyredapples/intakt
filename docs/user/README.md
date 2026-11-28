@@ -40,7 +40,7 @@ You will meet these characters on the dashboard. Each one stands where its job h
 You run `intakt:build:size` on a task, and the answer is `split`: the task is too big for one build.
 
 1. Intakt records its plan first. Then it files two to four new issues, the parts. Each part has the task's labels and waits for the parts it builds on.
-2. The task stays open as their umbrella, with one comment naming the parts. Editing it later does not size it again.
+2. The task stays open as their umbrella, with one comment naming the parts. It is never built itself: `intakt:queue:show` lists it as held, and the parts as tasks. Editing it later does not size it again.
 3. If the command stops halfway, run it again. It finishes from the plan and files no part twice.
 4. A task is split only once, and a part is never split again ([details](../reference/user-manual.md#sizing-a-new-task)).
 
