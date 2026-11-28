@@ -15,4 +15,9 @@ enum MarkdownLineKind: string
     // Used only while the line kinds are read, because an item whose first line is indented code opens a list but is measured as code.
     case CodeItem = 'code item';
     case Prose = 'prose';
+
+    public function isText(): bool
+    {
+        return in_array($this, [self::Prose, self::ListItem], true);
+    }
 }
