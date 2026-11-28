@@ -38,7 +38,7 @@ final readonly class TierPlatform implements TierInvoker
     ) {
     }
 
-    // Decided by the configuration, the cooldowns (the account windows and a model's pinned router provider) and the accounts' measured room alone, never by a failed call,because a request that fails on purpose would otherwise let its sender pick the reviewer.
+    // Decided by the configuration, the cooldowns (the account windows and a model's pinned router provider) and the accounts' measured room alone, never by a failed call, because a request that fails on purpose would otherwise let its sender pick the reviewer.
     #[Override]
     public function answering(string $project, Tier $tier): ResolvedModel
     {

@@ -153,17 +153,53 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return new EveryAccountCoolingDown($this->provider, $this->secondsUntilStartable($ranked, $waits));
     }
 
-    // The soonest moment any account can start again: a cooldown's wait from the read that found no account free, never a second read, or a left-out account's end. Each is at least a second (see waits()), so a refused call never waits 0 s; an end the ranking cannot name counts as the longest window, which is listed too, so min() always has a value.
+    // The soonest moment any account can start again. Per account the longer of its cooldown's wait, from the read that found no account free and never a second read, and its left-out end, because an account that is both cooling down and at a ceiling starts only once both have ended; then the shortest across the accounts. At least a second, so a refused call never waits 0 s, and at most the longest window, which also stands for an end the ranking cannot name.
     /**
      * @param array<string, int> $waits
      */
     private function secondsUntilStartable(RankedAccounts $ranked, array $waits): int
     {
-        $now = $this->clock->now()->getTimestamp();
-        $cooling = array_values(array_filter($waits, static fn (int $wait): bool => 0 < $wait));
-        $leftOut = array_map(static fn (LeftOutAccount $left): int => $left->resetsAt instanceof DateTimeImmutable ? max(1, $left->resetsAt->getTimestamp() - $now) : AccountCooldowns::LONGEST_SECONDS, $ranked->leftOut);
+        $leftOut = $this->leftOutWaits([...$ranked->leftOut, ...$this->leftOutWhileCooling($waits)]);
+        $perAccount = [];
+        foreach ($waits as $name => $wait) {
+            $perAccount[] = max($wait, $leftOut[$name] ?? 0);
+        }
 
-        return min([AccountCooldowns::LONGEST_SECONDS, ...$cooling, ...$leftOut]);
+        return max(1, min([AccountCooldowns::LONGEST_SECONDS, ...$perAccount]));
+    }
+
+    // The cooling accounts are ranked for the wait only, never for the send order, because startable() leaves them out before it ranks, so a ceiling that outlasts a cooldown would otherwise never reach the wait.
+    /**
+     * @param array<string, int> $waits
+     *
+     * @return list<LeftOutAccount>
+     */
+    private function leftOutWhileCooling(array $waits): array
+    {
+        $cooling = [];
+        foreach (array_keys($this->platforms) as $name) {
+            if (0 < $waits[$name]) {
+                $cooling[] = new Account($this->provider, $name);
+            }
+        }
+
+        return [] === $cooling || !$this->ranking instanceof AccountRanking ? [] : $this->ranking->rank($cooling)->leftOut;
+    }
+
+    /**
+     * @param list<LeftOutAccount> $leftOut
+     *
+     * @return array<string, int>
+     */
+    private function leftOutWaits(array $leftOut): array
+    {
+        $now = $this->clock->now()->getTimestamp();
+        $waits = [];
+        foreach ($leftOut as $left) {
+            $waits[$left->account->name] = $left->resetsAt instanceof DateTimeImmutable ? max(1, $left->resetsAt->getTimestamp() - $now) : AccountCooldowns::LONGEST_SECONDS;
+        }
+
+        return $waits;
     }
 
     /**

@@ -113,6 +113,54 @@ final class AccountFailoverPlatformRankingTest extends TestCase
         self::assertSame([], $this->called);
     }
 
+    public function testAnAccountBothCoolingDownAndAtAFreshCeilingWaitsUntilBothHaveEnded(): void
+    {
+        $account = new Account(Provider::ClaudeCode, Account::DEFAULT);
+        $this->readings->record(new WindowReading($account, UsageWindow::Weekly, new Usage(95.0, $this->clock->now()->modify('+5 minutes'))));
+        $wait = 60;
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('secondsUntilFree')->willReturnCallback(static function () use (&$wait): int {
+            return $wait;
+        });
+        $platform = new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->answering(Account::DEFAULT)], $cooldowns, $this->clock, new NullLogger(), new NoPinnedProviderCooldowns(), $this->ranking());
+
+        $cooldownAndCeiling = $platform->secondsUntilFree('big');
+        $wait = 0;
+        $this->clock->sleep(60);
+        $afterTheCooldown = $platform->secondsUntilFree('big');
+        $this->holds->coolDown($account, $this->clock->now()->modify('+1 minute'));
+        $holdAndCeiling = $platform->secondsUntilFree('big');
+        $this->clock->sleep(60);
+        $afterTheHold = $platform->secondsUntilFree('big');
+
+        self::assertSame([300, 240, 240, 180], [$cooldownAndCeiling, $afterTheCooldown, $holdAndCeiling, $afterTheHold]);
+    }
+
+    public function testACallRefusedForACoolingAccountAtAFreshCeilingCarriesTheLaterEnd(): void
+    {
+        $this->both(Account::DEFAULT, $this->usage(10.0, 5), $this->usage(95.0, 2));
+        $this->both('team', $this->usage(95.0, 1), $this->usage(20.0, 60));
+
+        self::assertSame(3600, $this->waitOf($this->platform($this->teamCoolingFor(60))));
+        self::assertSame([], $this->called);
+    }
+
+    public function testACooldownThatOutlastsTheCeilingOfItsAccountSetsTheWait(): void
+    {
+        $this->both(Account::DEFAULT, $this->usage(10.0, 5), $this->usage(95.0, 4));
+        $this->both('team', $this->usage(95.0, 1), $this->usage(20.0, 60));
+
+        self::assertSame(2 * 3600, $this->waitOf($this->platform($this->teamCoolingFor(2 * 3600))));
+    }
+
+    public function testACoolingAccountWhoseFreshCeilingNamesNoResetWaitsTheLongestWindow(): void
+    {
+        $this->both(Account::DEFAULT, $this->usage(10.0, 5), $this->usage(95.0, 30));
+        $this->readings->record(new WindowReading(new Account(Provider::ClaudeCode, 'team'), UsageWindow::FiveHour, new Usage(95.0, null)));
+
+        self::assertSame(AccountCooldowns::LONGEST_SECONDS, $this->waitOf($this->platform($this->teamCoolingFor(60))));
+    }
+
     public function testAHoldWithAnHourLeftMakesTheCallWaitAnHourNotADay(): void
     {
         $this->holds->coolDown(new Account(Provider::ClaudeCode, Account::DEFAULT), $this->clock->now()->modify('+1 hour'));

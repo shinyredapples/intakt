@@ -75,6 +75,46 @@ final class MeasuredRoomRankingTest extends TestCase
         self::assertEquals($this->clock->now()->modify('+1 hour'), $ranked->leftOut[0]->resetsAt);
     }
 
+    public function testAnAccountCoolingDownAtAFreshCeilingThatOutlastsItsHoldIsLeftOutUntilTheReset(): void
+    {
+        $this->both('first', $this->usage(10.0, 5), $this->usage(95.0, 60));
+        $this->holds->coolDown(new Account(Provider::ClaudeCode, 'first'), $this->clock->now()->modify('+1 hour'));
+
+        $ranked = $this->rank('first');
+
+        self::assertSame(LeftOutCause::CoolingDown, $ranked->leftOut[0]->cause);
+        self::assertEquals($this->clock->now()->modify('+60 hours'), $ranked->leftOut[0]->resetsAt);
+    }
+
+    public function testAnAccountWhoseHoldOutlastsItsFreshCeilingIsLeftOutUntilTheHoldEnds(): void
+    {
+        $this->both('first', $this->usage(95.0, 2), $this->usage(20.0, 60));
+        $this->holds->coolDown(new Account(Provider::ClaudeCode, 'first'), $this->clock->now()->modify('+3 hours'));
+
+        self::assertEquals($this->clock->now()->modify('+3 hours'), $this->rank('first')->leftOut[0]->resetsAt);
+    }
+
+    public function testAnAccountCoolingDownAtAFreshCeilingWithoutAResetHasNoKnownEnd(): void
+    {
+        $account = new Account(Provider::ClaudeCode, 'first');
+        $this->readings->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(95.0, null)));
+        $this->holds->coolDown($account, $this->clock->now()->modify('+1 hour'));
+
+        $ranked = $this->rank('first');
+
+        self::assertSame(LeftOutCause::CoolingDown, $ranked->leftOut[0]->cause);
+        self::assertNull($ranked->leftOut[0]->resetsAt);
+    }
+
+    public function testAHoldOverAStaleCeilingReadingEndsWithTheHold(): void
+    {
+        $this->both('first', $this->usage(10.0, 5), $this->usage(95.0, 48));
+        $this->clock->modify('+'.(CeilingStartGuard::TRUSTED_FOR_SECONDS + 1).' seconds');
+        $this->holds->coolDown(new Account(Provider::ClaudeCode, 'first'), $this->clock->now()->modify('+1 hour'));
+
+        self::assertEquals($this->clock->now()->modify('+1 hour'), $this->rank('first')->leftOut[0]->resetsAt);
+    }
+
     public function testAnAccountWhoseCeilingReadingIsOlderThanTheProbeIntervalIsStillRankedWhenItIsTheOnlyOne(): void
     {
         $this->both('first', $this->usage(10.0, 5), $this->usage(95.0, 48));
