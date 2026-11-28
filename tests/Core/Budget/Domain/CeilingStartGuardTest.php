@@ -270,11 +270,6 @@ final class CeilingStartGuardTest extends TestCase
         $this->readings->record(new WindowReading($this->account(), $window, new Usage($percent, $resetsAt)));
     }
 
-    private function secondsUntil(?DateTimeImmutable $moment): ?int
-    {
-        return $moment instanceof DateTimeImmutable ? $moment->getTimestamp() - $this->clock->now()->getTimestamp() : null;
-    }
-
     private function fiveHourReset(): DateTimeImmutable
     {
         return $this->clock->now()->modify('+3 hours');
@@ -283,5 +278,10 @@ final class CeilingStartGuardTest extends TestCase
     private function account(): Account
     {
         return new Account(Provider::ClaudeCode, 'main');
+    }
+
+    private function secondsUntil(?DateTimeImmutable $moment): ?int
+    {
+        return $moment instanceof DateTimeImmutable ? $moment->getTimestamp() - $this->clock->now()->getTimestamp() : null;
     }
 }
