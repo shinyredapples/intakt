@@ -169,7 +169,7 @@ final class SmallPoolSplitTest extends TestCase
         self::assertSame([SizingOutcome::Ready, 2, []], [$outcome, count($this->asked), $fixture->parts->filed]);
         self::assertSame([LedgerEventKind::TaskSized], $fixture->ledger->kinds());
         self::assertSame(['outcome' => 'ready', 'size' => 'large', 'estimated_lines' => SmallPoolSplit::LOWER_SPLIT_LINES], array_intersect_key($fixture->ledger->payloads()[0], ['outcome' => true, 'size' => true, 'estimated_lines' => true]));
-        self::assertSame(0, (int) $fixture->parked->fetchOne(sprintf('SELECT COUNT(*) FROM %s', ParkedTaskRecord::TABLE)));
+        self::assertSame(0, $fixture->parked->fetchOne(sprintf('SELECT COUNT(*) FROM %s', ParkedTaskRecord::TABLE)));
     }
 
     public function testATaskKeptWholeAfterItsSecondAnswerIsNotAskedAgainOnTheSameText(): void
