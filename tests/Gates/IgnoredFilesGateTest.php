@@ -282,7 +282,7 @@ final class IgnoredFilesGateTest extends SandboxTestCase
         $sandbox->write('docs/.gitignore', "*.tmp\n");
 
         $result = $sandbox->gateResult(new IgnoredFilesGate());
-        $findings = json_decode($result->toFullJson(), true, flags: \JSON_THROW_ON_ERROR)['findings'];
+        $findings = json_decode($result->toFullJson(), true, flags: JSON_THROW_ON_ERROR)['findings'];
 
         self::assertSame(['docs/.gitignore: working-tree .gitignore differs from the index; stage or revert it so the gate judges the rules that will be committed; tracked although .gitignore excludes it; run git rm --cached on it, or add a negated rule to .gitignore'], $findings);
     }

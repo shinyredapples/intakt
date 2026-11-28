@@ -142,7 +142,7 @@ final readonly class IgnoredFilesGate implements Gate
 
     private function directoryOf(string $rulePath): string
     {
-        return substr($rulePath, 0, -\strlen('.gitignore'));
+        return substr($rulePath, 0, -strlen('.gitignore'));
     }
 
     // Because a finding must name a file the reader can untrack, a path JSON cannot carry losslessly is quoted the way git quotes it.
