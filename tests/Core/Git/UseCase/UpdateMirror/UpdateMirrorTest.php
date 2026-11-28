@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\UseCase\UpdateMirror;
 
+use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
@@ -468,7 +469,7 @@ final class UpdateMirrorTest extends TestCase
     {
         $network = new NetworkGit($clock ?? new RecordingClock(), new NullLogger());
 
-        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors))->update($project, $remote);
+        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors), self::createStub(DiskSpace::class))->update($project, $remote);
     }
 
     private function git(string $directory, string ...$arguments): string
