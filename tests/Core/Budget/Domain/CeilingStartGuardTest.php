@@ -12,6 +12,7 @@ use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
 use Intakt\Core\Budget\Contract\WindowUse;
+use Intakt\Core\Budget\Domain\AccountRoom;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -22,6 +23,7 @@ use Symfony\Component\Clock\MockClock;
 #[CoversClass(CeilingStartGuard::class)]
 #[CoversClass(StartDecision::class)]
 #[UsesClass(Account::class)]
+#[UsesClass(AccountRoom::class)]
 #[UsesClass(Usage::class)]
 #[UsesClass(UsageWindow::class)]
 #[UsesClass(WindowReading::class)]
@@ -184,6 +186,42 @@ final class CeilingStartGuardTest extends TestCase
         self::assertSame(StartDecision::Start, $this->decide(1));
     }
 
+    // 44934 s, because the pace needs 50 * 40 / (90 * 90) of the week elapsed, counting the current five hours: 149333.3 s against 104400 s now.
+    public function testAShortWindowWithoutResetTimeHeldOnlyByTheWeeklyPaceIsFreeOnceThePaceCatchesUp(): void
+    {
+        $this->readWindow(UsageWindow::Weekly, 40.0, $this->weekResets);
+        $this->readWindow(UsageWindow::FiveHour, 50.0, null);
+
+        $room = $this->guard()->roomOf($this->account());
+
+        self::assertSame([UsageWindow::FiveHour, 44934], [$room->atCeiling, $this->secondsUntil($room->resetsAt)]);
+    }
+
+    // 601 s, because at 81% of the week with 47 h 10 min left the pace lifts the short ceiling to exactly 75% after 600 s, and a use at the ceiling still holds the account.
+    public function testARisingWeeklyPaceFreesAShortWindowBeforeEitherReset(): void
+    {
+        $this->readWindow(UsageWindow::Weekly, 81.0, $this->clock->now()->modify('+47 hours 10 minutes'));
+        $this->readWindow(UsageWindow::FiveHour, 75.0, $this->clock->now()->modify('+20 minutes'));
+        $room = $this->guard()->roomOf($this->account());
+        $wait = $this->secondsUntil($room->resetsAt);
+
+        $this->clock->sleep(600);
+        $atTheBoundary = $this->guard()->roomOf($this->account())->atCeiling;
+        $this->clock->sleep(1);
+
+        self::assertSame([UsageWindow::FiveHour, 601, UsageWindow::FiveHour, null], [$room->atCeiling, $wait, $atTheBoundary, $this->guard()->roomOf($this->account())->atCeiling]);
+    }
+
+    public function testAShortWindowWithoutResetTimeAtItsOwnCeilingIsFreeAtAnUnknownTime(): void
+    {
+        $this->readWindow(UsageWindow::Weekly, 40.0, $this->weekResets);
+        $this->readWindow(UsageWindow::FiveHour, 95.0, null);
+
+        $room = $this->guard()->roomOf($this->account());
+
+        self::assertSame([UsageWindow::FiveHour, null], [$room->atCeiling, $room->resetsAt]);
+    }
+
     public function testOnlyAStartDecisionAdmits(): void
     {
         $admitting = array_filter(StartDecision::cases(), static fn (StartDecision $decision): bool => $decision->admits());
@@ -240,5 +278,10 @@ final class CeilingStartGuardTest extends TestCase
     private function account(): Account
     {
         return new Account(Provider::ClaudeCode, 'main');
+    }
+
+    private function secondsUntil(?DateTimeImmutable $moment): ?int
+    {
+        return $moment instanceof DateTimeImmutable ? $moment->getTimestamp() - $this->clock->now()->getTimestamp() : null;
     }
 }

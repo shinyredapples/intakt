@@ -43,6 +43,23 @@ final readonly class CeilingStartGuard
         };
     }
 
+    // A reading older than the probe interval counts as unknown, and so does an account without a current reading; unlike decide(), an old reading at the ceiling leaves no account out, because an unknown account must stay eligible when no trusted one has room.
+    public function roomOf(Account $account): AccountRoom
+    {
+        $uses = $this->currentUsesOf($account);
+        $fresh = array_filter($uses, static fn (WindowUse $use): bool => $use->ageInSeconds <= self::TRUSTED_FOR_SECONDS);
+        $trusted = [] !== $uses && count($fresh) === count($uses);
+        $holding = $this->lastToStopHolding($fresh);
+        if ($holding instanceof UsageWindow) {
+            return new AccountRoom($holding, $this->holdsUntil($holding, $fresh), $trusted);
+        }
+
+        $known = array_filter(array_map(static fn (WindowUse $use): ?DateTimeImmutable => $use->usage->resetsAt, $uses), static fn (?DateTimeImmutable $resetsAt): bool => $resetsAt instanceof DateTimeImmutable);
+        usort($known, static fn (DateTimeImmutable $one, DateTimeImmutable $other): int => $one <=> $other);
+
+        return new AccountRoom(null, array_first($known), $trusted);
+    }
+
     /**
      * @return array<string, WindowUse>
      */
@@ -57,6 +74,58 @@ final readonly class CeilingStartGuard
         }
 
         return $uses;
+    }
+
+    // With both windows at their ceiling the account is free only once the last of them stops holding it, and a window whose end is unknown holds it longest; the weekly window comes first, so it is the cause named when both end together.
+    /**
+     * @param array<string, WindowUse> $uses
+     */
+    private function lastToStopHolding(array $uses): ?UsageWindow
+    {
+        $atCeiling = array_filter([UsageWindow::Weekly, UsageWindow::FiveHour], fn (UsageWindow $window): bool => isset($uses[$window->value]) && $uses[$window->value]->usage->usedPercent >= $this->ceilingOf($window, $uses, 0.0));
+        usort($atCeiling, fn (UsageWindow $one, UsageWindow $other): int => ($this->holdsUntil($other, $uses)?->getTimestamp() ?? PHP_INT_MAX) <=> ($this->holdsUntil($one, $uses)?->getTimestamp() ?? PHP_INT_MAX));
+
+        return array_first($atCeiling);
+    }
+
+    // A short window below its configured ceiling is held only by the weekly pace, so it frees at the first of its own reset, the weekly reset that ends the week's reading, and the moment the rising pace lifts its ceiling above its use.
+    /**
+     * @param array<string, WindowUse> $uses
+     */
+    private function holdsUntil(UsageWindow $window, array $uses): ?DateTimeImmutable
+    {
+        $use = $uses[$window->value];
+        $resetsAt = $use->usage->resetsAt;
+        $weekly = $uses[UsageWindow::Weekly->value] ?? null;
+        $weekResetsAt = $weekly?->usage->resetsAt;
+        if (UsageWindow::Weekly === $window || !$weekly instanceof WindowUse || $use->usage->usedPercent >= $this->ceilings[$window->value] || !$weekResetsAt instanceof DateTimeImmutable) {
+            return $resetsAt;
+        }
+
+        $ends = array_filter([$resetsAt, $weekResetsAt, $this->paceReleases($use, $weekly, $weekResetsAt)], static fn (?DateTimeImmutable $end): bool => $end instanceof DateTimeImmutable);
+
+        return min($ends);
+    }
+
+    // The readings stand still until the next probe, so only the elapsed week moves the paced ceiling; the account is free the first whole second the ceiling passes the use, because a use at the ceiling still holds it.
+    private function paceReleases(WindowUse $short, WindowUse $weekly, DateTimeImmutable $weekResetsAt): ?DateTimeImmutable
+    {
+        $weeklyCeiling = $this->ceilings[UsageWindow::Weekly->value];
+        if ($weeklyCeiling <= 0.0) {
+            return null;
+        }
+
+        $neededShare = $short->usage->usedPercent * $weekly->usage->usedPercent / $this->ceilings[UsageWindow::FiveHour->value] / $weeklyCeiling;
+        if ($neededShare >= 1.0) {
+            return null;
+        }
+
+        $week = UsageWindow::Weekly->seconds();
+        $now = $this->clock->now();
+        $elapsed = $week - ($weekResetsAt->getTimestamp() - $now->getTimestamp());
+        $seconds = (int) floor($neededShare * $week - $elapsed - UsageWindow::FiveHour->seconds()) + 1;
+
+        return $now->modify(sprintf('+%d seconds', max(1, $seconds)));
     }
 
     // A reset window starts empty, so its reading says nothing any more; without a reset time, one window's length is when it reset at the latest.
@@ -76,7 +145,15 @@ final readonly class CeilingStartGuard
      */
     private function reachesCeiling(array $uses, float $margin): bool
     {
-        return array_any($uses, fn (WindowUse $use, string $window): bool => $use->usage->usedPercent >= $this->ceilingOf(UsageWindow::from($window), $uses, $margin));
+        return $this->windowAtCeiling($uses, $margin) instanceof UsageWindow;
+    }
+
+    /**
+     * @param array<string, WindowUse> $uses
+     */
+    private function windowAtCeiling(array $uses, float $margin): ?UsageWindow
+    {
+        return array_find([UsageWindow::Weekly, UsageWindow::FiveHour], fn (UsageWindow $window): bool => isset($uses[$window->value]) && $uses[$window->value]->usage->usedPercent >= $this->ceilingOf($window, $uses, $margin));
     }
 
     /**

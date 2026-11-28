@@ -10,7 +10,6 @@ use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
-use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Domain\BugReport;
@@ -107,14 +106,14 @@ final readonly class BuildTask
         }
 
         if (null !== $failure) {
-            $this->record($run, BuildStep::Task, $failure);
+            $this->record($run, EndedStep::of(BuildStep::Task, $failure));
 
             return $failure;
         }
 
         try {
             $task = $this->readTask($request);
-            $this->record($run, BuildStep::Task, $task instanceof ListedIssue ? null : $task);
+            $this->record($run, EndedStep::of(BuildStep::Task, $task instanceof ListedIssue ? null : $task));
 
             return $task;
         } finally {
@@ -122,13 +121,12 @@ final readonly class BuildTask
         }
     }
 
-    private function record(BuildRun $run, BuildStep $step, ?string $failure): void
+    private function record(BuildRun $run, EndedStep $ended): void
     {
-        $payload = $run->stepPayload($step, null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed, $failure);
-        $result = $this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $payload));
+        $result = $this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload($ended)));
 
         if (!$result->succeeded()) {
-            throw BuildStepNotRecorded::for($run, $step, (string) $result->failure);
+            throw BuildStepNotRecorded::for($run, $ended->step, (string) $result->failure);
         }
     }
 
@@ -165,18 +163,18 @@ final readonly class BuildTask
             // A local of this run, never a property, because a worker keeps the service between runs.
             $results[$step->value] = $result;
 
-            $question = $this->questionIn($result);
+            $asked = AskedQuestion::in($result);
 
-            if ($question instanceof BuildQuestion) {
-                return $this->park($run, $task, $question);
+            if ($asked instanceof AskedQuestion) {
+                return $this->park($run, $task, $asked);
             }
 
-            $failure = $this->failureIn($result);
+            $ended = $this->endOf($step, $result);
 
-            $this->record($run, $step, $failure);
+            $this->record($run, $ended);
 
-            if (null !== $failure) {
-                return new BuildTaskOutcome($step, $failure, $task);
+            if (null !== $ended->failure) {
+                return new BuildTaskOutcome($step, $ended->failure, $task);
             }
         }
 
@@ -205,8 +203,8 @@ final readonly class BuildTask
         return null;
     }
 
-    // The outcome of a job that built, for the hand-back check, or of one that asked an accepted question, for the parking; otherwise the failure's text.
-    private function runBuildJob(BuildTaskRequest $request, BuildRun $run, ListedIssue $task): BuildJobOutcome|BuildQuestion|string
+    // The outcome of a job that built, for the hand-back check, or of one that asked an accepted question, for the parking; otherwise the failed step, with the job's stop cause once a job ran, or the failure's text.
+    private function runBuildJob(BuildTaskRequest $request, BuildRun $run, ListedIssue $task): BuildJobOutcome|BuildQuestion|EndedStep|string
     {
         $incomplete = $this->incompleteBugQuestion($task);
 
@@ -224,16 +222,18 @@ final readonly class BuildTask
             return $outcome;
         }
 
-        // What the job hands back stays untrusted until the hand-back check, so only its verdict reaches the ledger.
+        // What the job hands back stays untrusted until the hand-back check, so only its verdict and its stop cause reach the ledger, both Intakt's own words.
         if (!$outcome->built()) {
-            return $outcome->verdict->reason();
+            return EndedStep::of(BuildStep::BuildJob, $outcome->verdict->reason(), $outcome->stopCause);
         }
 
-        return $this->unpark($run) ?? $outcome;
+        $notCleared = $this->unpark($run);
+
+        return null === $notCleared ? $outcome : EndedStep::of(BuildStep::BuildJob, $notCleared, $outcome->stopCause);
     }
 
     /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null> $results
      */
     private function bundleIn(array $results): string
     {
@@ -242,7 +242,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null> $results
      */
     private function builtIn(array $results): BuildJobOutcome
     {
@@ -253,7 +253,7 @@ final readonly class BuildTask
 
     // The mirror again first, because main can move while the build job runs and the check merges the branch with current main; the text last, so only a head that would otherwise be pushed counts toward its one go-back. The regression runs of a passed check are the step's result, for the push.
     /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null> $results
      */
     private function prePushCheck(BuildTaskRequest $request, ListedIssue $task, array $results): RegressionRuns|string|null
     {
@@ -280,7 +280,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null> $results
      */
     private function textIn(array $results): string
     {
@@ -294,7 +294,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null> $results
      */
     private function push(BuildTaskRequest $request, array $results): ?string
     {
@@ -312,18 +312,13 @@ final readonly class BuildTask
         return $changeText instanceof ChangeText ? $this->pushes->failureOf($request, $accepted, $changeText) : $changeText;
     }
 
-    private function questionIn(BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null $result): ?BuildQuestion
-    {
-        return $result instanceof BuildJobOutcome ? $result->question : ($result instanceof BuildQuestion ? $result : null);
-    }
-
     // The run ends at the build job without recording its step, because park() records it as asked in the transaction that stores the question.
-    private function park(BuildRun $run, ListedIssue $task, BuildQuestion $question): BuildTaskOutcome
+    private function park(BuildRun $run, ListedIssue $task, AskedQuestion $asked): BuildTaskOutcome
     {
         try {
-            $this->parkedTasks->park($run, $question);
+            $this->parkedTasks->park($run, $asked->question, $asked->stopCause);
         } catch (TaskNotParked $notParked) {
-            $this->record($run, BuildStep::BuildJob, $notParked->getMessage());
+            $this->record($run, EndedStep::of(BuildStep::BuildJob, $notParked->getMessage(), $asked->stopCause));
 
             return new BuildTaskOutcome(BuildStep::BuildJob, $notParked->getMessage(), $task);
         }
@@ -331,10 +326,14 @@ final readonly class BuildTask
         return new BuildTaskOutcome(BuildStep::BuildJob, null, $task);
     }
 
-    // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed.
-    private function failureIn(BuildJobOutcome|BuildQuestion|AcceptedHandBack|RegressionRuns|string|null $result): ?string
+    // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed; a job that built after a stop still names its cause.
+    private function endOf(BuildStep $step, BuildJobOutcome|BuildQuestion|EndedStep|AcceptedHandBack|RegressionRuns|string|null $result): EndedStep
     {
-        return is_string($result) ? $result : null;
+        if ($result instanceof EndedStep) {
+            return $result;
+        }
+
+        return EndedStep::of($step, is_string($result) ? $result : null, $result instanceof BuildJobOutcome ? $result->stopCause : null);
     }
 
     // The title on the first line and the body after it, as BuilderPrompt asks the builder to write them; fixed words for a text without a title, because the forge opens no pull request without one.

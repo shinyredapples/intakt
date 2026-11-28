@@ -9,16 +9,12 @@ final readonly class HighlightFragments
 {
     public const string ASSEMBLED = 'docs/highlights.md';
 
-    private const string DIRECTORY = 'docs/highlights.d';
+    public const string DIRECTORY = 'docs/highlights.d';
 
     private const string FRAGMENT_NAME = '/^\d+-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/';
 
-    private const string COMMIT = '/^[0-9a-f]{40,64}$/';
-
-    private const int UNBORN_HEAD = 1;
-
     public function __construct(
-        private ProcessRunner $runner = new ProcessRunner(),
+        private HighlightHistory $history = new HighlightHistory(),
     ) {
     }
 
@@ -81,22 +77,24 @@ final readonly class HighlightFragments
             return new HighlightAssembly('', ['cannot read '.HighlightLayout::FILE]);
         }
 
-        $history = $this->additionsOn($root);
+        $order = $this->history->orderOn($root);
 
-        if (is_string($history)) {
-            return new HighlightAssembly('', [$history]);
+        if (is_string($order)) {
+            return new HighlightAssembly('', [$order]);
         }
 
         $layout = HighlightLayout::fromLines($layout);
         $names = $this->fragmentNames($root);
         $findings = $this->nameFindings($names);
-        $rows = [];
+        $rowsByFragment = [];
 
-        foreach ($this->fragmentsInOrder($names, $history) as $name) {
-            [$fragmentRows, $fragmentFindings] = $this->rowsOf($root, $name, $layout);
+        foreach ($this->fragmentsInOrder($names, $order) as $name) {
+            [$rowsByFragment[$name], $fragmentFindings] = $this->rowsOf($root, $name, $layout);
             $findings = [...$findings, ...$fragmentFindings];
-            $rows = $this->withReplacedRows($rows, $fragmentRows);
         }
+
+        $findings = [...$findings, ...$this->unorderedRowFindings($rowsByFragment, $order)];
+        $rows = array_reduce($rowsByFragment, $this->withReplacedRows(...), []);
 
         return new HighlightAssembly([] === $findings ? $layout->assembledWith($rows) : '', $findings);
     }
@@ -109,34 +107,6 @@ final readonly class HighlightFragments
         $contents = $this->contentsOf($file);
 
         return null === $contents ? null : array_map(rtrim(...), explode("\n", $contents));
-    }
-
-    /**
-     * @return array<string, int>|string
-     */
-    private function additionsOn(string $root): array|string
-    {
-        // First-parent history, because on the main branch a merge or squash commit adds a change's fragment when it is merged, not when it was written.
-        $head = file_exists($root.'/.git') ? $this->runner->git(['rev-parse', '--verify', '--quiet', 'HEAD'], $root) : null;
-
-        // With --quiet, exit status 1 is a branch without commits; any other failure is history git cannot read.
-        if (!$head instanceof ProcessResult || self::UNBORN_HEAD === $head->exitCode) {
-            return [];
-        }
-
-        $unreadable = $this->unreadableHistoryFinding($root, $head);
-
-        if (null !== $unreadable) {
-            return $unreadable;
-        }
-
-        $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', '--', self::DIRECTORY.'/'], $root);
-
-        if (!$log->succeeded()) {
-            return 'cannot read the history of '.self::DIRECTORY.'/: '.$log->firstErrorLine();
-        }
-
-        return $this->additionsIn($log->output);
     }
 
     /**
@@ -169,63 +139,18 @@ final readonly class HighlightFragments
     }
 
     /**
-     * @param list<string>       $names
-     * @param array<string, int> $history
+     * @param list<string> $names
      *
      * @return list<string>
      */
-    private function fragmentsInOrder(array $names, array $history): array
+    private function fragmentsInOrder(array $names, HighlightOrder $order): array
     {
         $fragments = array_values(array_filter($names, static fn (string $name): bool => 1 === preg_match(self::FRAGMENT_NAME, $name)));
 
-        // A later change replaces an earlier one's row whatever their issue numbers, so fragments apply in the order they reached the branch; an uncommitted fragment is the newest.
-        usort($fragments, static function (string $a, string $b) use ($history): int {
-            $byHistory = ($history[$a] ?? PHP_INT_MAX) <=> ($history[$b] ?? PHP_INT_MAX);
-
-            return 0 === $byHistory ? strnatcmp($a, $b) : $byHistory;
-        });
+        // A later change replaces an earlier one's row whatever their issue numbers, so fragments apply in the order their first-parent commits reached the branch; an uncommitted fragment is the newest.
+        usort($fragments, $order->compare(...));
 
         return $fragments;
-    }
-
-    private function unreadableHistoryFinding(string $root, ProcessResult $head): ?string
-    {
-        if (!$head->succeeded()) {
-            return 'cannot read the history of '.self::DIRECTORY.'/: '.$head->firstErrorLine();
-        }
-
-        return $this->shallowHistoryFinding($root);
-    }
-
-    /**
-     * @return array<string, int>
-     */
-    private function additionsIn(string $log): array
-    {
-        $history = [];
-        $commit = 0;
-
-        foreach (explode("\n", $log) as $line) {
-            if (1 === preg_match(self::COMMIT, $line)) {
-                ++$commit;
-            } elseif ('' !== $line) {
-                $history[basename($line)] = $commit;
-            }
-        }
-
-        return $history;
-    }
-
-    // A shallow clone hides the commits that added the older fragments, which would quietly reorder them.
-    private function shallowHistoryFinding(string $root): ?string
-    {
-        $shallow = $this->runner->git(['rev-parse', '--is-shallow-repository'], $root);
-
-        if (!$shallow->succeeded()) {
-            return 'cannot read the history of '.self::DIRECTORY.'/: '.$shallow->firstErrorLine();
-        }
-
-        return 'false' === trim($shallow->output) ? null : 'the history of '.self::DIRECTORY.'/ is shallow, so the order its fragments were merged in is unknown: fetch the full history (git fetch --unshallow)';
     }
 
     /**
@@ -237,6 +162,75 @@ final readonly class HighlightFragments
         $lines = $this->linesOf($root.'/'.$file);
 
         return null === $lines ? [[], ['cannot read '.$file]] : new HighlightFragment($file, $layout)->rowsOf($lines);
+    }
+
+    /**
+     * @param array<string, array<string, array<string, string>>> $rowsByFragment
+     *
+     * @return list<string>
+     */
+    private function unorderedRowFindings(array $rowsByFragment, HighlightOrder $order): array
+    {
+        // Fragments that share a place would otherwise fall back to an order history does not give, and an older change could silently replace a newer row.
+        $findings = [];
+
+        foreach ($this->latestSettersOf($rowsByFragment, $order) as [$section, $key, $names]) {
+            if (count($names) > 1) {
+                $findings[] = $this->listOf($names).' set row "'.$key.'" of section "'.$section.'" at one place in the first-parent history (one commit or merge added them, they are uncommitted, or there is no history), so none of them is known to be newer: remove the superseded row from its fragment, and delete the fragment only if nothing is left in it';
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * @param array<string, array<string, array<string, string>>> $rowsByFragment
+     *
+     * @return list<array{string, string, non-empty-list<string>}>
+     */
+    private function latestSettersOf(array $rowsByFragment, HighlightOrder $order): array
+    {
+        $setBy = [];
+
+        foreach ($rowsByFragment as $name => $rows) {
+            foreach ($this->rowKeysOf($rows) as [$section, $key]) {
+                $latest = $setBy[$section][$key][2] ?? [];
+
+                // A fragment at a later place sets the row's final value, so a tie before it does not matter.
+                $setBy[$section][$key] = [$section, $key, [] !== $latest && !$order->knowsWhichCameFirst($latest[0], $name) ? [...$latest, $name] : [$name]];
+            }
+        }
+
+        return array_merge(...array_map(array_values(...), array_values($setBy)));
+    }
+
+    /**
+     * @param array<string, array<string, string>> $rows
+     *
+     * @return list<array{string, string}>
+     */
+    private function rowKeysOf(array $rows): array
+    {
+        $keys = [];
+
+        foreach ($rows as $section => $sectionRows) {
+            foreach (array_keys($sectionRows) as $key) {
+                $keys[] = [$section, $key];
+            }
+        }
+
+        return $keys;
+    }
+
+    /**
+     * @param non-empty-list<string> $names
+     */
+    private function listOf(array $names): string
+    {
+        $files = array_map(static fn (string $name): string => self::DIRECTORY.'/'.$name, $names);
+        $last = array_pop($files);
+
+        return [] === $files ? $last : implode(', ', $files).' and '.$last;
     }
 
     /**

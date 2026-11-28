@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
+use Intakt\Core\Budget\Domain\MeasuredRoomRanking;
 use Intakt\Core\Budget\Domain\OutageWatch;
 use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
 use Intakt\Core\Budget\Infrastructure\AccountReadingLock;
@@ -52,6 +53,7 @@ use Symfony\Component\Lock\LockFactory;
 #[UsesClass(ScriptHoldsNoStep::class)]
 #[UsesClass(BudgetGuard::class)]
 #[UsesClass(CeilingStartGuard::class)]
+#[UsesClass(MeasuredRoomRanking::class)]
 #[UsesClass(AccountReadingLock::class)]
 #[UsesClass(DoctrineHolds::class)]
 #[UsesClass(DoctrineMeasuredUse::class)]
@@ -107,6 +109,21 @@ final class ReplayDayCommandTest extends KernelTestCase
             '2026-11-02T15:10 start claude_code.team 0: start',
             '2026-11-02T16:00 start claude_code.team 0: start',
         ], $this->linesOf($this->command->getDisplay()));
+    }
+
+    public function testARankStepPrintsTheAccountsInTheOrderOfTheirMeasuredRoomAndEachLeftOutAccountsCause(): void
+    {
+        $this->command->execute(['script' => __DIR__.'/ranked-day.txt']);
+
+        $this->command->assertCommandIsSuccessful();
+        self::assertSame([
+            '2026-11-02T08:00 rank claude_code.main claude_code.team: ranked claude_code.team; left out claude_code.main weekly-ceiling until 2026-11-04T08:00',
+            '2026-11-02T08:00 rank anthropic.key claude_code.team: ranked claude_code.team, anthropic.key; left out none',
+            '2026-11-02T08:00 rank claude_code.spare claude_code.team: ranked claude_code.team, claude_code.spare; left out none',
+            '2026-11-02T08:10 rank claude_code.spare claude_code.team: ranked claude_code.spare; left out claude_code.team short-window-ceiling until 2026-11-02T11:00',
+            '2026-11-02T08:20 rank claude_code.main claude_code.team claude_code.spare: ranked none; left out claude_code.main weekly-ceiling until 2026-11-04T08:00, claude_code.team short-window-ceiling until 2026-11-02T11:00, claude_code.spare short-window-ceiling until 2026-11-02T12:00',
+            '2026-11-02T09:00 rank claude_code.main claude_code.team claude_code.spare: ranked claude_code.spare, claude_code.main; left out claude_code.team cooling-down until 2026-11-02T10:00',
+        ], array_values(array_filter($this->linesOf($this->command->getDisplay()), static fn (string $line): bool => str_contains($line, ' rank '))));
     }
 
     public function testAReplayLeavesNoReadingHoldOrNoticeOnTheInstall(): void

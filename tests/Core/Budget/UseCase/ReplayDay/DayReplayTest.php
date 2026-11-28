@@ -5,14 +5,18 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Budget\UseCase\ReplayDay;
 
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Budget\Contract\LeftOutAccount;
+use Intakt\Core\Budget\Contract\RankedAccounts;
 use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
 use Intakt\Core\Budget\Contract\WindowUse;
+use Intakt\Core\Budget\Domain\AccountRoom;
 use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
+use Intakt\Core\Budget\Domain\MeasuredRoomRanking;
 use Intakt\Core\Budget\Domain\OutageWatch;
 use Intakt\Core\Budget\UseCase\ReplayDay\DayReplay;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptedStep;
@@ -33,6 +37,10 @@ use Symfony\Component\EventDispatcher\EventDispatcher;
 #[UsesClass(BudgetGuard::class)]
 #[UsesClass(CeilingStartGuard::class)]
 #[UsesClass(OutageWatch::class)]
+#[UsesClass(MeasuredRoomRanking::class)]
+#[UsesClass(AccountRoom::class)]
+#[UsesClass(RankedAccounts::class)]
+#[UsesClass(LeftOutAccount::class)]
 #[UsesClass(SharedHold::class)]
 #[UsesClass(StartDecision::class)]
 #[UsesClass(Account::class)]
@@ -51,6 +59,15 @@ final class DayReplayTest extends TestCase
         self::assertSame('cooling-down', $this->play('2026-11-02T08:00 start claude_code.main 0'));
         self::assertSame('held', $this->play('2026-11-02T08:00 hold drain 2026-11-02T09:00'));
         self::assertSame('draining', $this->play('2026-11-02T08:00 merge'));
+        self::assertSame('ranked claude_code.team; left out claude_code.main cooling-down until 2026-11-02T09:00', $this->play('2026-11-02T08:00 rank claude_code.main claude_code.team'));
+    }
+
+    public function testARankStepNamesEachLeftOutAccountWithItsCauseAndItsEnd(): void
+    {
+        $this->play('2026-11-02T08:00 read claude_code.main weekly 95 2026-11-04T08:00');
+        $this->play('2026-11-02T08:00 read claude_code.team five-hour 95 2026-11-02T10:00');
+
+        self::assertSame('ranked none; left out claude_code.main weekly-ceiling until 2026-11-04T08:00, claude_code.team short-window-ceiling until 2026-11-02T10:00', $this->play('2026-11-02T08:00 rank claude_code.main claude_code.team'));
     }
 
     /**
@@ -58,8 +75,10 @@ final class DayReplayTest extends TestCase
      */
     public static function linesNotUnderstood(): iterable
     {
-        yield 'an unknown step' => ['2026-11-02T08:00 sleep', 'a step is read, limit, hold, start or merge'];
-        yield 'no step' => ['2026-11-02T08:00', 'a step is read, limit, hold, start or merge'];
+        yield 'an unknown step' => ['2026-11-02T08:00 sleep', 'a step is read, limit, hold, start, merge or rank'];
+        yield 'no step' => ['2026-11-02T08:00', 'a step is read, limit, hold, start, merge or rank'];
+        yield 'a rank without an account' => ['2026-11-02T08:00 rank', 'rank takes one account or more'];
+        yield 'a rank of an account written wrong' => ['2026-11-02T08:00 rank claude_code.team claude', 'an account is written as provider.name'];
         yield 'a missing argument' => ['2026-11-02T08:00 start claude_code.main', 'start takes 2 arguments'];
         yield 'an extra argument' => ['2026-11-02T08:00 merge now', 'merge takes 0 arguments'];
         yield 'an unknown provider' => ['2026-11-02T08:00 start claude.main 0', 'an account is written as provider.name'];
@@ -89,7 +108,7 @@ final class DayReplayTest extends TestCase
         $readings = new ReadingsInMemory($clock);
         $holds = new HoldsInMemory($clock);
         $guard = new BudgetGuard($holds, new CeilingStartGuard($readings, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]), new OutageWatch($readings, $clock, new EventDispatcher()), new HaltsInMemory());
-        $this->replay = new DayReplay($readings, $holds, $guard);
+        $this->replay = new DayReplay($readings, $holds, $guard, new MeasuredRoomRanking($holds, new CeilingStartGuard($readings, $clock, ['five-hour' => 90.0, 'weekly' => 90.0])));
     }
 
     private function play(string $line): string

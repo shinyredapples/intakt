@@ -72,6 +72,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
 use Intakt\Tests\Core\Ai\Infrastructure\NoPinnedProviderCooldowns;
+use Intakt\Tests\Core\Ai\Infrastructure\OwnersOrderRanking;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
@@ -255,7 +256,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
     {
         $logger = new BufferingLogger();
         $cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new MockClock(self::NOW)), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::ClaudeCode->value => [Account::DEFAULT]]);
-        $accounts = new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->claudeCodePlatform(RecordedClaudeCodeCli::replaying($recording))], $cooldowns, new MockClock(self::NOW), $logger, new NoPinnedProviderCooldowns());
+        $accounts = new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->claudeCodePlatform(RecordedClaudeCodeCli::replaying($recording))], $cooldowns, new MockClock(self::NOW), $logger, new NoPinnedProviderCooldowns(), new OwnersOrderRanking());
 
         try {
             $this->vendorOn($accounts)->review('alpha', Tier::Strong, $this->request());
