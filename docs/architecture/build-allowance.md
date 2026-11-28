@@ -1,6 +1,6 @@
 # When a build over its allowance stops
 
-Progress, not spend, ends a build: one over its allowance keeps going while it makes progress, until the runaway ceiling or the per-task total applies ([Budget and model planner](../design/05-architecture/06-budget-and-model-planner.md), "Allowance per task"). Plain code in `src/Core/Build/Domain/` decides when a running build stops and names the cause. Nothing calls it yet: the watch of a running build (#3965) will, and the pages follow with T60 (#1737). The limits are configured already, and a recorded cause already reaches the ledger (below).
+Progress, not spend, ends a build: one over its allowance keeps going while it makes progress, until the runaway ceiling or the per-task total applies ([Budget and model planner](../design/05-architecture/06-budget-and-model-planner.md), "Allowance per task"). Plain code in `src/Core/Build/Domain/` decides when a running build stops and names the cause. Nothing calls it yet: the watch of a running build (#3965) will, and the pages follow with T60 (#1737). The limits are configured, and a recorded cause reaches the ledger (below).
 
 ## A stopped job keeps its commits
 
@@ -10,7 +10,7 @@ Progress, not spend, ends a build: one over its allowance keeps going while it m
 
 ## The ledger names the cause
 
-`BuildTask` writes the cause into the `stop_cause` key of the `build_job` step's `build_step_ended` row, as the `BuildStopCause` value (`no_progress`, `runaway_ceiling` or `per_task_total`), through `UseCase/BuildTask/EndedStep`. The row names it whether the step passed, asked or failed: the `asked` row of a stopped job that parks its question records the cause, and a stopped job that handed back no commit, whose question could not be parked, or whose earlier parked question could not be cleared, still records its cause beside the failure. Every other row, and the row of a job that was not stopped, holds `stop_cause: null`; rows written before this key existed lack it, and no reader reads it yet ([Build task, The ledger](build-task.md#the-ledger)).
+`BuildTask` writes the cause into the `stop_cause` key of the `build_job` step's `build_step_ended` row, as the `BuildStopCause` value (`no_progress`, `runaway_ceiling` or `per_task_total`), through `UseCase/BuildTask/EndedStep`. The row names it whether the step passed, asked or failed: the `asked` row of a stopped job that parks its question records the cause, and a stopped job that handed back no commit, whose question could not be parked, or whose earlier parked question could not be cleared, still records its cause beside the failure, as does a job whose runner failed after the stop (`JobEventNotRecorded` or `DockerEngineFailed`, which `RunBuildJob` hands on as `BuildJobFailed` with the cause it read, keeping the original text). Every other row, and the row of a job that was not stopped, holds `stop_cause: null`; rows written before this key existed lack it, and no reader reads it yet ([Build task, The ledger](build-task.md#the-ledger)).
 
 ## The classes
 
