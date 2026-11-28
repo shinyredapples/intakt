@@ -315,9 +315,9 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .seg { display: flex; }
   .seg button { flex: 1; height: var(--tab-h); }
   .input, .select { height: 48px; }
-  /* overflow-x: auto clips on every side, so the padding keeps the 2px focus ring and its 2px offset inside the box; the negative inline margin keeps the chips lined up with the page; the scroll padding stops a focused control, scrolled into view, flush against the edge, where the ring would be cut. */
   /* The bottom bar is fixed, so focus must scroll a control clear of it as well. */
   html { scroll-padding-bottom: calc(var(--bar) + env(safe-area-inset-bottom) + var(--s8)); }
+  /* overflow-x: auto clips on every side, so the padding keeps the 2px focus ring and its 2px offset inside the box; the negative inline margin keeps the chips lined up with the page; the scroll padding stops a focused control, scrolled into view, flush against the edge, where the ring would be cut. */
   .filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-block: var(--s4); padding-inline: var(--s4); margin-inline: calc(-1 * var(--s4)); scroll-padding-inline: var(--s8); }
   .filters .input { flex: none; min-width: 200px; height: 48px; }
   .filters #history-project { display: block; flex: none; width: auto; max-width: 60%; height: 48px; }
@@ -931,6 +931,8 @@ a.lane:hover { background: var(--tint-2); }
 @media (max-width: 760px) {
   :root:has(.tour-caption):not([data-tour="closed"]) { --bar: 56px; }
   :root:has(.tour-caption):not([data-tour="closed"]) .rail .nav { height: 48px; }
+  /* The caption sits above the bar, so focus must clear its 44 px as well. */
+  :root:has(.tour-caption):not([data-tour="closed"]) { scroll-padding-bottom: calc(var(--bar) + 44px + env(safe-area-inset-bottom) + var(--s8)); }
   .tour-caption { bottom: calc(var(--bar) + env(safe-area-inset-bottom)); gap: var(--s8); min-height: 44px; padding: 0 0 0 var(--s16); border-top: 0; }
   .tour-caption .tour-dots { position: absolute; top: -1px; left: 0; right: 0; gap: 2px; }
   .tour-caption .tour-dot, .tour-caption .tour-dot.now { flex: 1; width: auto; height: 3px; border-radius: 0; }
