@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
@@ -87,7 +88,7 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
-// On the install's own database, because the parked row and the asked step share its transaction while the earlier steps go through the same ledger; a stopped job's row is read back from the same table.
+// On the install's own database, because the parked row and the asked step share its transaction while the earlier steps go through the same ledger; a stopped job's row is read back from the same table. The refused parking runs on SQLite only, because its trigger is written in SQLite.
 #[Group('persistence')]
 #[CoversClass(BuildTask::class)]
 #[CoversClass(BuildTaskOutcome::class)]
@@ -258,6 +259,10 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
     public function testAStoppedBuildJobThatAsksAQuestionKeepsItsStopCauseInTheBuildJobLedgerRow(bool $refuseParking, string $expected): void
     {
         if ($refuseParking) {
+            if (!$this->connection()->getDatabasePlatform() instanceof SQLitePlatform) {
+                self::markTestSkipped('The trigger that refuses the parked row is written in SQLite.');
+            }
+
             $this->connection()->executeStatement("CREATE TRIGGER refuse_park BEFORE INSERT ON build_parked_task BEGIN SELECT RAISE(ABORT, 'refused'); END");
         }
 
