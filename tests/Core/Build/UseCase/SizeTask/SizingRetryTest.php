@@ -41,7 +41,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
-// Forced order in every test: the first run's comment post fails after the park, and the retry runs on the same text.
+// Each test forces the first run's comment post to fail after the park, because only that order shows whether the retry on the same text finishes the first verdict or sizes the task again.
 #[CoversClass(SizeTask::class)]
 #[CoversClass(RecordedSizing::class)]
 #[CoversClass(SizingRecords::class)]
@@ -152,14 +152,9 @@ final class SizingRetryTest extends TestCase
         self::assertSame(1, $this->calls);
     }
 
-    private function failedFirstRun(SizeTask $sizing): void
+    private function fixture(): SizingFixture
     {
-        try {
-            (void) $sizing->run(ScriptedIssue::PROJECT, ScriptedIssue::NUMBER);
-            self::fail('A run whose comment failed was reported as sized.');
-        } catch (TaskNotSized $notSized) {
-            self::assertStringContainsString('but its comment was not posted', $notSized->getMessage());
-        }
+        return new SizingFixture(self::createStub(ManagerRegistry::class));
     }
 
     private function issueThatStoresAndFails(): ScriptedIssue
@@ -168,14 +163,6 @@ final class SizingRetryTest extends TestCase
         $issue->answerToAStoredPost = 502;
 
         return $issue;
-    }
-
-    private function vendorAnswering(SizingVerdict ...$verdicts): SizingVendor
-    {
-        $vendor = self::createStub(SizingVendor::class);
-        $vendor->method('size')->willReturnCallback(fn (): SizingVerdict => $verdicts[$this->calls++] ?? self::fail('The model was asked more often than it was scripted for.'));
-
-        return $vendor;
     }
 
     private function notReady(ReadinessGap $gap): SizingVerdict
@@ -188,16 +175,29 @@ final class SizingRetryTest extends TestCase
         return new SizingVerdict(true, [], SizeTier::Small, 20, 'Reassessed.');
     }
 
+    private function vendorAnswering(SizingVerdict ...$verdicts): SizingVendor
+    {
+        $vendor = self::createStub(SizingVendor::class);
+        $vendor->method('size')->willReturnCallback(fn (): SizingVerdict => $verdicts[$this->calls++] ?? self::fail('The model was asked more often than it was scripted for.'));
+
+        return $vendor;
+    }
+
+    private function failedFirstRun(SizeTask $sizing): void
+    {
+        try {
+            (void) $sizing->run(ScriptedIssue::PROJECT, ScriptedIssue::NUMBER);
+            self::fail('A run whose comment failed was reported as sized.');
+        } catch (TaskNotSized $notSized) {
+            self::assertStringContainsString('but its comment was not posted', $notSized->getMessage());
+        }
+    }
+
     /**
      * @return list<array<string, mixed>>
      */
     private function sizings(SizingFixture $fixture): array
     {
         return array_values(array_filter($fixture->ledger->payloads(), static fn (array $payload): bool => isset($payload['text'])));
-    }
-
-    private function fixture(): SizingFixture
-    {
-        return new SizingFixture(self::createStub(ManagerRegistry::class));
     }
 }

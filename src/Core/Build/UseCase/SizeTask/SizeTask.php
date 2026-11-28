@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\SizeTask;
 
-use Intakt\Core\Build\Contract\ReadinessGap;
 use Intakt\Core\Build\Contract\SizingRequest;
-use Intakt\Core\Build\Contract\SizingVerdict;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTaskNotCleared;
@@ -102,7 +100,11 @@ final readonly class SizeTask
         $missing = $verdict->missing ?? [];
 
         if (SizingOutcome::Parked === $outcome && [] !== $missing) {
-            $this->parkedAndAsked($run, $request, $verdict, $missing);
+            $question = BuildQuestion::forMissingReadiness($missing);
+            $this->parked($run, $question);
+            // After the park and before the comment, so a record of a failed park never keeps the task from being sized again, and a comment the forge stored but answered as failed leaves the verdict on record for the retry to finish.
+            $this->records->record($request, $verdict, $run->id);
+            $this->asked($run, $request, $question);
 
             return $outcome;
         }
@@ -132,25 +134,16 @@ final readonly class SizeTask
         return SizingOutcome::AlreadySized;
     }
 
-    // Parked before the record, because a record of a failed park would keep the task from being sized again; recorded before the comment, so a comment the forge stored but answered as failed leaves the verdict on record and the retry only ensures the comment.
     /**
-     * @param non-empty-list<ReadinessGap> $missing
-     *
      * @throws TaskNotSized
      */
-    private function parkedAndAsked(BuildRun $run, SizingRequest $request, SizingVerdict $verdict, array $missing): void
+    private function parked(BuildRun $run, BuildQuestion $question): void
     {
-        $question = BuildQuestion::forMissingReadiness($missing);
-
         try {
             $this->parkedTasks->park($run, $question);
         } catch (TaskNotParked) {
             throw TaskNotSized::notParked($run->project, $run->task);
         }
-
-        $this->records->record($request, $verdict, $run->id);
-
-        $this->asked($run, $request, $question);
     }
 
     // Keyed by the hash of the sized text, so a retry finds a stored comment and posts no second one, while an edited text that still lacks the same item gets its own comment.

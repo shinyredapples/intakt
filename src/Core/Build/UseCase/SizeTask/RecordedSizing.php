@@ -25,16 +25,17 @@ final readonly class RecordedSizing
     public static function in(string $payload): ?self
     {
         $fields = json_decode($payload, true);
-        $text = is_array($fields) ? ($fields['text'] ?? null) : null;
-        $outcome = is_array($fields) && is_string($fields['outcome'] ?? null) ? SizingOutcome::tryFrom($fields['outcome']) : null;
-        $run = is_array($fields) ? ($fields['run'] ?? null) : null;
-        $missing = self::gapsIn(is_array($fields) ? ($fields['missing'] ?? null) : null);
 
-        if (!is_string($text) || !in_array($outcome, [SizingOutcome::Ready, SizingOutcome::Parked], true)) {
+        if (!is_array($fields)) {
             return null;
         }
 
-        if (SizingOutcome::Parked === $outcome && [] === $missing) {
+        $text = $fields['text'] ?? null;
+        $outcome = is_string($fields['outcome'] ?? null) ? SizingOutcome::tryFrom($fields['outcome']) : null;
+        $missing = self::gapsIn($fields['missing'] ?? null);
+        $run = $fields['run'] ?? null;
+
+        if (!is_string($text) || !self::settles($outcome, $missing)) {
             return null;
         }
 
@@ -82,5 +83,15 @@ final readonly class RecordedSizing
         }
 
         return $gaps;
+    }
+
+    /**
+     * @param list<ReadinessGap> $missing
+     *
+     * @phpstan-assert-if-true SizingOutcome $outcome
+     */
+    private static function settles(?SizingOutcome $outcome, array $missing): bool
+    {
+        return SizingOutcome::Ready === $outcome || (SizingOutcome::Parked === $outcome && [] !== $missing);
     }
 }
