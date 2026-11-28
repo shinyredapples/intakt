@@ -53,8 +53,6 @@ final class ParityRecordTest extends TestCase
             'Intake and shaping, line 10: A task waits until every `Waits for #n` issue is closed; a line naming the task\'s own pull request is no wait, and a pull request target counts as the task it closes for that task\'s failure and stall, but releases only on that pull request\'s confirmed merge into main.',
             'Intake and shaping, line 11: Open pull request work goes before new tasks.',
             'Intake and shaping, line 12: Projects get free slots in share order; urgent work first; a project at share 0 is paused for builds and reviews.',
-            'Intake and shaping, line 13: A task split creates its parts in order with `Waits for` lines, and the original becomes an umbrella.',
-            'Intake and shaping, line 14: A task is never split twice; an interrupted split ends on the first part once.',
             'Intake and shaping, line 15: An umbrella closes only on trusted notes when its parts close.',
             'Build and hand-back, line 20: Builder and reviewer egress is limited to an allowlist; the vendor login is unreadable to the model\'s commands.',
             'Build and hand-back, line 22: Builds run the project\'s own PHP, never a fallback.',

@@ -57,7 +57,7 @@ final class SizeTaskCommandTest extends TestCase
 {
     public function testAReadyTaskPrintsItsOutcome(): void
     {
-        $tester = $this->tester(new SizingVerdict(true, [], SizeTier::Small, 10, 'Fine.'));
+        $tester = $this->tester(new SizingVerdict(true, [], SizeTier::Small, 10, 'Fine.', []));
 
         $status = $tester->execute(['project' => 'alpha', 'issue' => '7']);
 
@@ -111,7 +111,7 @@ final class SizeTaskCommandTest extends TestCase
     {
         $fixture = new SizingFixture(self::createStub(ManagerRegistry::class));
         $vendor = self::createStub(SizingVendor::class);
-        $vendor->method('size')->willReturn(new SizingVerdict(true, [], SizeTier::Small, 10, 'Fine.'));
+        $vendor->method('size')->willReturn(new SizingVerdict(true, [], SizeTier::Small, 10, 'Fine.', []));
         $tester = new CommandTester(new SizeTaskCommand($fixture->sizing($vendor)));
         $tester->execute(['project' => 'alpha', 'issue' => '7']);
 

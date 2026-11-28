@@ -72,6 +72,50 @@ final class GitHubTaskPartsTest extends TestCase
         self::assertCount(1, $tracker->filed());
     }
 
+    public function testAFiledPartIsKnownByItsNumberInItsProjectAlone(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $number = $this->fileOnce($tracker);
+
+        $parts = $tracker->parts();
+
+        self::assertSame([true, false, false], [$parts->isFiledPart(ScriptedIssueTracker::PROJECT, $number), $parts->isFiledPart(ScriptedIssueTracker::PROJECT, $number + 1), $parts->isFiledPart('other', $number)]);
+    }
+
+    public function testAPartNumberKeptForOneRepositoryIsNotAFiledPartAfterTheProjectIsRemappedToAnother(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $number = $this->fileOnce($tracker);
+
+        self::assertFalse($tracker->parts('acme/gadget')->isFiledPart(ScriptedIssueTracker::PROJECT, $number));
+    }
+
+    public function testAPartNumberKeptForTheProjectsCurrentRepositoryIsStillAFiledPart(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $number = $this->fileOnce($tracker);
+
+        self::assertTrue($tracker->parts('acme/widget')->isFiledPart(ScriptedIssueTracker::PROJECT, $number));
+    }
+
+    public function testAPartIsNotKnownByItsNumberWhileTheAnswerToItsCreateIsLostAndIsOnceARetryFoundIt(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->answerToAStoredCreate = 502;
+
+        try {
+            $this->fileOnce($tracker);
+            self::fail('A create answered with 502 was reported as filed.');
+        } catch (ForgeWriteFailed) {
+            self::assertFalse($tracker->parts()->isFiledPart(ScriptedIssueTracker::PROJECT, 1));
+        }
+
+        $tracker->answerToAStoredCreate = null;
+        $found = $this->fileOnce($tracker);
+
+        self::assertSame([1, true], [$found, $tracker->parts()->isFiledPart(ScriptedIssueTracker::PROJECT, $found)]);
+    }
+
     public function testAPersonsIssueThatCarriesTheMarkerDoesNotStandForThePart(): void
     {
         $tracker = new ScriptedIssueTracker();

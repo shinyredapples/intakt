@@ -35,6 +35,15 @@ You will meet these characters on the dashboard. Each one stands where its job h
 8. [When something goes wrong](08-when-something-goes-wrong.md): the common surprises, why they happen, what to do.
 9. [Running it for a team](09-running-it-for-a-team.md): your own panel, your own CI, and where the details live.
 
+## When a task is too big
+
+You run `intakt:build:size` on a task, and the answer is `split`: the task is too big for one build.
+
+1. Intakt records its plan first. Then it files two to four new issues, the parts. Each part has the task's labels and waits for the parts it builds on.
+2. The task stays open as their umbrella, with one comment naming the parts. Editing it later does not size it again.
+3. If the command stops halfway, run it again. It finishes from the plan and files no part twice.
+4. A task is split only once, and a part is never split again ([details](../reference/user-manual.md#sizing-a-new-task)).
+
 ## Which tier a build runs on
 
 When Intakt builds a task, these inputs decide its tier, the first that applies wins:
@@ -68,6 +77,8 @@ The `left-undone` check of `bin/check` refuses a new TODO, FIXME or XXX comment 
 Text that is not a comment does not count: a string, a line indented under a YAML `run: |`, or a shell here-document body (from `cat <<EOF` up to the `EOF` line). A comment after such a body still counts.
 
 A comment in the form `TODO(#123): <reason>` that names an issue is allowed ([examples and exceptions](../reference/user-manual.md#when-the-left-undone-gate-reports-a-todo-comment-a-skipped-test-or-a-not-implemented-throw)).
+
+The `ignored` check of `bin/check` refuses a tracked file that `.gitignore` excludes. Untrack it with `git --literal-pathspecs rm --cached -- '<path>'`, the path in single quotes with each `'` in it written as `'\''` (the quotes and the option keep a name such as `build[1].tmp` from matching other files), or keep it with a negated rule in `.gitignore` ([how](../reference/user-manual.md#when-the-ignored-gate-reports-a-tracked-file-that-gitignore-excludes)).
 
 One rule to know before your first build: for a project with a `github` entry, the `--remote` of `intakt:build:task` must be that configured GitHub repository's `https://github.com/<owner>/<name>` address, or the command refuses before it does anything ([the `intakt:build:task` options](../reference/user-manual.md#building-one-task)).
 
