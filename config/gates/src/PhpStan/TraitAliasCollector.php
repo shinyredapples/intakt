@@ -135,7 +135,7 @@ final readonly class TraitAliasCollector implements Collector
 
         foreach ($use->adaptations as $adaptation) {
             if ($adaptation instanceof Precedence) {
-                $exclusions = [...$exclusions, ...array_map(static fn (Name $excluded): array => ['trait' => $excluded->toString(), 'method' => $adaptation->method->toString()], $adaptation->insteadof)];
+                $exclusions = [...$exclusions, ...array_map(static fn (Name $excluded): array => ['trait' => $excluded->toString(), 'method' => $adaptation->method->toString()], array_values($adaptation->insteadof))];
             }
         }
 

@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
+// the methods one class takes from its traits are composed the way PHP composes them, each wrapper trait first and then the class, because a name must be followed along its route: the declaration it ends at cannot tell which wrapper supplied it
 /**
- * The methods one class takes from its traits, composed the way PHP composes them: each wrapper trait first, then the class, so a name is followed along its route and not judged by the declaration it ends at.
- *
  * @phpstan-import-type UseBlock from TraitAliasCollector
  * @phpstan-import-type UsedTrait from TraitAliasCollector
  * @phpstan-import-type AliasRecord from TraitAliasCollector
@@ -23,7 +22,7 @@ final readonly class TraitComposition
 
     // keyed by statement because PHPStan visits the block of a wrapper once for every route that leads to it, while PHP applies each statement once
     /**
-     * @param list<UseBlock> $blocks the use blocks of one class and of the traits it uses
+     * @param list<UseBlock> $blocks
      */
     public function __construct(array $blocks)
     {
@@ -40,7 +39,7 @@ final readonly class TraitComposition
     }
 
     /**
-     * @return array<string, ComposedTraitMethod> the methods the class or trait takes from its traits, by lower-case name
+     * @return array<string, ComposedTraitMethod>
      */
     public function methodsOf(string $declarer): array
     {
@@ -65,7 +64,8 @@ final readonly class TraitComposition
         $taken = [];
 
         foreach ($uses['traits'] as $trait) {
-            $copies = array_merge([], ...array_map(fn (ComposedTraitMethod $method): array => $this->copiesOf($method, $trait['name'], $uses), array_values($this->methodsIn($trait, [...$path, $key]))));
+            $methods = array_values($this->methodsIn($trait, [...$path, $key]));
+            $copies = array_merge([], ...array_map(fn (ComposedTraitMethod $method): array => $this->copiesOf($method, $trait['name'], $uses), $methods));
             $taken = array_reduce($copies, fn (array $bound, ComposedTraitMethod $copy): array => $this->bound($bound, $copy, $uses['own']), $taken);
         }
 

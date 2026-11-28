@@ -12,11 +12,12 @@ use PhpParser\Modifiers;
  */
 final readonly class ComposedTraitMethod
 {
+    // namedAt is the alias that gave the method its name and stays null under the name its trait declares, because only an alias can be fixed where it is written; aliasedAt is the first alias of the method on its way to the class
     /**
-     * @param MethodFact $fact      the method as the class or trait that takes it exposes it
-     * @param Place      $source    where the trait that declares the method names it
-     * @param Place|null $namedAt   the alias that gave the method its name, null while it runs under the name its trait declares
-     * @param Place|null $aliasedAt the first alias of the method on its way to the class
+     * @param MethodFact $fact
+     * @param Place      $source
+     * @param Place|null $namedAt
+     * @param Place|null $aliasedAt
      */
     public function __construct(
         public array $fact,

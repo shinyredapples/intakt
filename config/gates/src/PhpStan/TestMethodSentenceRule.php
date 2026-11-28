@@ -76,6 +76,20 @@ final readonly class TestMethodSentenceRule implements Rule
     }
 
     /**
+     * @return array<string, int>
+     */
+    private function traitMethodLines(CollectedDataNode $node): array
+    {
+        $lines = [];
+
+        foreach (array_merge(...array_merge(...array_values($node->get(TraitMethodLineCollector::class)))) as [$trait, $method, $line]) {
+            $lines[strtolower($trait.'::'.$method)] = $line;
+        }
+
+        return $lines;
+    }
+
+    /**
      * @return array<string, non-empty-list<UseBlock>>
      */
     private function useBlocksByClass(CollectedDataNode $node): array
@@ -107,20 +121,6 @@ final readonly class TestMethodSentenceRule implements Rule
             !$this->isUnderTests($method->namedAt[0]) && $this->isUnderTests($sourceFile) => $class,
             default => $method->namedAt,
         };
-    }
-
-    /**
-     * @return array<string, int>
-     */
-    private function traitMethodLines(CollectedDataNode $node): array
-    {
-        $lines = [];
-
-        foreach (array_merge(...array_merge(...array_values($node->get(TraitMethodLineCollector::class)))) as [$trait, $method, $line]) {
-            $lines[strtolower($trait.'::'.$method)] = $line;
-        }
-
-        return $lines;
     }
 
     private function isUnderTests(string $file): bool

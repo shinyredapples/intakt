@@ -424,7 +424,7 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
     public function testAStillRunOriginalOfATraitThatIsNotAnalyzedIsReportedOnTheTraitsOwnLine(): void
     {
         $sandbox = $this->emptySandbox();
-        // the gate's excluded fixtures folder stands for a file a changed-files run leaves out
+        // because the gate excludes its fixtures folder, a trait there stands for a file a changed-files run leaves out
         $sandbox->write('tests/Gates/Fixtures/PartialChecks.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait PartialChecks\n{\n    public function testGo(): void {}\n}\n");
         $sandbox->write('tests/PartialTest.php', <<<'PHP_WRAP'
         <?php
