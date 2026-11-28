@@ -95,6 +95,34 @@ final class RouteNamesGateTest extends SandboxTestCase
         self::assertStringContainsString('so it must be named "dashboard_play_demo"', $run->findingsOf('routes'));
     }
 
+    public function testARouteWhoseServiceSpellsItsClassInAnotherCaseIsNamedAfterTheDeclaredClass(): void
+    {
+        $sandbox = $this->kernelSandbox();
+        $sandbox->write('src/Controller.php', "<?php\nnamespace Intakt\\Core\\Dashboard\\UseCase\\RouteCasing;\nfinal class FixtureController\n{\n    public function __invoke(): \\Symfony\\Component\\HttpFoundation\\Response\n    {\n        return new \\Symfony\\Component\\HttpFoundation\\Response('fixture served');\n    }\n}\n");
+        $sandbox->write('vendor/autoload.php', '<?php require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).";\nrequire __DIR__.'/../src/Controller.php';\n");
+        $kernel = (string) file_get_contents($sandbox->root.'/src/Kernel.php');
+        $kernel = str_replace("'http_method_override' => false]);", "'http_method_override' => false]);\n        \$container->services()->set('demo.casing', 'Intakt\\Core\\Dashboard\\UseCase\\Routecasing\\FixtureController')->public();", $kernel);
+        $served = str_replace("'dashboard_show_demo', '/demo')->controller('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController')", "'dashboard_routecasing', '/demo')->controller('demo.casing::__invoke')", $kernel);
+        self::assertStringContainsString("controller('demo.casing::__invoke')", $served);
+        $sandbox->write('src/Kernel.php', $served);
+
+        $run = $sandbox->check('--only=routes');
+
+        self::assertTrue($run->failed('routes'), $run->output());
+        self::assertStringContainsString('Route "dashboard_routecasing" is served by Intakt\Core\Dashboard\UseCase\RouteCasing\FixtureController, so it must be named "dashboard_route_casing"', $run->findingsOf('routes'));
+    }
+
+    public function testATreeWhoseClassesCannotBeReflectedFailsTheGate(): void
+    {
+        $sandbox = $this->kernelSandbox();
+        $sandbox->write('vendor/autoload.php', "<?php\nif (!str_ends_with(\$_SERVER['argv'][0] ?? '', 'console')) {\n    throw new RuntimeException('autoload refused');\n}\nreturn require ".var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).";\n");
+
+        $run = $sandbox->check('--only=routes');
+
+        self::assertTrue($run->failed('routes'), $run->output());
+        self::assertStringContainsString('could not be reflected', $run->findingsOf('routes'));
+    }
+
     public function testAConsoleThatPrintsNoServiceListFailsTheGate(): void
     {
         $sandbox = $this->kernelSandbox();

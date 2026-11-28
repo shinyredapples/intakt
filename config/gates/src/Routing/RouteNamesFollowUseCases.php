@@ -21,12 +21,14 @@ final readonly class RouteNamesFollowUseCases
 
     /**
      * @param array<string, string> $classOfService
+     * @param list<string>          $reflectedClasses
      */
-    public function __construct(private array $classOfService)
+    public function __construct(private array $classOfService, array $reflectedClasses = [])
     {
         $declaredClasses = [];
 
-        foreach ($classOfService as $class) {
+        // Because a service definition may spell its class in another case than the class declares, the reflected spelling comes last and wins.
+        foreach ([...array_values($classOfService), ...$reflectedClasses] as $class) {
             $class = ltrim($class, '\\');
             $declaredClasses[strtolower($class)] = $class;
         }

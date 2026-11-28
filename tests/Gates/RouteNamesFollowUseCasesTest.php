@@ -146,6 +146,28 @@ final class RouteNamesFollowUseCasesTest extends TestCase
         self::assertSame([], new RouteNamesFollowUseCases([PlayDemoController::class => PlayDemoController::class])->findingsIn($routes));
     }
 
+    public function testAServiceClassSpelledInAnotherCaseIsRejectedWithTheNameOfItsDeclaredClass(): void
+    {
+        $routes = $this->routes(['dashboard_routecasing' => 'demo.casing::__invoke']);
+        $rule = new RouteNamesFollowUseCases(
+            ['demo.casing' => 'Intakt\Core\Dashboard\UseCase\Routecasing\FixtureController'],
+            ['Intakt\Core\Dashboard\UseCase\RouteCasing\FixtureController'],
+        );
+
+        self::assertStringContainsString('must be named "dashboard_route_casing"', implode("\n", $rule->findingsIn($routes)));
+    }
+
+    public function testAServiceClassSpelledInAnotherCaseIsAcceptedUnderTheUseCaseNameOfItsDeclaredClass(): void
+    {
+        $routes = $this->routes(['dashboard_route_casing' => 'demo.casing::__invoke']);
+        $rule = new RouteNamesFollowUseCases(
+            ['demo.casing' => 'Intakt\Core\Dashboard\UseCase\Routecasing\FixtureController'],
+            ['Intakt\Core\Dashboard\UseCase\RouteCasing\FixtureController'],
+        );
+
+        self::assertSame([], $rule->findingsIn($routes));
+    }
+
     public function testAControllerInAnotherCaseThanAnyKnownClassIsRejected(): void
     {
         $routes = $this->routes(['dashboard_wrong' => 'intakt\Core\Dashboard\UseCase\RouteCaseProbe\RouteCaseProbeController::__invoke']);

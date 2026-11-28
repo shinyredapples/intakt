@@ -14,7 +14,21 @@ final class RouteNamesGate implements RunsTheChangesCode
     // Because the shipped routes are the ones a user reaches; the dev and test environments only add other vendors' tools.
     private const string ENVIRONMENT = 'prod';
 
-    private const array OPTIONS = ['--format=json', '--env='.self::ENVIRONMENT, '--no-ansi', '--no-interaction'];
+    private const string OWN_NAMESPACE = 'intakt\\';
+
+    // Because Symfony serves a service from the class PHP loads, whose declared spelling only reflection inside the tree knows.
+    private const string REFLECT = <<<'PHP'
+        require $argv[1];
+        $declared = [];
+        foreach (json_decode((string) file_get_contents($argv[2]), true, 512, JSON_THROW_ON_ERROR) as $class) {
+            if (class_exists($class)) {
+                $declared[] = new ReflectionClass($class)->getName();
+            }
+        }
+        echo json_encode($declared, JSON_THROW_ON_ERROR);
+        PHP;
+
+    private const array OPTIONS =['--format=json', '--env='.self::ENVIRONMENT, '--no-ansi', '--no-interaction'];
 
     public function name(): string
     {
@@ -70,7 +84,49 @@ final class RouteNamesGate implements RunsTheChangesCode
             return GateResult::failedBecause($this->name(), 'debug:container printed no service list in JSON, so controllers named by service ID cannot be read');
         }
 
-        return GateResult::withFindings($this->name(), new RouteNamesFollowUseCases($classOfService)->findingsIn($routes));
+        $reflectedClasses = $this->reflectedClassesOf($workspace, $classOfService);
+
+        if (null === $reflectedClasses) {
+            return GateResult::failedBecause($this->name(), 'the services\' classes could not be reflected, so their declared spelling cannot be read');
+        }
+
+        return GateResult::withFindings($this->name(), new RouteNamesFollowUseCases($classOfService, $reflectedClasses)->findingsIn($routes));
+    }
+
+    /**
+     * @param array<string, string> $classOfService
+     *
+     * @return list<string>|null
+     */
+    private function reflectedClassesOf(Workspace $workspace, array $classOfService): ?array
+    {
+        $candidates = array_values(array_unique(array_filter(
+            array_map(static fn (string $class): string => ltrim($class, '\\'), $classOfService),
+            static fn (string $class): bool => 0 === strncasecmp($class, self::OWN_NAMESPACE, strlen(self::OWN_NAMESPACE)),
+        )));
+
+        $scratch = ScratchDirectory::create('intakt-route-classes');
+
+        if (!$scratch instanceof ScratchDirectory) {
+            return null;
+        }
+
+        try {
+            // Because many class names exceed what one command line argument may hold, they go through a file.
+            $list = $scratch->path.'/classes.json';
+            file_put_contents($list, json_encode($candidates, JSON_THROW_ON_ERROR));
+            $reflected = $workspace->command([PHP_BINARY, '-r', self::REFLECT, '--', $workspace->root.'/vendor/autoload.php', $list]);
+        } finally {
+            $scratch->discard();
+        }
+
+        $declared = $reflected->succeeded() ? $this->decoded($reflected->output) : null;
+
+        if (!is_array($declared) || !array_is_list($declared)) {
+            return null;
+        }
+
+        return array_values(array_filter($declared, is_string(...)));
     }
 
     private function routesFrom(string $json): ?RouteCollection
