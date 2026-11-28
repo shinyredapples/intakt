@@ -20,6 +20,13 @@ final readonly class SizingRequest
         public string $body,
         // Never sent to the model, because only a split reads them: each part gets its original's labels.
         public array $labels = [],
+        // Set only by plain code, because on a small pool it decides a split the model's size did not name and then asks once for the parts.
+        public bool $partsAsked = false,
     ) {
+    }
+
+    public function askingForParts(): self
+    {
+        return clone($this, ['partsAsked' => true]);
     }
 }

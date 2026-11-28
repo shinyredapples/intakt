@@ -37,7 +37,7 @@ You will meet these characters on the dashboard. Each one stands where its job h
 
 ## When a task is too big
 
-You run `intakt:build:size` on a task, and the answer is `split`: the task is too big for one build.
+You run `intakt:build:size` on a task, and the answer is `split`: the task is too big for one build. With a single AI account, a task estimated at 400 changed lines or more is split too, because rework on a large change costs the most.
 
 1. Intakt records its plan first. Then it files two to four new issues, the parts. Each part has the task's labels and waits for the parts it builds on.
 2. The task stays open as their umbrella, with one comment naming the parts. It is never built itself: `intakt:queue:show` lists it as held, and the parts as tasks. Editing it later does not size it again.
