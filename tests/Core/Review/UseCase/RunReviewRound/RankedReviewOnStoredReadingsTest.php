@@ -17,7 +17,9 @@ use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
+use Intakt\Core\Budget\Contract\AccountPick;
 use Intakt\Core\Budget\Contract\LeftOutAccount;
+use Intakt\Core\Budget\Contract\LeftOutCause;
 use Intakt\Core\Budget\Contract\RankedAccounts;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
 use Intakt\Core\Budget\Contract\Usage;
@@ -27,7 +29,10 @@ use Intakt\Core\Budget\Contract\WindowUse;
 use Intakt\Core\Budget\Domain\AccountRoom;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\MeasuredRoomRanking;
+use Intakt\Core\Budget\Infrastructure\AccountPicked;
 use Intakt\Core\Budget\Infrastructure\AccountReadingLock;
+use Intakt\Core\Budget\Infrastructure\LedgerAccountPicks;
+use Intakt\Core\Budget\Infrastructure\PickedLeftOut;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -87,6 +92,10 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[UsesClass(AccountRoom::class)]
 #[UsesClass(RankedAccounts::class)]
 #[UsesClass(LeftOutAccount::class)]
+#[UsesClass(LedgerAccountPicks::class)]
+#[UsesClass(AccountPicked::class)]
+#[UsesClass(PickedLeftOut::class)]
+#[UsesClass(AccountPick::class)]
 #[UsesClass(DoctrineMeasuredUse::class)]
 #[UsesClass(DoctrineHolds::class)]
 #[UsesClass(AccountReadingLock::class)]
@@ -130,6 +139,9 @@ final class RankedReviewOnStoredReadingsTest extends KernelTestCase
         self::assertSame(['team'], array_values(array_unique($this->called)));
         self::assertNotContains(LedgerEventKind::AccountCooledDown, $this->fixture->ledgerKinds());
         self::assertEquals(2, $this->fixture->entities->getConnection()->fetchOne('SELECT COUNT(*) FROM budget_window_reading'));
+        $pick = $this->picks()->latestOf(Provider::ClaudeCode);
+        self::assertEquals(new Account(Provider::ClaudeCode, 'team'), $pick?->picked);
+        self::assertEquals([new LeftOutAccount(new Account(Provider::ClaudeCode, Account::DEFAULT), LeftOutCause::AtWeeklyCeiling, $this->fixture->clock->now()->modify('+2 days'))], $pick->leftOut);
     }
 
     public function testAReviewWhoseEveryAccountIsAtAStoredCeilingSendsNoCallAndWaitsForTheEarliestReset(): void
@@ -148,6 +160,10 @@ final class RankedReviewOnStoredReadingsTest extends KernelTestCase
 
         self::assertSame([], $this->called);
         self::assertSame(ReviewerState::Queued, $this->fixture->reviewer($message->reviewerId)->state());
+        $pick = $this->picks()->latestOf(Provider::ClaudeCode);
+        self::assertNotNull($pick);
+        self::assertNull($pick->picked);
+        self::assertEquals($this->fixture->clock->now()->modify('+3 hours'), $pick->earliestReset());
     }
 
     protected function setUp(): void
@@ -164,12 +180,17 @@ final class RankedReviewOnStoredReadingsTest extends KernelTestCase
         self::assertSame(ReadingOutcome::Recorded, $this->measured->record($reading));
     }
 
+    private function picks(): LedgerAccountPicks
+    {
+        return new LedgerAccountPicks($this->fixture->ledger(), $this->fixture->ledgerPayloads(), StoredSerializerFactory::create(), new NullLogger());
+    }
+
     private function vendorOnTwoAccounts(): Vendor
     {
         $clock = $this->fixture->clock;
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'claude_code', 'model' => 'big']]]], []);
         $cooldowns = new AccountCooldownWindows(new ReadingsInMemory($clock), new ArrayAdapter(), new LockFactory(new InMemoryStore()), $clock, $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::ClaudeCode->value => [Account::DEFAULT, 'team']]);
-        $ranking = new MeasuredRoomRanking(new DoctrineHolds($this->fixture->entities, $clock), new CeilingStartGuard($this->measured, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]));
+        $ranking = new MeasuredRoomRanking(new DoctrineHolds($this->fixture->entities, $clock), new CeilingStartGuard($this->measured, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]), $this->picks());
         $platforms = [Account::DEFAULT => $this->answering(Account::DEFAULT), 'team' => $this->answering('team')];
         $accounts = new AccountFailoverPlatform(Provider::ClaudeCode, $platforms, $cooldowns, $clock, new NullLogger(), new NoPinnedProviderCooldowns(), $ranking);
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $accounts]), $cooldowns, new NullLogger());

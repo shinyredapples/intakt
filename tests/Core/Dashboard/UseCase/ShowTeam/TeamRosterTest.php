@@ -14,6 +14,10 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Budget\Contract\AccountPick;
+use Intakt\Core\Budget\Contract\LeftOutAccount;
+use Intakt\Core\Budget\Contract\LeftOutCause;
+use Intakt\Core\Budget\Contract\RankedAccounts;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\TierChoice;
@@ -35,6 +39,7 @@ use Intakt\Core\Review\Contract\PathGlob;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Tests\Core\Budget\PicksInMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -61,6 +66,9 @@ use ReflectionProperty;
 #[UsesClass(RoutingRules::class)]
 #[UsesClass(PathGlob::class)]
 #[UsesClass(BuildRoutingNotConfigured::class)]
+#[UsesClass(AccountPick::class)]
+#[UsesClass(RankedAccounts::class)]
+#[UsesClass(LeftOutAccount::class)]
 final class TeamRosterTest extends TestCase
 {
     public function testAnAccountIsListedOnceInTheOnePoolView(): void
@@ -68,6 +76,26 @@ final class TeamRosterTest extends TestCase
         $team = $this->teamOf(new GivenInstall()->accounts(Provider::ClaudeCode, 'default'));
 
         self::assertSame(['claude_code.default'], $this->accountKeys($team));
+    }
+
+    public function testTheRosterCarriesTheLastPickOfEachProviderWithListedAccounts(): void
+    {
+        $picks = new PicksInMemory();
+        $picks->record(Provider::ClaudeCode, new RankedAccounts([new Account(Provider::ClaudeCode, 'default')], []));
+        $picks->record(Provider::ClaudeCode, new RankedAccounts([], [new LeftOutAccount(new Account(Provider::ClaudeCode, 'default'), LeftOutCause::AtWeeklyCeiling, null)]));
+
+        $team = $this->teamOf(new GivenInstall()->accounts(Provider::ClaudeCode, 'default'), $picks);
+
+        self::assertCount(1, $team->picks);
+        self::assertNull($team->picks[0]->picked);
+    }
+
+    public function testAProviderWithoutListedAccountsShowsNoPick(): void
+    {
+        $picks = new PicksInMemory();
+        $picks->record(Provider::Codex, new RankedAccounts([new Account(Provider::Codex, 'default')], []));
+
+        self::assertSame([], $this->teamOf(new GivenInstall()->accounts(Provider::ClaudeCode, 'default'), $picks)->picks);
     }
 
     public function testEachListedAccountOfEachProviderIsListedInTheOwnersOrder(): void
@@ -124,11 +152,11 @@ final class TeamRosterTest extends TestCase
         self::assertSame(AccountState::Rejected, $team->accounts[0]->state);
     }
 
-    public function testTheRosterExposesNoResetTimeAndNoCeilingValue(): void
+    public function testTheAccountRowsExposeNoResetTimeAndNoCeilingValueAndOnlyThePicksCarryResets(): void
     {
         $fields = [...$this->publicFields(TeamAccount::class), ...$this->publicFields(Team::class)];
 
-        self::assertSame(['account', 'state', 'roles', 'accounts'], $fields);
+        self::assertSame(['account', 'state', 'roles', 'accounts', 'picks'], $fields);
     }
 
     public function testTheDeveloperRoleListsTheProviderOfTheDefaultTier(): void
@@ -227,7 +255,7 @@ final class TeamRosterTest extends TestCase
         return array_map(static fn (TeamRole $role): string => $role->name, $account->roles);
     }
 
-    private function teamOf(GivenInstall $install): Team
+    private function teamOf(GivenInstall $install, PicksInMemory $picks = new PicksInMemory()): Team
     {
         $listed = self::createStub(ListedAccounts::class);
         $listed->method('of')->willReturnCallback(static fn (Provider $provider): array => array_map(static fn (string $name): Account => new Account($provider, $name), $install->accounts[$provider->value] ?? []));
@@ -237,7 +265,7 @@ final class TeamRosterTest extends TestCase
         $cooldowns->method('isCoolingDown')->willReturnCallback(static fn (Account $account): bool => in_array($account->key(), $install->coolingDown, true));
         $cooldowns->method('isRejected')->willReturnCallback(static fn (Account $account): bool => in_array($account->key(), $install->rejected, true));
 
-        return new TeamRoster($listed, $credentials, $cooldowns, new ConfiguredBuildRouting($install->routing, new ModelRouting()), $this->tiers($install), $this->panels($install))->now();
+        return new TeamRoster($listed, $credentials, $cooldowns, new ConfiguredBuildRouting($install->routing, new ModelRouting()), $this->tiers($install), $this->panels($install), $picks)->now();
     }
 
     private function tiers(GivenInstall $install): TierResolver

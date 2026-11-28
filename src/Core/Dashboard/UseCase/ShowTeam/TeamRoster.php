@@ -12,6 +12,8 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Budget\Contract\AccountPick;
+use Intakt\Core\Budget\Contract\AccountPicks;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
@@ -23,7 +25,7 @@ use Intakt\Core\Review\Contract\PanelConfigurationFailure;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
 
-// The one-pool view: every account once, whatever the number of projects and tiers that use it; reset times and ceilings stay out, because they show only behind the owner session.
+// The one-pool view: every account once, whatever the number of projects and tiers that use it; the account rows carry no reset time or ceiling, because those show only behind the owner session. The last pick of each provider carries its reset times, because a start that found no account must name the earliest reset (T81), and only the owner's console reads it today.
 final readonly class TeamRoster
 {
     private const string DEVELOPER = 'Developer';
@@ -35,6 +37,7 @@ final readonly class TeamRoster
         private BuildRouting $routing,
         private TierResolver $tiers,
         private Panels $panels,
+        private AccountPicks $picks,
     ) {
     }
 
@@ -42,14 +45,21 @@ final readonly class TeamRoster
     {
         $roles = $this->rolesByProvider();
         $rows = [];
+        $picks = [];
 
         foreach (Provider::cases() as $provider) {
-            foreach ($this->listed->of($provider) as $account) {
+            $accounts = $this->listed->of($provider);
+            foreach ($accounts as $account) {
                 $rows[] = new TeamAccount($account, $this->stateOf($account), $roles[$provider->value] ?? []);
+            }
+
+            $pick = [] === $accounts ? null : $this->picks->latestOf($provider);
+            if ($pick instanceof AccountPick) {
+                $picks[] = $pick;
             }
         }
 
-        return new Team($rows);
+        return new Team($rows, $picks);
     }
 
     /**

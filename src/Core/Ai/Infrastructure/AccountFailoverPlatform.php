@@ -17,6 +17,7 @@ use Intakt\Core\Ai\Contract\PinnedProviderCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\AccountRanking;
 use Intakt\Core\Budget\Contract\LeftOutAccount;
+use Intakt\Core\Budget\Contract\LeftOutCause;
 use Intakt\Core\Budget\Contract\RankedAccounts;
 use LogicException;
 use Override;
@@ -62,6 +63,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         $routerProvider = $this->modelWaits->routerProviderOf($model);
         $waits = $this->waits($routerProvider);
         $ranked = $this->startable($waits);
+        $this->ranking->record($this->provider, $this->pickOf($ranked, $waits));
         $free = $this->freeAccounts($ranked->inOrder, $failures, $routerProvider);
         if ([] === $free) {
             throw $this->outOfAccounts($ranked, $waits, $failures);
@@ -78,13 +80,18 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return $this->typedWhenRead($answer, fn (): Throwable => $this->rejectedWhenRead($answer, $failures, $routerProvider), $options);
     }
 
-    // 0 while an account can take the model, else the wait invoke() would report, by the same reads of the cooldowns, the pins and the ranking, so tier selection never picks a model whose every account waits for its pin (issue #2860) or is left out by measured room.
+    // 0 while an account can take the model, else the wait invoke() would report, by the same reads of the cooldowns, the pins and the ranking, so tier selection never picks a model whose every account waits for its pin (issue #2860) or is left out by measured room. Tier selection reads this only right before a start, and a start it refuses never reaches invoke(), so the refused start is recorded here; a free one is recorded by invoke().
     public function secondsUntilFree(string|Model $model): int
     {
         $waits = $this->waits($this->modelWaits->routerProviderOf($model));
         $ranked = $this->startable($waits);
+        if ([] !== $ranked->inOrder) {
+            return 0;
+        }
 
-        return [] === $ranked->inOrder ? $this->secondsUntilStartable($ranked, $waits) : 0;
+        $this->ranking->record($this->provider, $this->pickOf($ranked, $waits));
+
+        return $this->secondsUntilStartable($ranked, $waits);
     }
 
     #[Override]
@@ -116,6 +123,56 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         }
 
         return $this->ranking->rank($accounts);
+    }
+
+    // The pick also names each account this call drops for a cooldown, because the ranking saw only the rest and the owner must see why every account was not used.
+    /**
+     * @param array<string, int> $waits
+     */
+    private function pickOf(RankedAccounts $ranked, array $waits): RankedAccounts
+    {
+        $now = $this->clock->now();
+        $held = [];
+        foreach ($this->leftOutWhileCooling($waits) as $left) {
+            $held[$left->account->name] = $left;
+        }
+
+        $cooling = [];
+        foreach ($waits as $name => $wait) {
+            if (0 < $wait) {
+                $cooling[] = new LeftOutAccount(new Account($this->provider, $name), LeftOutCause::CoolingDown, $this->endWhileCooling($now->modify(sprintf('+%d seconds', $wait)), $held[$name] ?? null));
+            }
+        }
+
+        return new RankedAccounts($ranked->inOrder, [...$ranked->leftOut, ...$cooling]);
+    }
+
+    // The cooling accounts are ranked for the wait only, never for the send order, because startable() leaves them out before it ranks, so a ceiling that outlasts a cooldown would otherwise never reach the wait.
+    /**
+     * @param array<string, int> $waits
+     *
+     * @return list<LeftOutAccount>
+     */
+    private function leftOutWhileCooling(array $waits): array
+    {
+        $cooling = [];
+        foreach (array_keys($this->platforms) as $name) {
+            if (0 < $waits[$name]) {
+                $cooling[] = new Account($this->provider, $name);
+            }
+        }
+
+        return [] === $cooling ? [] : $this->ranking->rank($cooling)->leftOut;
+    }
+
+    // The later of the cooldown's end and the end of what else holds the account, unknown when that hold names none, because the account starts again only once both have ended.
+    private function endWhileCooling(DateTimeImmutable $cooledUntil, ?LeftOutAccount $held): ?DateTimeImmutable
+    {
+        if (!$held instanceof LeftOutAccount) {
+            return $cooledUntil;
+        }
+
+        return $held->resetsAt instanceof DateTimeImmutable ? max($cooledUntil, $held->resetsAt) : null;
     }
 
     /**
@@ -166,24 +223,6 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         }
 
         return max(1, min([AccountCooldowns::LONGEST_SECONDS, ...$perAccount]));
-    }
-
-    // The cooling accounts are ranked for the wait only, never for the send order, because startable() leaves them out before it ranks, so a ceiling that outlasts a cooldown would otherwise never reach the wait.
-    /**
-     * @param array<string, int> $waits
-     *
-     * @return list<LeftOutAccount>
-     */
-    private function leftOutWhileCooling(array $waits): array
-    {
-        $cooling = [];
-        foreach (array_keys($this->platforms) as $name) {
-            if (0 < $waits[$name]) {
-                $cooling[] = new Account($this->provider, $name);
-            }
-        }
-
-        return [] === $cooling ? [] : $this->ranking->rank($cooling)->leftOut;
     }
 
     /**

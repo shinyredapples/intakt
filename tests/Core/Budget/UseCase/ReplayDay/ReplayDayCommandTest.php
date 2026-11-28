@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Budget\UseCase\ReplayDay;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Budget\Contract\AccountPicks;
 use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\MeasuredRoomRanking;
@@ -217,7 +218,7 @@ final class ReplayDayCommandTest extends KernelTestCase
         $store->method('waitAndSave')->willReturnCallback(static function () use (&$waits): void {
             ++$waits;
         });
-        $replay = new RolledBackReplay($entities, new LockFactory($store), ['five-hour' => 90.0, 'weekly' => 90.0], self::createStub(Halts::class));
+        $replay = new RolledBackReplay($entities, new LockFactory($store), ['five-hour' => 90.0, 'weekly' => 90.0], self::createStub(Halts::class), self::createStub(AccountPicks::class));
 
         $replay->replay([
             ScriptedStep::parse('2026-11-02T08:00 read claude_code.probe five-hour 12 2026-11-02T13:00'),

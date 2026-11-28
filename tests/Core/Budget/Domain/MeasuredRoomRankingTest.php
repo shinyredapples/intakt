@@ -17,6 +17,7 @@ use Intakt\Core\Budget\Domain\AccountRoom;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\MeasuredRoomRanking;
 use Intakt\Tests\Core\Budget\HoldsInMemory;
+use Intakt\Tests\Core\Budget\PicksInMemory;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -189,7 +190,7 @@ final class MeasuredRoomRankingTest extends TestCase
     {
         $this->both('team', $this->usage(10.0, 5), $this->usage(20.0, 100));
 
-        $ranked = new MeasuredRoomRanking($this->holds, $this->guard())->rank([new Account(Provider::Anthropic, 'key'), new Account(Provider::ClaudeCode, 'team')]);
+        $ranked = new MeasuredRoomRanking($this->holds, $this->guard(), new PicksInMemory())->rank([new Account(Provider::Anthropic, 'key'), new Account(Provider::ClaudeCode, 'team')]);
 
         self::assertSame(['claude_code.team', 'anthropic.key'], array_map(static fn (Account $account): string => $account->key(), $ranked->inOrder));
     }
@@ -236,7 +237,7 @@ final class MeasuredRoomRankingTest extends TestCase
 
     private function rank(string ...$names): RankedAccounts
     {
-        return new MeasuredRoomRanking($this->holds, $this->guard())->rank(array_values(array_map(static fn (string $name): Account => new Account(Provider::ClaudeCode, $name), $names)));
+        return new MeasuredRoomRanking($this->holds, $this->guard(), new PicksInMemory())->rank(array_values(array_map(static fn (string $name): Account => new Account(Provider::ClaudeCode, $name), $names)));
     }
 
     private function guard(): CeilingStartGuard

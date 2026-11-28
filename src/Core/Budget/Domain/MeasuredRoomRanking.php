@@ -6,6 +6,8 @@ namespace Intakt\Core\Budget\Domain;
 
 use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Budget\Contract\AccountPicks;
 use Intakt\Core\Budget\Contract\AccountRanking;
 use Intakt\Core\Budget\Contract\Holds;
 use Intakt\Core\Budget\Contract\LeftOutAccount;
@@ -20,6 +22,7 @@ final readonly class MeasuredRoomRanking implements AccountRanking
     public function __construct(
         private Holds $holds,
         private CeilingStartGuard $ceilings,
+        private AccountPicks $picks,
     ) {
     }
 
@@ -32,6 +35,12 @@ final readonly class MeasuredRoomRanking implements AccountRanking
         usort($open, static fn (int $one, int $other): int => self::sortKey($accounts[$one], $rooms[$one], $one) <=> self::sortKey($accounts[$other], $rooms[$other], $other));
 
         return new RankedAccounts(array_map(static fn (int $position): Account => $accounts[$position], $open), array_values(array_filter($verdicts)));
+    }
+
+    #[Override]
+    public function record(Provider $provider, RankedAccounts $pick): void
+    {
+        $this->picks->record($provider, $pick);
     }
 
     private function leftOutOf(Account $account, AccountRoom $room): ?LeftOutAccount
