@@ -6,19 +6,24 @@ namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Modifiers;
 use PhpParser\Node;
-use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\Node\Stmt\TraitUseAdaptation\Alias;
+use PhpParser\Node\Stmt\TraitUseAdaptation\Precedence;
 use PHPStan\Analyser\Scope;
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionMethod;
 use PHPStan\Collectors\Collector;
 use PHPStan\Reflection\ClassReflection;
 
 /**
- * @phpstan-type AliasRecord array{string, int, string, string, string, bool, string, string, array{string, int, string}|null}
+ * @phpstan-type Place array{string, int, string}
+ * @phpstan-type MethodFact array{name: string, line: int, visibility: int, abstract: bool, marked: bool, provider: bool}
+ * @phpstan-type UsedTrait array{name: string, file: string, methods: list<MethodFact>}
+ * @phpstan-type AliasRecord array{trait: string|null, method: string, name: string|null, visibility: int, line: int}
+ * @phpstan-type Exclusion array{trait: string, method: string}
+ * @phpstan-type UseBlock array{class: Place, declarer: array{string, string}, statement: string, own: list<string>, traits: list<UsedTrait>, aliases: list<AliasRecord>, exclusions: list<Exclusion>}
  *
- * @implements Collector<TraitUse, non-empty-list<AliasRecord>>
+ * @implements Collector<TraitUse, UseBlock>
  */
 final readonly class TraitAliasCollector implements Collector
 {
@@ -34,9 +39,9 @@ final readonly class TraitAliasCollector implements Collector
         return TraitUse::class;
     }
 
-    // PHPStan visits a trait's own `use` once inside each class that uses the trait, so an alias a wrapper trait declares is judged with the methods each using class exposes
+    // PHPStan visits a trait's own `use` once inside each class that uses the trait, so the blocks of a class and of every wrapper trait on the way to a method are recorded per class, and TraitComposition follows the route each name takes through them
     /**
-     * @return non-empty-list<AliasRecord>|null
+     * @return UseBlock|null
      */
     public function processNode(Node $node, Scope $scope): ?array
     {
@@ -46,120 +51,94 @@ final readonly class TraitAliasCollector implements Collector
             return null;
         }
 
-        $use = new TraitUseScope($node, $class, $scope->getTraitReflection() ?? $class);
-        $records = [];
+        $declarer = $scope->getTraitReflection() ?? $class;
 
-        foreach ($node->adaptations as $alias) {
-            if ($alias instanceof Alias && $alias->newName instanceof Identifier) {
-                // the first alias wins, because one original name aliased twice is one name to fix
-                $records += $this->misnamedNamesOf($alias, $use);
+        return [
+            'class' => [(string) $class->getFileName(), $class->getNativeReflection()->getStartLine(), $class->getName()],
+            'declarer' => [(string) $declarer->getFileName(), $declarer->getName()],
+            'statement' => $node->getStartLine().':'.implode(',', array_map(static fn (Name $trait): string => $trait->toString(), $node->traits)),
+            'own' => array_map(static fn (ReflectionMethod $method): string => strtolower($method->getName()), $this->ownMethods($declarer)),
+            'traits' => array_map($this->usedTrait(...), array_values($declarer->getTraits())),
+            'aliases' => $this->aliases($node),
+            'exclusions' => $this->exclusions($node),
+        ];
+    }
+
+    // because a method a class or trait takes from a trait still names that trait as its declaring class, while one it declares itself names the class or trait
+    /**
+     * @return list<ReflectionMethod>
+     */
+    private function ownMethods(ClassReflection $owner): array
+    {
+        return array_values(array_filter(
+            $owner->getNativeReflection()->getMethods(),
+            static fn (ReflectionMethod $method): bool => 0 === strcasecmp($method->getBetterReflection()->getDeclaringClass()->getName(), $owner->getName()),
+        ));
+    }
+
+    /**
+     * @return UsedTrait
+     */
+    private function usedTrait(ClassReflection $trait): array
+    {
+        return [
+            'name' => $trait->getName(),
+            'file' => (string) $trait->getFileName(),
+            'methods' => array_map(fn (ReflectionMethod $method): array => $this->fact($trait, $method), $this->ownMethods($trait)),
+        ];
+    }
+
+    /**
+     * @return MethodFact
+     */
+    private function fact(ClassReflection $trait, ReflectionMethod $method): array
+    {
+        return [
+            'name' => $method->getName(),
+            'line' => (int) $method->getStartLine(),
+            'visibility' => $method->isPublic() ? Modifiers::PUBLIC : Modifiers::PRIVATE,
+            'abstract' => $method->isAbstract(),
+            'marked' => PhpUnitTestMethod::isMarked($method),
+            'provider' => $this->names->mayBeProvider($trait, $method),
+        ];
+    }
+
+    // because BetterReflection gives a method that one block both aliases and changes the visibility of the wrong visibility (upstream/phpstan-trait-alias-drops-visibility/), the adaptations are recorded as the block writes them
+    /**
+     * @return list<AliasRecord>
+     */
+    private function aliases(TraitUse $use): array
+    {
+        $aliases = [];
+
+        foreach ($use->adaptations as $adaptation) {
+            if ($adaptation instanceof Alias) {
+                $aliases[] = [
+                    'trait' => $adaptation->trait?->toString(),
+                    'method' => $adaptation->method->toString(),
+                    'name' => $adaptation->newName?->toString(),
+                    'visibility' => (int) $adaptation->newModifier & Modifiers::VISIBILITY_MASK,
+                    'line' => $adaptation->getStartLine(),
+                ];
             }
         }
 
-        return [] === $records ? null : array_values($records);
+        return $aliases;
     }
 
     /**
-     * @return array<string, AliasRecord>
+     * @return list<Exclusion>
      */
-    private function misnamedNamesOf(Alias $alias, TraitUseScope $use): array
+    private function exclusions(TraitUse $use): array
     {
-        $declared = $this->declaredMethod($alias, $use->declarer);
+        $exclusions = [];
 
-        if (!$declared instanceof ReflectionMethod) {
-            return [];
-        }
-
-        $records = [];
-        $source = [(string) $declared->getFileName(), $declared->getBetterReflection()->getDeclaringClass()->getName()];
-        $exposed = $this->boundAs((string) $alias->newName?->toString(), $use->class, $declared);
-
-        if ($exposed instanceof ReflectionMethod && $this->aliasIsPublic($alias, $declared) && $use->keepsPublic($exposed) && $this->isMisnamed($exposed)) {
-            $records['alias '.$alias->getStartLine().' '.strtolower($exposed->getName())] = [...$this->location($alias, $use->declarer), ...$this->judged($use->class, $exposed), ...$source, $this->exposer($use->class)];
-        }
-
-        $original = $this->boundAs($alias->method->toString(), $use->class, $declared);
-
-        if ($original instanceof ReflectionMethod && $this->originalIsPublic($declared, $use) && $use->keepsPublic($original) && $this->isMisnamed($original)) {
-            $records['original '.strtolower($original->getName())] = [...$this->location($alias, $use->declarer), ...$this->judged($use->class, $original), ...$source, null];
-        }
-
-        return $records;
-    }
-
-    // because PHP resolves an adaptation without a trait name against every trait the declaring class or trait uses
-    private function declaredMethod(Alias $alias, ClassReflection $declarer): ?ReflectionMethod
-    {
-        $method = $alias->method->toString();
-        $named = $alias->trait instanceof Name ? $alias->trait->toString() : null;
-        $trait = array_find($declarer->getTraits(), static fn (ClassReflection $trait): bool => (null === $named || 0 === strcasecmp($named, $trait->getName())) && $trait->getNativeReflection()->hasMethod($method));
-
-        return $trait?->getNativeReflection()->getMethod($method);
-    }
-
-    // because the class does not run this trait method under a name it declares itself or takes from another trait or wrapper with insteadof
-    private function boundAs(string $name, ClassReflection $class, ReflectionMethod $declared): ?ReflectionMethod
-    {
-        $native = $class->getNativeReflection();
-
-        return $native->hasMethod($name) && TraitMethodDeclaration::isSame($native->getMethod($name), $declared) ? $native->getMethod($name) : null;
-    }
-
-    // because BetterReflection gives an alias the visibility of any adaptation of its method (upstream/phpstan-trait-alias-drops-visibility/), the use block that declares the alias decides
-    private function aliasIsPublic(Alias $alias, ReflectionMethod $declared): bool
-    {
-        $modifier = (int) $alias->newModifier;
-
-        return 0 !== ($modifier & Modifiers::VISIBILITY_MASK) ? 0 !== ($modifier & Modifiers::PUBLIC) : $declared->isPublic();
-    }
-
-    private function isMisnamed(ReflectionMethod $method): bool
-    {
-        return PhpUnitTestMethod::isNamedOrMarked($method) && !$this->names->isSentence($method->getName());
-    }
-
-    /**
-     * @return array{string, int, string}
-     */
-    private function location(Alias $alias, ClassReflection $declarer): array
-    {
-        return [(string) $declarer->getFileName(), $alias->getStartLine(), $declarer->getName()];
-    }
-
-    /**
-     * @return array{string, string, bool}
-     */
-    private function judged(ClassReflection $class, ReflectionMethod $method): array
-    {
-        return [$method->getDeclaringClass()->getName(), $method->getName(), $this->names->mayBeProvider($class, $method)];
-    }
-
-    /**
-     * @return array{string, int, string}
-     */
-    private function exposer(ClassReflection $class): array
-    {
-        return [(string) $class->getFileName(), $class->getNativeReflection()->getStartLine(), $class->getName()];
-    }
-
-    // because BetterReflection drops `method as private;` for a method the same use block also aliases (upstream/phpstan-trait-alias-drops-visibility/), the last such adaptation in the block decides
-    private function originalIsPublic(ReflectionMethod $declared, TraitUseScope $use): bool
-    {
-        $isPublic = $declared->isPublic();
-
-        foreach ($use->node->adaptations as $adaptation) {
-            if ($adaptation instanceof Alias && !$adaptation->newName instanceof Identifier && 0 !== ((int) $adaptation->newModifier & Modifiers::VISIBILITY_MASK) && $this->changes($adaptation, $declared, $use)) {
-                $isPublic = 0 !== ((int) $adaptation->newModifier & Modifiers::PUBLIC);
+        foreach ($use->adaptations as $adaptation) {
+            if ($adaptation instanceof Precedence) {
+                $exclusions = [...$exclusions, ...array_map(static fn (Name $excluded): array => ['trait' => $excluded->toString(), 'method' => $adaptation->method->toString()], $adaptation->insteadof)];
             }
         }
 
-        return $isPublic;
-    }
-
-    private function changes(Alias $adaptation, ReflectionMethod $declared, TraitUseScope $use): bool
-    {
-        $method = $this->declaredMethod($adaptation, $use->declarer);
-
-        return $method instanceof ReflectionMethod && TraitMethodDeclaration::isSame($method, $declared);
+        return $exclusions;
     }
 }

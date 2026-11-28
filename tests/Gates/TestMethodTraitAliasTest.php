@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\PhpStan\ComposedTraitMethod;
 use Intakt\Gates\PhpStan\PhpUnitTestMethod;
 use Intakt\Gates\PhpStan\SentenceTestName;
 use Intakt\Gates\PhpStan\TestMethodCollector;
 use Intakt\Gates\PhpStan\TestMethodSentenceRule;
 use Intakt\Gates\PhpStan\TestProviderCollector;
 use Intakt\Gates\PhpStan\TraitAliasCollector;
+use Intakt\Gates\PhpStan\TraitComposition;
 use Intakt\Gates\PhpStan\TraitMethodDeclaration;
 use Intakt\Gates\PhpStan\TraitMethodLineCollector;
-use Intakt\Gates\PhpStan\TraitUseScope;
 use Override;
 use PhpParser\Node;
 use PHPStan\Collectors\Collector;
@@ -25,7 +26,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 #[CoversClass(TraitAliasCollector::class)]
 #[CoversClass(TraitMethodLineCollector::class)]
 #[CoversClass(TraitMethodDeclaration::class)]
-#[CoversClass(TraitUseScope::class)]
+#[CoversClass(TraitComposition::class)]
+#[CoversClass(ComposedTraitMethod::class)]
 #[CoversClass(TestMethodCollector::class)]
 #[CoversClass(SentenceTestName::class)]
 #[CoversClass(TestProviderCollector::class)]
@@ -227,6 +229,219 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
         PHP_WRAP);
 
         self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testOnlyTheSelectedWrapperIsReportedWhenBothWrappersAliasTheSameMethod(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/SelectedTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        trait Shared { public function helper(): void {} }
+        trait Left { use Shared { helper as testGo; } }
+        trait Right { use Shared { helper as testGo; } }
+
+        final class SelectedTest extends \PHPUnit\Framework\TestCase
+        {
+            use Left, Right { Right::testGo insteadof Left; }
+        }
+        PHP_WRAP);
+
+        self::assertSame('tests/SelectedTest.php:7 intakt.testMethodSentence Test method Intakt\Sample\Right::testGo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testOnlyTheSelectedWrapperIsReportedWhenTheAliasedMethodsShareALine(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/SameLineWrappersTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        trait Other { public function doFirst(): void {} public function doSecond(): void {} }
+        trait WrapFirst { use Other { doFirst as testDo; } }
+        trait WrapSecond { use Other { doSecond as testDo; } }
+
+        final class SameLineWrappersTest extends \PHPUnit\Framework\TestCase
+        {
+            use WrapFirst, WrapSecond { WrapSecond::testDo insteadof WrapFirst; }
+        }
+        PHP_WRAP);
+
+        self::assertSame('tests/SameLineWrappersTest.php:7 intakt.testMethodSentence Test method Intakt\Sample\WrapSecond::testDo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testOnlyTheWrapperThatAWrapperOfWrappersSelectsIsReported(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/MiddleTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        trait Deep { public function helper(): void {} }
+        trait DeepLeft { use Deep { helper as testGo; } }
+        trait DeepRight { use Deep { helper as testGo; } }
+        trait Middle { use DeepLeft, DeepRight { DeepLeft::testGo insteadof DeepRight; } }
+
+        final class MiddleTest extends \PHPUnit\Framework\TestCase
+        {
+            use Middle;
+        }
+        PHP_WRAP);
+
+        self::assertSame('tests/MiddleTest.php:6 intakt.testMethodSentence Test method Intakt\Sample\DeepLeft::testGo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testTheOriginalNameOfAnAliasInAWrapperThatInsteadofExcludesIsNotReported(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/RouteChecks.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait RouteChecks { public function testRuns(): void {} }\n");
+        $sandbox->write('tests/RouteTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        trait RouteLeft { use RouteChecks { testRuns as testTheLeftCheckRuns; } }
+        trait RouteRight { use RouteChecks; }
+
+        final class RouteTest extends \PHPUnit\Framework\TestCase
+        {
+            use RouteLeft, RouteRight { RouteRight::testRuns insteadof RouteLeft; }
+        }
+
+        final class RouteLeftTest extends \PHPUnit\Framework\TestCase
+        {
+            use RouteLeft;
+        }
+        PHP_WRAP);
+
+        self::assertSame('tests/RouteTest.php:5 intakt.testMethodSentence Test method Intakt\Sample\RouteLeft::testRuns()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAPublicAliasInAWrapperThatAlsoHidesTheOriginalIsReported(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/WrapHide.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        trait HideChecks { public function helper(): void {} }
+        trait HideWrapper { use HideChecks { helper as private; helper as testGo; } }
+
+        final class HideWrapperTest extends \PHPUnit\Framework\TestCase
+        {
+            use HideWrapper;
+        }
+        PHP_WRAP);
+
+        self::assertSame('tests/WrapHide.php:6 intakt.testMethodSentence Test method Intakt\Sample\HideWrapper::testGo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAWrapperAliasThatTheTestClassHidesAndRenamesInOneBlockPassesStaticAnalysis(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/HiddenAtUseTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        trait HiddenAtUseChecks { public function helper(): void {} }
+        trait HiddenAtUseWrapper { use HiddenAtUseChecks { helper as testGo; } }
+
+        final class HiddenAtUseTest extends \PHPUnit\Framework\TestCase
+        {
+            use HiddenAtUseWrapper { testGo as private; testGo as testTheCheckRuns; }
+        }
+        PHP_WRAP);
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAPrivateWrapperAliasThatTheTestClassMakesPublicIsReportedAtTheAliasInTheWrapper(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/WidenedTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        trait WidenedChecks { public function helper(): void {} }
+        trait WidenedWrapper { use WidenedChecks { helper as private testNo; } }
+
+        final class WidenedTest extends \PHPUnit\Framework\TestCase
+        {
+            use WidenedWrapper { testNo as public; }
+        }
+        PHP_WRAP);
+
+        self::assertSame('tests/WidenedTest.php:6 intakt.testMethodSentence Test method Intakt\Sample\WidenedWrapper::testNo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAWrapperAliasThatTheTestClassRenamesAgainIsReportedOnceUnderTheWrapper(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/RenamedTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        trait RenamedChecks { public function helper(): void {} }
+        trait RenamedWrapper { use RenamedChecks { helper as testGo; } }
+
+        final class RenamedTest extends \PHPUnit\Framework\TestCase
+        {
+            use RenamedWrapper { testGo as testTheCheckRuns; }
+        }
+        PHP_WRAP);
+
+        self::assertSame('tests/RenamedTest.php:6 intakt.testMethodSentence Test method Intakt\Sample\RenamedWrapper::testGo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testATraitTestMethodAliasedInTwoUseStatementsIsReportedOnceInTheTrait(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/TwoStatementsTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        trait TwoStatementsChecks { public function testDo(): void {} }
+
+        final class TwoStatementsTest extends \PHPUnit\Framework\TestCase
+        {
+            use TwoStatementsChecks { testDo as testTheFirstThing; }
+            use TwoStatementsChecks { testDo as testTheSecondThing; }
+        }
+        PHP_WRAP);
+
+        self::assertSame('tests/TwoStatementsTest.php:5 intakt.testMethodSentence Test method Intakt\Sample\TwoStatementsChecks::testDo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAStillRunOriginalOfATraitThatIsNotAnalyzedIsReportedOnTheTraitsOwnLine(): void
+    {
+        $sandbox = $this->emptySandbox();
+        // the gate's excluded fixtures folder stands for a file a changed-files run leaves out
+        $sandbox->write('tests/Gates/Fixtures/PartialChecks.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait PartialChecks\n{\n    public function testGo(): void {}\n}\n");
+        $sandbox->write('tests/PartialTest.php', <<<'PHP_WRAP'
+        <?php
+
+        namespace Intakt\Sample;
+
+        final class PartialTest extends \PHPUnit\Framework\TestCase
+        {
+
+
+            use PartialChecks { testGo as testTheCheckRuns; }
+        }
+        PHP_WRAP);
+        // because the analysis finds a class it does not analyze only once PHP has loaded it
+        require_once $sandbox->root.'/tests/Gates/Fixtures/PartialChecks.php';
+
+        self::assertSame('tests/Gates/Fixtures/PartialChecks.php:7 intakt.testMethodSentence Test method Intakt\Sample\PartialChecks::testGo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
     }
 
     public function testAShortTestMethodOfATraitUnderSourceUsedWithoutAliasPassesStaticAnalysis(): void

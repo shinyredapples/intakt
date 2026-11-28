@@ -13,6 +13,9 @@ use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
 
 /**
+ * @phpstan-import-type Place from TraitAliasCollector
+ * @phpstan-import-type UseBlock from TraitAliasCollector
+ *
  * @implements Rule<CollectedDataNode>
  */
 final readonly class TestMethodSentenceRule implements Rule
@@ -54,19 +57,56 @@ final readonly class TestMethodSentenceRule implements Rule
     private function aliasedNames(CollectedDataNode $node): array
     {
         $lines = $this->traitMethodLines($node);
+        $names = new SentenceTestName();
         $judged = [];
 
-        foreach (array_merge(...array_merge(...array_values($node->get(TraitAliasCollector::class)))) as [$file, $line, $owner, $class, $method, $mayBeProvider, $sourceFile, $sourceTrait, $exposer]) {
-            // because a name the trait declares is one name to fix in the trait when the trait lives under tests/, and only the alias can be fixed for a trait outside tests/, while an alias declared outside tests/ is fixed in the test class that takes it
-            $place = match (true) {
-                null === $exposer && $this->isUnderTests($sourceFile) => [$sourceFile, $lines[strtolower($sourceTrait.'::'.$method)] ?? $line, $sourceTrait],
-                null !== $exposer && !$this->isUnderTests($file) && $this->isUnderTests($sourceFile) => $exposer,
-                default => [$file, $line, $owner],
-            };
-            $judged[] = [...$place, $class, $method, $mayBeProvider];
+        foreach ($this->useBlocksByClass($node) as $blocks) {
+            $class = $blocks[0]['class'];
+
+            foreach (new TraitComposition($blocks)->methodsOf($class[2]) as $method) {
+                $place = $this->placeOf($method, $class, $lines);
+
+                if (null !== $place && $method->isRunAsTest() && !$names->isSentence($method->name())) {
+                    $judged[] = [...$place, $class[2], $method->name(), $method->fact['provider']];
+                }
+            }
         }
 
         return $judged;
+    }
+
+    /**
+     * @return array<string, non-empty-list<UseBlock>>
+     */
+    private function useBlocksByClass(CollectedDataNode $node): array
+    {
+        $blocks = [];
+
+        foreach (array_merge(...array_values($node->get(TraitAliasCollector::class))) as $block) {
+            $blocks[strtolower($block['class'][2])][] = $block;
+        }
+
+        return $blocks;
+    }
+
+    // because a name the trait declares is one name to fix in the trait when the trait lives under tests/, and only the alias can be fixed for a trait outside tests/ (one used without any alias is not judged), while an alias declared outside tests/ is fixed in the test class that takes it
+    /**
+     * @param Place              $class
+     * @param array<string, int> $lines
+     *
+     * @return Place|null
+     */
+    private function placeOf(ComposedTraitMethod $method, array $class, array $lines): ?array
+    {
+        [$sourceFile, $sourceLine, $trait] = $method->source;
+
+        return match (true) {
+            null === $method->namedAt && null === $method->aliasedAt => null,
+            null === $method->namedAt && $this->isUnderTests($sourceFile) => [$sourceFile, $lines[strtolower($trait.'::'.$method->name())] ?? $sourceLine, $trait],
+            null === $method->namedAt => $method->aliasedAt,
+            !$this->isUnderTests($method->namedAt[0]) && $this->isUnderTests($sourceFile) => $class,
+            default => $method->namedAt,
+        };
     }
 
     /**
