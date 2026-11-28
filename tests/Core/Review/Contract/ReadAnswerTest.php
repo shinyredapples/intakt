@@ -25,7 +25,7 @@ final class ReadAnswerTest extends TestCase
 {
     public function testAReadAnswerKeepsTheVerdictAndEachFindingsSeverityPlaceAndTitleInOrder(): void
     {
-        $expected = [new ReadFinding(Severity::P1, 'src/Cart.php', 12, 'The discount ends early.'), new ReadFinding(Severity::P3, null, null, 'Name the constant.')];
+        $expected = [new ReadFinding(Severity::P1, 'src/Cart.php', 12, 'The discount ends early.', null), new ReadFinding(Severity::P3, null, null, 'Name the constant.', null)];
 
         $answer = ReadAnswer::of(new Verdict(Decision::Changes, array_map($this->findingReadAs(...), $expected), [], []));
 

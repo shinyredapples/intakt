@@ -108,6 +108,16 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         self::assertCount(2, $crawler->filter('.log-summary .ls-findings .kind-sym svg'));
     }
 
+    public function testAFindingWhoseTitleIsOnlyANoBreakSpaceKeepsItsWholeText(): void
+    {
+        $blank = new Finding('F1', Severity::P1, null, null, null, 'Take the lock first.', FixableBy::Builder, false, null, null, title: "\u{00A0}");
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), new Paths(), [$blank], [], [], false));
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
+
+        self::assertSame(['F1 P1 Take the lock first. Open'],$this->linesOf($crawler->filter('.log-summary .ls-findings li')));
+    }
+
     public function testAFindingRecordedWithoutATitleOrKindKeepsItsWholeTextAndNoSymbol(): void
     {
         $this->givenTheRunningRoundRecorded($this->summary());

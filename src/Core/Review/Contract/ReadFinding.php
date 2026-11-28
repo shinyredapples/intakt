@@ -11,7 +11,7 @@ final readonly class ReadFinding
         public ?string $file,
         public ?int $line,
         public string $title,
-        public ?FindingKind $kind = null,
+        public ?FindingKind $kind,
     ) {
     }
 
