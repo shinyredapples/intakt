@@ -23,11 +23,11 @@ final class IsolatedSessionLogTest extends TestCase
 {
     private const string AUTOLOAD = __DIR__.'/../../../../../vendor/autoload.php';
 
-    private const string RESULT = '{"type":"result","subtype":"success","is_error":false,"num_turns":12,"result":"done","usage":{"input_tokens":1200,"output_tokens":340,"cache_read_input_tokens":56000,"cache_creation_input_tokens":7800}}';
+    private const string RESULT = '{"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","model":"claude-opus-5-5","content":[{"type":"text","text":"done"}],"usage":{"input_tokens":1200,"output_tokens":340,"cache_read_input_tokens":56000,"cache_creation_input_tokens":7800}}}';
 
     private string $folder = '';
 
-    public function testTheCliResultInABuildLogIsReadInTheChildProcess(): void
+    public function testTheCliMessagesInABuildLogAreReadInTheChildProcess(): void
     {
         $usage = new IsolatedSessionLog(self::AUTOLOAD)->usageIn("starting\n".self::RESULT."\nclaude exited with 0\n");
 

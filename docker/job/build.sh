@@ -150,7 +150,7 @@ BASH_MAX_TIMEOUT_MS="$BASH_DEFAULT_TIMEOUT_MS"
 export BASH_DEFAULT_TIMEOUT_MS BASH_MAX_TIMEOUT_MS
 time_limit_settings="$(printf '{"env":{"BASH_DEFAULT_TIMEOUT_MS":"%s","BASH_MAX_TIMEOUT_MS":"%s"}}' "$BASH_DEFAULT_TIMEOUT_MS" "$BASH_MAX_TIMEOUT_MS")"
 # In a session of its own, so the processes it leaves running can be ended with it.
-setsid claude -p --model "$model" --max-turns "$turns" --output-format json --dangerously-skip-permissions --settings "$time_limit_settings" < "$prompt" >> "$log" 2>&1 &
+setsid claude -p --model "$model" --max-turns "$turns" --output-format stream-json --verbose --dangerously-skip-permissions --settings "$time_limit_settings" < "$prompt" >> "$log" 2>&1 &
 session=$!
 # The allowance ends the session only, never this script, so a cut session still reaches the bundle below; the watchdog is in a session of its own too, so its sleep goes with it.
 # It reports the cut by its exit status, not by a file, because the builder can write anywhere a file could be and so stop the kill or fake a cut.

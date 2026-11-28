@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"00000000-0000-4000-8000-000000000000","model":"claude-opus-5-5","tools":["Bash","Read","Edit"]}
+{"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","model":"claude-opus-5-5","content":[{"type":"text","text":"Reading the task."}],"usage":{"input_tokens":3000,"output_tokens":700,"cache_read_input_tokens":210000,"cache_creation_input_tokens":15000}},"session_id":"00000000-0000-4000-8000-000000000000"}
+{"type":"assistant","message":{"id":"msg_02","type":"message","role":"assistant","model":"claude-opus-5-5","content":[{"type":"tool_use","id":"toolu_01","name":"Bash","input":{"command":"bin/check"}}],"usage":{"input_tokens":2500,"output_tokens":300,"cache_read_input_tokens":225000,"cache_creation_input_tokens":4000}},"session_id":"00000000-0000-4000-8000-000000000000"}
+claude cut after 3000 seconds, its commits are kept
+claude exited with 143

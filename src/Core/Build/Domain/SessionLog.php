@@ -6,28 +6,44 @@ namespace Intakt\Core\Build\Domain;
 
 use Generator;
 
-// Runs in the reader's own process only, because build.log is the builder's to write; it reads the CLI's JSON result (--output-format json), whose usage covers every turn of the session.
+// Runs in the reader's own process only, because build.log is the builder's to write; it reads the CLI's stream (--output-format stream-json), which writes each message as the session runs, so a cut session still counts what it spent (docs/design/05-architecture/06-budget-and-model-planner.md).
 final readonly class SessionLog
 {
     public const int MAX_LINE_BYTES = 1024 * 1024;
 
-    // Deep enough for the CLI's result, so a line nested deeper is no result and costs the decoder nothing more.
+    // Deep enough for the CLI's records, so a line nested deeper is skipped and costs the decoder nothing more.
     private const int DEPTH = 16;
 
     private const string TYPE = 'type';
 
+    private const string MESSAGE = 'message';
+
     public static function usageIn(string $log): SessionUsage
     {
-        $result = null;
+        $messages = [];
 
         foreach (self::linesOf($log) as $line) {
             if (null === $line) {
                 return SessionUsage::withoutUsage(UsageReading::LineTooLong);
             }
-            $result = self::resultIn($line) ?? $result;
+
+            $message = self::assistantMessageIn($line);
+
+            if (null === $message) {
+                continue;
+            }
+
+            $counted = self::countedMessage($message);
+
+            if (null === $counted) {
+                return SessionUsage::withoutUsage(UsageReading::Malformed);
+            }
+
+            // Keyed by the message id, because the CLI writes one record per content block of the same message.
+            $messages[$counted[0]] = $counted[1];
         }
 
-        return null === $result ? SessionUsage::withoutUsage(UsageReading::NotReported) : self::usageOf($result);
+        return self::totalOf($messages);
     }
 
     // One line at a time and null for one over the limit, because a log of millions of short lines split at once would hold more memory than the reader may use.
@@ -46,25 +62,54 @@ final readonly class SessionLog
         }
     }
 
-    // Other lines are skipped, because the log also holds the CLI's errors and the script's own lines.
+    // Other lines are skipped, because the log also holds the CLI's other records, its errors and the script's own lines; the final result is one of them, since its usage repeats the messages'.
     /**
      * @return array<mixed>|null
      */
-    private static function resultIn(string $line): ?array
+    private static function assistantMessageIn(string $line): ?array
     {
-        $event = json_decode($line, true, self::DEPTH);
+        $record = json_decode($line, true, self::DEPTH);
 
-        return is_array($event) && 'result' === ($event[self::TYPE] ?? null) ? $event : null;
+        if (!is_array($record) || 'assistant' !== ($record[self::TYPE] ?? null)) {
+            return null;
+        }
+
+        return is_array($record[self::MESSAGE] ?? null) ? $record[self::MESSAGE] : [];
     }
 
-    // The last result only, because the CLI writes one when the session ends; a result without valid counts is malformed, never zero.
+    // Null for a record without an id or without valid counts, because it would otherwise settle the build as having spent less than it did.
     /**
-     * @param array<mixed> $result
+     * @param array<mixed> $message
+     *
+     * @return array{string, BuildUsage}|null
      */
-    private static function usageOf(array $result): SessionUsage
+    private static function countedMessage(array $message): ?array
     {
-        $usage = is_array($result['usage'] ?? null) ? BuildUsage::fromCounts($result['usage']) : null;
+        $id = $message['id'] ?? null;
+        $usage = is_array($message['usage'] ?? null) ? BuildUsage::fromCounts($message['usage']) : null;
 
-        return $usage instanceof BuildUsage ? SessionUsage::read($usage) : SessionUsage::withoutUsage(UsageReading::Malformed);
+        return is_string($id) && '' !== $id && $usage instanceof BuildUsage ? [$id, $usage] : null;
+    }
+
+    /**
+     * @param array<string, BuildUsage> $messages
+     */
+    private static function totalOf(array $messages): SessionUsage
+    {
+        $total = array_first($messages);
+
+        if (null === $total) {
+            return SessionUsage::withoutUsage(UsageReading::NotReported);
+        }
+
+        foreach (array_slice($messages, 1) as $usage) {
+            $total = $total->plus($usage);
+
+            if (null === $total) {
+                return SessionUsage::withoutUsage(UsageReading::Malformed);
+            }
+        }
+
+        return SessionUsage::read($total);
     }
 }

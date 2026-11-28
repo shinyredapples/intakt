@@ -131,9 +131,9 @@ final class RunBuildJobTest extends TestCase
         self::assertSame("log\n", $outcome->log);
     }
 
-    public function testTheUsageOfTheCliResultInTheBuildLogIsCarriedInTheOutcome(): void
+    public function testTheUsageOfTheCliMessagesInTheBuildLogIsCarriedInTheOutcome(): void
     {
-        $log = "claude starts\n".'{"type":"result","subtype":"success","is_error":false,"num_turns":4,"result":"done","usage":{"input_tokens":5,"output_tokens":6,"cache_read_input_tokens":7,"cache_creation_input_tokens":8}}'."\nclaude exited with 0\n";
+        $log = "claude starts\n".'{"type":"assistant","message":{"id":"msg_01","usage":{"input_tokens":5,"output_tokens":6,"cache_read_input_tokens":7,"cache_creation_input_tokens":8}}}'."\nclaude exited with 0\n";
 
         $outcome = $this->runBuilds(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n", 'build.log' => $log]))->run($this->job());
 
@@ -141,7 +141,7 @@ final class RunBuildJobTest extends TestCase
         self::assertSame($log, $outcome->log);
     }
 
-    public function testAKilledJobWithoutACliResultCarriesAUsageThatWasNotReported(): void
+    public function testAKilledJobWithoutCliMessagesCarriesAUsageThatWasNotReported(): void
     {
         $outcome = $this->runBuilds(OutputFiles::of(['build.log' => "claude cut after 3000 seconds, its commits are kept\n"]), end: new JobEnd(JobCause::MemoryKilled, 137))->run($this->job());
 

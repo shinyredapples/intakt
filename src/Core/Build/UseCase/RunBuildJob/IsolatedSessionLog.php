@@ -15,7 +15,7 @@ use Symfony\Component\Process\Process;
 // In a child process with no environment and its own memory and time limits, because the log is the builder's to write: a crafted one must not cost the orchestrator its memory or time, nor reach its credentials (docs/design/05-architecture/06-budget-and-model-planner.md).
 final readonly class IsolatedSessionLog
 {
-    // Checked before the reader starts, because the CLI's result is a few kilobytes and a larger log is the builder's noise.
+    // Checked before the reader starts, because a log is the builder's to fill and the reader's memory must stay bounded whatever it wrote.
     public const int MAX_BYTES = 4 * 1024 * 1024;
 
     public const string MEMORY_LIMIT = '64M';

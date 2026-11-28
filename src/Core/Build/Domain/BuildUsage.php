@@ -41,6 +41,12 @@ final readonly class BuildUsage
         return new self($input, $output, $cacheRead, $cacheCreation);
     }
 
+    // Null past MOST, because a session's messages sum to far less and a larger total was written to overflow it.
+    public function plus(self $other): ?self
+    {
+        return self::fromCounts(array_combine(self::COUNTS, array_map(static fn (int $mine, int $theirs): int => $mine + $theirs, $this->counts(), $other->counts())));
+    }
+
     public function total(): int
     {
         return $this->inputTokens + $this->outputTokens + $this->cacheReadTokens + $this->cacheCreationTokens;
