@@ -55,14 +55,14 @@ The task is one sentence saying what the branch should do. The reviewers read a 
 
 ## Several keys of one provider
 
-A team often has more than one key per provider, say a personal and a team key. List them under `accounts:` in the order Intakt tries them:
+A team often has more than one key per provider, say a personal and a team key. List them under `accounts:` in your order of preference:
 
 ```yaml
 accounts:
     anthropic: [default, team]
 ```
 
-The `team` account reads `ANTHROPIC_API_KEY_TEAM`. When one account hits a rate limit, the reviewer moves to the next.
+The `team` account reads `ANTHROPIC_API_KEY_TEAM`. Before each model call Intakt looks at how much room each subscription account has left, from the usage it last measured for that account alone. An account that a recent reading shows at its five-hour or weekly ceiling, or that is cooling down, is left out, and the call goes to the account whose window resets soonest. An account without a recent reading (older than 30 minutes, or none) is tried only after every account with a recent reading, even if its old reading showed a ceiling, and an API-key account only after every subscription account with room. Your order breaks a tie. When every account is left out, no call starts: the reviewer moves to a substitute you listed for its tier, or else waits until the first account can start again: its reset (the later reset when both its five-hour and weekly windows are at their ceiling; a five-hour window that is below its own ceiling and held back only because the week is being used up too fast is free again as soon as the week has gone on far enough to allow its use, or at the weekly reset or its own reset if one of those comes first) or the end of its cooldown, and the later of the two for an account that is both at a ceiling and cooling down. To see the order Intakt would pick on a given day, add `rank` steps to a day replay (`intakt:budget:replay`, see the user manual). When a call is refused after it started, for example by a rate limit, the reviewer moves to the next account as before.
 
 Run `php bin/console intakt:team` to see each account once with its state and the roles it serves, as Developer or reviewer.
 

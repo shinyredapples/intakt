@@ -18,7 +18,7 @@
 <div class="page-head finding-head">
     <div>
         <p class="kicker">{{ urgency is null ? 'Severity not recorded' : urgency.words }}{% if reporters is not null and reporters is not empty %} · {{ reporters|length == 1 ? 'one reviewer' : reporters|length ~ ' reviewers' }}{% endif %}</p>
-        <h1>{% if finding.headline is null %}Text not recorded.{% else %}{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(finding.headline)}, with_context = false) }}{% endif %}</h1>
+        <h1>{{ include('dashboard/_kind_symbol.html.twig', {words: finding.kindWords}, with_context = false) }}{% if finding.shortLine is null %}Text not recorded.{% else %}{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(finding.shortLine)}, with_context = false) }}{% endif %}</h1>
         <p class="finding-place{% if finding.place is not null %} mono{% endif %}">{{ finding.place ?? 'File and line not recorded' }}</p>
     </div>
 </div>
@@ -53,8 +53,8 @@
     </div>
 </section>
 {% endif %}
-{# The whole text, as on the Full record's card, and only when it goes on after the headline, so nothing the reviewer wrote is lost. #}
-{% if finding.goesOnAfterItsHeadline %}
+{# The whole text, as on the Full record's card, and only when it goes on after its short line, so nothing the reviewer wrote is lost. #}
+{% if finding.goesOnAfterItsShortLine %}
 <section class="finding-section" aria-labelledby="finding-why">
     <h2 id="finding-why">Why</h2>
     <p class="card finding-words">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: ''}, with_context = false) }}</p>

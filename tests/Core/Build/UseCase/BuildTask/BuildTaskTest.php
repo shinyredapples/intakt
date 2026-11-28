@@ -34,11 +34,13 @@ use Intakt\Core\Build\Domain\ReadableLines;
 use Intakt\Core\Build\Domain\RegressionEvidence;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
+use Intakt\Core\Build\UseCase\BuildTask\AskedQuestion;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
+use Intakt\Core\Build\UseCase\BuildTask\EndedStep;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTaskNotCleared;
@@ -51,6 +53,7 @@ use Intakt\Core\Build\UseCase\BuildTask\PushRemoteRefused;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobEndFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
@@ -129,9 +132,11 @@ use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
+use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
+use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
@@ -197,6 +202,8 @@ use Symfony\Component\Uid\Uuid;
 #[CoversClass(BuildTaskOutcome::class)]
 #[CoversClass(BuildTaskRequest::class)]
 #[CoversClass(BuildRun::class)]
+#[CoversClass(EndedStep::class)]
+#[UsesClass(AskedQuestion::class)]
 #[CoversClass(BuildStepNotRecorded::class)]
 #[CoversClass(GitBuildCheckout::class)]
 #[CoversClass(BuildCheckoutFailed::class)]
@@ -290,6 +297,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
 #[UsesClass(RecordedBuildStops::class)]
+#[UsesClass(BuildJobEndFailed::class)]
 #[UsesClass(BuildLimits::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
@@ -480,6 +488,101 @@ final class BuildTaskTest extends TestCase
         self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob, BuildStep::HandBackCheck, BuildStep::PrePushCheck, BuildStep::Push], $outcome->passedSteps());
         self::assertSame("Build task 7\n", $this->git(['log', '-1', '--format=%s', 'feat/task'], $this->remote->path));
         self::assertNull($this->stops->causeFor($stopped), 'the build job did not read the recorded cause');
+    }
+
+    #[TestWith([BuildStopCause::NoProgress])]
+    #[TestWith([BuildStopCause::RunawayCeiling])]
+    #[TestWith([BuildStopCause::PerTaskTotal])]
+    public function testABuildStoppedWhileItRanNamesItsStopCauseInTheBuildJobLedgerRowOnly(BuildStopCause $cause): void
+    {
+        $this->runner = $this->runnerAfterWhich($this->committingRunner(), fn () => $this->stops->record($this->stoppedJob(), $cause));
+        $ledger = new InMemoryLedger();
+
+        (void) $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame([null, null, null, $cause->value, null, null, null], array_column($this->stepsIn($ledger), 'stop_cause'));
+        self::assertSame('passed', $this->stepsIn($ledger)[3]['outcome']);
+    }
+
+    public function testABuildJobThatWasNotStoppedRecordsNoStopCauseInAnyLedgerRow(): void
+    {
+        $this->runner = $this->committingRunner();
+        $ledger = new InMemoryLedger();
+
+        (void) $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertCount(7, $this->stepsIn($ledger));
+
+        foreach ($this->stepsIn($ledger) as $step) {
+            self::assertArrayHasKey('stop_cause', $step);
+            self::assertNull($step['stop_cause']);
+        }
+    }
+
+    #[TestWith([BuildStopCause::NoProgress])]
+    #[TestWith([BuildStopCause::RunawayCeiling])]
+    #[TestWith([BuildStopCause::PerTaskTotal])]
+    public function testAStoppedBuildJobThatHandedBackNoCommitNamesItsStopCauseInTheFailedBuildJobRow(BuildStopCause $cause): void
+    {
+        new Filesystem()->remove($this->output.'/'.RunBuildJob::BUNDLE);
+        $this->runner = $this->runnerAfterWhich(new ScriptedJobRunner($this->output), fn () => $this->stops->record($this->stoppedJob(), $cause));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame([BuildStep::BuildJob, BuildVerdict::NoCommits->reason()], [$outcome->last, $outcome->failure]);
+        self::assertSame(['failed', BuildVerdict::NoCommits->reason(), $cause->value], [$ledger->payloads()[3]['outcome'], $ledger->payloads()[3]['failure'], $ledger->payloads()[3]['stop_cause']]);
+    }
+
+    public function testAStoppedBuildJobWhoseParkedQuestionIsNotRemovedStillNamesItsStopCauseInTheFailedRow(): void
+    {
+        $this->runner = $this->runnerAfterWhich($this->committingRunner(), fn () => $this->stops->record($this->stoppedJob(), BuildStopCause::PerTaskTotal));
+        $this->parkedRows = ParkedTaskTable::unopenable($this->mirrors.'-missing');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertSame(['failed', $outcome->failure, 'per_task_total'], [$ledger->payloads()[3]['outcome'], $ledger->payloads()[3]['failure'], $ledger->payloads()[3]['stop_cause']]);
+    }
+
+    #[TestWith([BuildStopCause::NoProgress])]
+    #[TestWith([BuildStopCause::RunawayCeiling])]
+    #[TestWith([BuildStopCause::PerTaskTotal])]
+    public function testAStoppedBuildJobWhoseEndEventIsNotRecordedNamesItsStopCauseInTheFailedBuildJobRow(BuildStopCause $cause): void
+    {
+        $this->runner = $this->runnerThatStopsAndFails($cause, JobEventNotRecorded::for('job_ended', 'the database is locked'));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame([BuildStep::BuildJob, 'The ledger did not record the job event "job_ended": the database is locked'], [$outcome->last, $outcome->failure]);
+        self::assertSame(['failed', $outcome->failure, $cause->value], [$ledger->payloads()[3]['outcome'], $ledger->payloads()[3]['failure'], $ledger->payloads()[3]['stop_cause']]);
+    }
+
+    #[TestWith([BuildStopCause::NoProgress])]
+    #[TestWith([BuildStopCause::RunawayCeiling])]
+    #[TestWith([BuildStopCause::PerTaskTotal])]
+    public function testAStoppedBuildJobWhoseDockerEngineFailsAtItsEndNamesItsStopCauseInTheFailedBuildJobRow(BuildStopCause $cause): void
+    {
+        $this->runner = $this->runnerThatStopsAndFails($cause, DockerEngineFailed::notStoppedAfterKill('intakt-job-alpha', 10));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame([BuildStep::BuildJob, 'The container intakt-job-alpha did not stop within 10 seconds after the kill; no exit code is recorded.'], [$outcome->last, $outcome->failure]);
+        self::assertSame(['failed', $outcome->failure, $cause->value], [$ledger->payloads()[3]['outcome'], $ledger->payloads()[3]['failure'], $ledger->payloads()[3]['stop_cause']]);
+    }
+
+    public function testABuildJobWhoseEndEventIsNotRecordedWithoutAStopRecordsNoStopCause(): void
+    {
+        $this->runner = $this->runnerThatStopsAndFails(null, JobEventNotRecorded::for('job_ended', 'the database is locked'));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(['failed', $outcome->failure, null], [$ledger->payloads()[3]['outcome'], $ledger->payloads()[3]['failure'], $ledger->payloads()[3]['stop_cause']]);
+        self::assertSame(['task', 'mirror', 'clone', 'build_job'], array_column($ledger->payloads(), 'step'));
     }
 
     public function testThePullRequestTextsFirstLineIsTheTitleAndWhatFollowsTheBlankLineTheBody(): void
@@ -1639,6 +1742,27 @@ final class BuildTaskTest extends TestCase
         });
 
         return $runner;
+    }
+
+    // Stopped while it ran and failed at its end, because that is the order in which a watched build's job-end failure arrives.
+    private function runnerThatStopsAndFails(?BuildStopCause $cause, DockerEngineFailed|JobEventNotRecorded $failure): JobRunner
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($cause, $failure): never {
+            if ($cause instanceof BuildStopCause) {
+                $this->stops->record($this->stoppedJob(), $cause);
+            }
+
+            throw $failure;
+        });
+
+        return $runner;
+    }
+
+    // The job BuildTask hands to RunBuildJob for task 7, because RecordedBuildStops keys a stop by the job's id.
+    private function stoppedJob(): BuildJob
+    {
+        return new BuildJob('alpha', $this->clone, 'feat/task', new BuildBrief('x', new Decisions(), null), Tier::Standard, self::IMAGE);
     }
 
     private function taskWithEvidence(): ListedIssue

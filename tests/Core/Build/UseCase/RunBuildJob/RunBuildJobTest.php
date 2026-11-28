@@ -20,13 +20,16 @@ use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobEndFailed;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RecordedBuildStops;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
+use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
@@ -57,6 +60,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(BuilderNotOnClaudeCode::class)]
 #[CoversClass(BuildCloneIsNoFolder::class)]
 #[CoversClass(RecordedBuildStops::class)]
+#[CoversClass(BuildJobEndFailed::class)]
 #[UsesClass(BuildLimits::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildBrief::class)]
@@ -410,6 +414,45 @@ final class RunBuildJobTest extends TestCase
         self::assertNull($this->stops->causeFor($this->job()));
     }
 
+    #[TestWith(['ledger'])]
+    #[TestWith(['engine'])]
+    public function testAJobEndFailureCarriesTheStopCauseTheOriginalFailureAndItsMessage(string $kind): void
+    {
+        $original = $this->jobEndFailure($kind);
+
+        try {
+            (void) $this->useCase($this->runnerThatStopsAndFails(BuildStopCause::PerTaskTotal, $original), new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+            self::fail('the job-end failure was not passed on');
+        } catch (BuildJobEndFailed $failure) {
+            self::assertSame([BuildStopCause::PerTaskTotal, $original->getMessage(), $original], [$failure->stopCause, $failure->getMessage(), $failure->getPrevious()]);
+        }
+
+        self::assertSame([], glob($this->folder.'/prompts/*'));
+    }
+
+    public function testAJobEndFailureWithoutAStopCarriesNoCause(): void
+    {
+        try {
+            (void) $this->useCase($this->runnerThatStopsAndFails(null, $this->jobEndFailure('ledger')), new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+            self::fail('the job-end failure was not passed on');
+        } catch (BuildJobEndFailed $failure) {
+            self::assertNull($failure->stopCause);
+        }
+    }
+
+    #[TestWith(['ledger'])]
+    #[TestWith(['engine'])]
+    public function testTheBranchsNextBuildAfterAStoppedJobEndFailureCarriesNoStopCause(string $kind): void
+    {
+        try {
+            (void) $this->useCase($this->runnerThatStopsAndFails(BuildStopCause::NoProgress, $this->jobEndFailure($kind)), new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+            self::fail('the job-end failure was not passed on');
+        } catch (BuildJobEndFailed) {
+        }
+
+        self::assertNull($this->runBuilds(OutputFiles::of([]))->run($this->job())->stopCause);
+    }
+
     public function testARefusedJobLeavesTheCauseOfTheBuildThatHoldsTheBranch(): void
     {
         $this->stops->record($this->job(), BuildStopCause::RunawayCeiling);
@@ -532,6 +575,44 @@ final class RunBuildJobTest extends TestCase
         self::assertNull($this->stops->causeFor($this->job()));
     }
 
+    public function testADockerFailureBeforeTheRunnerIsCalledLeavesTheCauseOfTheBuildThatHoldsTheBranch(): void
+    {
+        $this->stops->record($this->job(), BuildStopCause::NoProgress);
+        $original = DockerEngineFailed::notStoppedAfterKill('intakt-job-demo', 10);
+        $this->gate = self::createStub(Gate::class);
+        $this->gate->method('registryHosts')->willThrowException($original);
+
+        try {
+            (void) $this->useCase(self::createStub(JobRunner::class), new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
+            self::fail('the setup failure was not passed on');
+        } catch (DockerEngineFailed $failure) {
+            self::assertSame($original, $failure);
+        }
+
+        self::assertSame(BuildStopCause::NoProgress, $this->stops->causeFor($this->job()));
+    }
+
+    public function testAFailedPromptRemovalDoesNotHideAJobEndFailureAndItsStopCause(): void
+    {
+        $original = JobEventNotRecorded::for('job_ended', 'the database is locked');
+        $filesystem = new class extends Filesystem {
+            /**
+             * @param string|iterable<mixed> $files
+             */
+            public function remove(string|iterable $files): void
+            {
+                throw new IOException('prompt cleanup failed');
+            }
+        };
+
+        try {
+            (void) $this->useCase($this->runnerThatStopsAndFails(BuildStopCause::NoProgress, $original), new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'), $filesystem)->run($this->job());
+            self::fail('the job end failure was not passed on');
+        } catch (BuildJobEndFailed $failure) {
+            self::assertSame([BuildStopCause::NoProgress, $original], [$failure->stopCause, $failure->getPrevious()]);
+        }
+    }
+
     public function testAStopCauseOfAnotherBranchIsNotCarried(): void
     {
         $this->stops->record(new BuildJob('demo', $this->folder.'/clone', 'other', new BuildBrief('x', new Decisions(), null), Tier::Standard, 'img'), BuildStopCause::PerTaskTotal);
@@ -615,6 +696,25 @@ final class RunBuildJobTest extends TestCase
         });
 
         return $this->useCase($runner, $model ?? new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
+    }
+
+    private function jobEndFailure(string $kind): DockerEngineFailed|JobEventNotRecorded
+    {
+        return 'ledger' === $kind ? JobEventNotRecorded::for('job_ended', 'the database is locked') : DockerEngineFailed::notStoppedAfterKill('intakt-job-demo', 10);
+    }
+
+    private function runnerThatStopsAndFails(?BuildStopCause $cause, DockerEngineFailed|JobEventNotRecorded $failure): JobRunner
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($cause, $failure): never {
+            if ($cause instanceof BuildStopCause) {
+                $this->stops->record($this->job(), $cause);
+            }
+
+            throw $failure;
+        });
+
+        return $runner;
     }
 
     private function job(Tier $tier = Tier::Standard): BuildJob

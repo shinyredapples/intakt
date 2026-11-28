@@ -24,6 +24,7 @@ use Intakt\Core\Ai\Infrastructure\ProviderKeySource;
 use Intakt\Core\Ai\UseCase\ProbeCodexLogin\ProbeCodexLoginCommand;
 use Intakt\Core\BranchCleanup\Contract\BranchCleanupServices;
 use Intakt\Core\BranchCleanup\Infrastructure\BranchCleanupConfiguration;
+use Intakt\Core\Budget\Contract\AccountRanking;
 use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Infrastructure\BudgetConfiguration;
@@ -324,7 +325,7 @@ return static function (ContainerConfigurator $container): void {
         }
 
         $container->services()->set($provider->accountsId(), AccountFailoverPlatform::class)
-            ->args([$provider, $platforms, new ReferenceConfigurator(AccountCooldowns::class), new ReferenceConfigurator(ClockInterface::class), new ReferenceConfigurator('logger'), new ReferenceConfigurator(PinnedProviderCooldowns::class)]);
+            ->args([$provider, $platforms, new ReferenceConfigurator(AccountCooldowns::class), new ReferenceConfigurator(ClockInterface::class), new ReferenceConfigurator('logger'), new ReferenceConfigurator(PinnedProviderCooldowns::class), new ReferenceConfigurator(AccountRanking::class)]);
         $enabledAccounts[$provider->value] = array_keys($enabled);
         $tierPlatforms[$provider->value] = new ReferenceConfigurator($provider->accountsId());
     }

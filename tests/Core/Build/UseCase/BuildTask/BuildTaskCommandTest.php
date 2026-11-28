@@ -18,6 +18,7 @@ use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildLimits;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
+use Intakt\Core\Build\UseCase\BuildTask\AskedQuestion;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
@@ -25,6 +26,7 @@ use Intakt\Core\Build\UseCase\BuildTask\BuildTaskCommand;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskInput;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
+use Intakt\Core\Build\UseCase\BuildTask\EndedStep;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
@@ -99,6 +101,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(BuildTaskOutcome::class)]
 #[UsesClass(BuildTaskRequest::class)]
 #[UsesClass(BuildRun::class)]
+#[UsesClass(AskedQuestion::class)]
+#[UsesClass(EndedStep::class)]
 #[UsesClass(BuildStepNotRecorded::class)]
 #[UsesClass(BuildCheckoutFailed::class)]
 #[UsesClass(HandBackCheck::class)]

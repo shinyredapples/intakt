@@ -43,9 +43,15 @@ final class HoldsInMemory implements Holds
     #[Override]
     public function isCoolingDown(Account $account): bool
     {
+        return $this->coolingDownUntil($account) instanceof DateTimeImmutable;
+    }
+
+    #[Override]
+    public function coolingDownUntil(Account $account): ?DateTimeImmutable
+    {
         $until = $this->cooldowns[$account->key()] ?? null;
 
-        return null !== $until && $until > $this->clock->now();
+        return null !== $until && $until > $this->clock->now() ? $until : null;
     }
 
     #[Override]
