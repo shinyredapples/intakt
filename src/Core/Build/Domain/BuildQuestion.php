@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\Domain;
 
+use Intakt\Core\Build\Contract\ReadinessGap;
 use JsonException;
 use stdClass;
 
@@ -37,6 +38,22 @@ final readonly class BuildQuestion
         return new self(
             sprintf('This bug task is missing: %s. A bug task states When (the steps or input), Today (what happens), Expected (what should happen) and Must keep working (what the fix must not change).', $names),
             [$add, 'Remove the bug label'],
+            $add,
+        );
+    }
+
+    // Worded by plain code from the closed list of gaps, never from the model's reason, because the model read the task's untrusted text and people read this.
+    /**
+     * @param non-empty-list<ReadinessGap> $missing
+     */
+    public static function forMissingReadiness(array $missing): self
+    {
+        $names = implode(', ', array_map(static fn (ReadinessGap $gap): string => $gap->wording(), $missing));
+        $add = 'Add the missing items to the task';
+
+        return new self(
+            sprintf('This task is not ready to build. It lacks: %s.', $names),
+            [$add, 'Close the task'],
             $add,
         );
     }
