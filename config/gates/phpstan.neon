@@ -171,6 +171,16 @@ services:
         tags:
             - phpstan.collector
     -
+        class: Intakt\Gates\PhpStan\TraitAliasCollector
+        arguments:
+            - @defaultAnalysisParser
+        tags:
+            - phpstan.collector
+    -
+        class: Intakt\Gates\PhpStan\TraitMethodLineCollector
+        tags:
+            - phpstan.collector
+    -
         class: Intakt\Gates\PhpStan\NoServiceLocatorRule
         arguments:
             root: %currentWorkingDirectory%
@@ -178,6 +188,12 @@ services:
             - phpstan.rules.rule
     -
         class: Intakt\Gates\PhpStan\NoRequiredAttributeRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\NarrowCatchRule
         arguments:
             root: %currentWorkingDirectory%
         tags:

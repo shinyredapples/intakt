@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\UseCase\MakeBuildClone;
 
+use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
@@ -210,7 +211,7 @@ final class MakeBuildCloneTest extends TestCase
         $racing = new FilesystemThatLetsAnotherCloneInFirst($this->buildClones(), 'feat/winner', $this->clone);
 
         try {
-            new MakeBuildClone(new HardenedGit(), $racing, new Mirrors($this->mirrors))->make('alpha', new TaskBranch('feat/loser'), $this->clone);
+            new MakeBuildClone(new HardenedGit(), $racing, new Mirrors($this->mirrors), self::createStub(DiskSpace::class))->make('alpha', new TaskBranch('feat/loser'), $this->clone);
             self::fail('the build clone was made in a folder another clone already owns');
         } catch (BuildCloneNotMade $refused) {
             self::assertStringContainsString('the folder already exists', $refused->getMessage());
@@ -426,7 +427,7 @@ final class MakeBuildCloneTest extends TestCase
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
 
-        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors))->update('alpha', $this->remote->path);
+        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors), self::createStub(DiskSpace::class))->update('alpha', $this->remote->path);
     }
 
     private function whenTheBuildCloneIsMade(string $branch): void
@@ -444,7 +445,7 @@ final class MakeBuildCloneTest extends TestCase
 
     private function buildClones(): MakeBuildClone
     {
-        return new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors));
+        return new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors), self::createStub(DiskSpace::class));
     }
 
     /**

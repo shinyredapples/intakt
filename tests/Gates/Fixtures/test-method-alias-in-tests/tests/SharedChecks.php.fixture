@@ -1,0 +1,18 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+trait SharedChecks
+{
+    public function testTheWholeSuiteRuns(): void
+    {
+        self::assertTrue(true);
+    }
+
+    public function testRuns(): void
+    {
+        self::assertTrue(true);
+    }
+}

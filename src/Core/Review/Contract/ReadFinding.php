@@ -11,20 +11,26 @@ final readonly class ReadFinding
         public ?string $file,
         public ?int $line,
         public string $title,
+        public ?FindingKind $kind,
     ) {
     }
 
     public static function of(Finding $finding): self
     {
-        return new self($finding->severity, $finding->file, $finding->line, self::titleOf($finding->text));
+        return new self($finding->severity, $finding->file, $finding->line, self::titleOf($finding), $finding->kind);
     }
 
-    // The first line of its text, because a finding has no title of its own and the rest of its text is the explanation; uncut, so whoever shows it cuts what the reader sees, after reading its marks.
-    private static function titleOf(string $text): string
+    // The reviewer's title, or the first line of its text for a finding written without one, because the rest of the text is the explanation; uncut, so whoever shows it cuts what the reader sees, after reading its marks.
+    private static function titleOf(Finding $finding): string
     {
-        // Split on the line endings by name rather than \R, which without UTF-8 mode would also split a multibyte character holding byte 0x85.
-        $lines = preg_split('/\r\n|\r|\n/', trim($text), 2);
+        $title = preg_replace('/^[\s\p{Z}]+|[\s\p{Z}]+$/u', '', (string) $finding->title);
+        if (null !== $title && '' !== $title) {
+            return $title;
+        }
 
-        return trim(false === $lines ? $text : $lines[0]);
+        // Split on the line endings by name rather than \R, which without UTF-8 mode would also split a multibyte character holding byte 0x85.
+        $lines = preg_split('/\r\n|\r|\n/', trim($finding->text), 2);
+
+        return trim(false === $lines ? $finding->text : $lines[0]);
     }
 }

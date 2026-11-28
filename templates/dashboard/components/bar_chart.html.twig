@@ -1,7 +1,9 @@
 {#- A bar's part is drawn solid inside a lighter whole of the same hue, because DESIGN.md's charts take one hue and small multiples instead of a second color. -#}
 {%- set width = 360 -%}
 {%- set height = 200 -%}
-{%- set left = 36 -%}
+{%- set axisValues = [0, 0.5, 1]|map(share => (share * top / (divisor|default(1)))|number_format(divisor|default(1) > 1 ? 4 : 0, '.', '')) -%}
+{#- The gutter grows with the longest value label (about 8 units a character, and the 6 between label and plot), because a cost label of six characters would otherwise start left of the drawing and be cut by the page edge on a phone. -#}
+{%- set left = max(36, max(axisValues|map(value => value|length)) * 8 + 6) -%}
 {%- set right = 8 -%}
 {%- set above = 24 -%}
 {%- set below = 28 -%}
@@ -24,7 +26,7 @@ M{{ x }},{{ base|round(1) }} V{{ (y + r)|round(1) }} Q{{ x }},{{ y|round(1) }} {
     {%- for share in [0, 0.5, 1] %}
     {%- set y = above + plot - share * plot %}
     <line x1="{{ left }}" x2="{{ width - right }}" y1="{{ y|round(1) }}" y2="{{ y|round(1) }}" class="{{ share == 0 ? 'c-base' : 'c-grid' }}"/>
-    <text x="{{ left - 6 }}" y="{{ (y + 4)|round(1) }}" class="c-axis" text-anchor="end" aria-hidden="true">{{ (share * top / (divisor|default(1)))|number_format(divisor|default(1) > 1 ? 4 : 0, '.', '') }}</text>
+    <text x="{{ left - 6 }}" y="{{ (y + 4)|round(1) }}" class="c-axis" text-anchor="end" aria-hidden="true">{{ axisValues[loop.index0] }}</text>
     {%- endfor %}
     {%- for bar in bars %}
     {%- set center = left + step * loop.index0 + step / 2 %}

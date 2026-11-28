@@ -47,10 +47,10 @@
         {% else %}
         <ul class="ls-list ls-findings">
             {% for finding in summary.checking %}
-            <li><span class="mono"><button type="button" class="linkbtn" data-highlight-finding="{{ finding.id }}">{{ finding.id }}</button></span> <span class="sev">{{ finding.severity.value }}</span> <span class="ls-text">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: ''}, with_context = false) }}</span> <span class="r">{{ finding.id in resolved ? 'Checked, resolved' : 'Open' }}</span></li>
+            <li><span class="mono"><button type="button" class="linkbtn" data-highlight-finding="{{ finding.id }}">{{ finding.id }}</button></span> <span class="sev">{{ finding.severity.value }}</span> <span class="ls-text">{{ include('dashboard/_finding_line.html.twig', {finding: finding, title: finding.title, words: finding.kind is null ? null : finding.kind.inWords, missing: ''}, with_context = false) }}</span> <span class="r">{{ finding.id in resolved ? 'Checked, resolved' : 'Open' }}</span></li>
             {% endfor %}
             {% for finding in reported %}
-            <li><span class="mono"><button type="button" class="linkbtn" data-highlight-finding="{{ finding.id }}">{{ finding.id }}</button></span> <span class="sev">{{ finding.severity.value }}</span> <span class="ls-text">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: ''}, with_context = false) }}</span> <span class="r">Reported</span></li>
+            <li><span class="mono"><button type="button" class="linkbtn" data-highlight-finding="{{ finding.id }}">{{ finding.id }}</button></span> <span class="sev">{{ finding.severity.value }}</span> <span class="ls-text">{{ include('dashboard/_finding_line.html.twig', {finding: finding, title: finding.title, words: finding.kind is null ? null : finding.kind.inWords, missing: ''}, with_context = false) }}</span> <span class="r">Reported</span></li>
             {% endfor %}
         </ul>
         {% endif %}

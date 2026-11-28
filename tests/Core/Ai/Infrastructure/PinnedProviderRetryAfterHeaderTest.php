@@ -150,7 +150,7 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
             modelCatalog: new InMemoryModelCatalog($models->models(self::ROUTER)),
         );
 
-        return new AccountFailoverPlatform(self::ROUTER, [Account::DEFAULT => $bridge], $this->accounts, $this->clock, new NullLogger(), $this->pins);
+        return new AccountFailoverPlatform(self::ROUTER, [Account::DEFAULT => $bridge], $this->accounts, $this->clock, new NullLogger(), $this->pins, new OwnersOrderRanking());
     }
 
     private function messages(): MessageBag

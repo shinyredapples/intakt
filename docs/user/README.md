@@ -35,6 +35,15 @@ You will meet these characters on the dashboard. Each one stands where its job h
 8. [When something goes wrong](08-when-something-goes-wrong.md): the common surprises, why they happen, what to do.
 9. [Running it for a team](09-running-it-for-a-team.md): your own panel, your own CI, and where the details live.
 
+## When a task is too big
+
+You run `intakt:build:size` on a task, and the answer is `split`: the task is too big for one build. With a single AI account, a task estimated at 400 changed lines or more is split too, because rework on a large change costs the most.
+
+1. Intakt records its plan first. Then it files two to four new issues, the parts. Each part has the task's labels and waits for the parts it builds on.
+2. The task stays open as their umbrella, with one comment naming the parts. It is never built itself: `intakt:queue:show` lists it as held, and the parts as tasks. Editing it later does not size it again.
+3. If the command stops halfway, run it again. It finishes from the plan and files no part twice.
+4. A task is split only once, and a part is never split again ([details](../reference/user-manual.md#sizing-a-new-task)).
+
 ## Which tier a build runs on
 
 When Intakt builds a task, these inputs decide its tier, the first that applies wins:
@@ -53,9 +62,11 @@ One thing to know about booting: Intakt can start a change in a scratch copy to 
 
 The helper-order check of `bin/check` does not recognize a call from a property hook, a `[$this, 'helper']` callable array or a `$this::helper()` call, so a private helper reached only that way is never reported ([the method-order rules](../reference/user-manual.md#when-bincheck-reports-the-order-of-methods)).
 
+`bin/check` refuses a catch in `src/` that takes any failure instead of naming the ones it expects ([generic catches](../reference/user-manual.md#when-bincheck-reports-a-generic-catch)).
+
 The `phpstan` check of `bin/check` wants test methods named as sentences: `test` followed by at least three camel-case words, such as `testTheFormIsSent()`. A data provider is exempt only when every concrete test class that runs it names it as a provider; a class that inherits it without naming it runs it as a plain test, so it is reported (renaming it without the `test` prefix avoids that) ([the test-name rule](../reference/user-manual.md#when-bincheck-reports-a-test-method-name)).
 
-The `routes` check of `bin/check` wants every route named `<module>_<use_case>` after its controller's module and the `UseCase/<Name>/` folder directly inside that module, in snake case, so `ShowReviewRecordController` in the Dashboard module is `dashboard_show_review_record`; a finding names the route and its controller. Only a wrong name gets the name it should have; a controller outside a use case folder, or a class written in the wrong letter case, gets a finding that asks you to move it into the folder or fix the spelling instead. Routes of other vendors' controllers are skipped ([the route-name rule](../reference/user-manual.md#when-bincheck-reports-a-route-name)).
+The `routes` check of `bin/check` wants every route named `<module>_<use_case>` after its controller's module and the `UseCase/<Name>/` folder directly inside that module, in snake case, so `ShowReviewRecordController` in the Dashboard module is `dashboard_show_review_record`; a finding names the route and its controller. Only a wrong name gets the name it should have. The check reads each controller class in the letter case it is declared with, so a class written in another case is judged by its declared name; only a class it cannot find in any spelling gets a finding that asks you to fix the spelling, and a controller outside a use case folder one that asks you to move it into the folder. Routes of other vendors' controllers are skipped ([the route-name rule](../reference/user-manual.md#when-bincheck-reports-a-route-name)).
 
 A reviewer's role prompt must come from the owner's panel configuration or the sample project's fixed roles, so the `phpstan` gate of `bin/check` limits where the objects that carry it are built: `new ReviewerRole` only in `ConfiguredPanels` and `SampleProject`, `new RoundReviewer` only in `ReviewRound` (`intakt.reviewerRole`), and `new ReviewerConversation` only in `ReviewWithReviewerHandler` and `SymfonyAiVendor` (`intakt.reviewerConversation`). A class string typed with an interface or parent class of one of these objects, such as `class-string<HasPlace>`, counts as naming that object; one typed with several (`class-string<HasPlace&Countable>`) counts only when the object has every one of them. Code under `tests/` is not checked ([details](../reference/user-manual.md#when-the-phpstan-gate-reports-a-prompt-message-finding)).
 
@@ -69,11 +80,15 @@ Text that is not a comment does not count: a string, a line indented under a YAM
 
 A comment in the form `TODO(#123): <reason>` that names an issue is allowed ([examples and exceptions](../reference/user-manual.md#when-the-left-undone-gate-reports-a-todo-comment-a-skipped-test-or-a-not-implemented-throw)).
 
+The `ignored` check of `bin/check` refuses a tracked file that `.gitignore` excludes. Untrack it with `git --literal-pathspecs rm --cached -- '<path>'`, the path in single quotes with each `'` in it written as `'\''` (the quotes and the option keep a name such as `build[1].tmp` from matching other files), or keep it with a negated rule in `.gitignore` ([how](../reference/user-manual.md#when-the-ignored-gate-reports-a-tracked-file-that-gitignore-excludes)). It also fails on a tracked `.gitignore` you changed or deleted without staging, since CI judges the committed rules: stage or revert that file.
+
 One rule to know before your first build: for a project with a `github` entry, the `--remote` of `intakt:build:task` must be that configured GitHub repository's `https://github.com/<owner>/<name>` address, or the command refuses before it does anything ([the `intakt:build:task` options](../reference/user-manual.md#building-one-task)).
+
+Before it hands a change back, the Developer can run Intakt's own check in the build job (`sh /input/precheck.sh`). It reports the refusals Intakt would otherwise give after the hand-back: no new commit on the task's branch, a branch that is not a fast-forward, a new merge commit, a commit git cannot write and a missing `PR.md`. The Developer fixes them in the same session. Intakt's own check after the hand-back still decides ([the builder's own check](../architecture/build-job.md#the-builders-own-check)).
 
 A task with the `bug` label describes the bug in four parts: When, Today, Expected and Must keep working. If one is missing or empty, Intakt builds nothing and parks the task with a question that names the missing part, shown on the task's page in the dashboard ([bug tasks](../reference/user-manual.md#bug-tasks)).
 
-When all four parts are there, the Developer writes the failing regression test first, commits it on its own, then fixes the bug. A build without that test, or whose test also passes on the base, fails before the push like a red check; otherwise the results on the base and on the head are written into the pull request's Evidence (an Evidence heading underlined with `===` or `---` gets them too, and underlined text inside indented code or a code fence is skipped); a bug no test can reproduce goes in without the `bug` label ([bug tasks](../reference/user-manual.md#bug-tasks), [writing a bug task](../guide/writing-a-good-task.md#writing-a-bug-task)).
+When all four parts are there, the Developer writes the failing regression test first, commits it on its own, then fixes the bug. A build without that test, or whose test also passes on the base, fails before the push like a red check; otherwise the results on the base and on the head are written into the pull request's Evidence (an Evidence heading underlined with `===` or `---` gets them too; code and HTML blocks are skipped); a bug no test can reproduce goes in without the `bug` label ([bug tasks](../reference/user-manual.md#bug-tasks), [writing a bug task](../guide/writing-a-good-task.md#writing-a-bug-task)).
 
 For a `bug` task, once the project's check has passed and only when the work adds, changes or renames a test, Intakt tries to run those tests twice before the push (a run that cannot start counts as having no result): on the old code (they should fail) and on the fixed code (they should pass). It finds them in the work itself, not in the Developer's word.
 
