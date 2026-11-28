@@ -57,10 +57,10 @@ final readonly class SummarySection
             $before = $fence;
             $fence = $this->fenceAfter($fence, $line);
             // A heading inside a code block is code, so it never opens or closes the section.
-            $lines[] = null === $before && null === $fence ? $this->lineOf($line, true === (array_last($lines)[3] ?? false)) : [$line, 0, '', false];
+            $lines[] = null === $before && null === $fence ? $this->lineOf($line) : [$line, 0, '', false];
         }
 
-        return $this->withSetextHeadings($lines);
+        return $this->withSetextHeadings($this->withParagraphContinuations($lines));
     }
 
     // The fence a line leaves open, so the lines from an opening fence to its closing one count as code.
@@ -73,28 +73,44 @@ final readonly class SummarySection
         return 1 === preg_match(self::FENCE_OPENS, $line, $opening) && !$this->backtickInInfo($opening[1], $opening[2]) ? $opening[1] : null;
     }
 
-    // Because CommonMark reads a backtick line whose info string holds a backtick as inline code, not as a fence.
-    private function backtickInInfo(string $fence, string $info): bool
-    {
-        return '`' === $fence[0] && str_contains($info, '`');
-    }
-
     // Because a shorter fence inside a longer one is code, as in CommonMark (https://spec.commonmark.org/0.31.2/#fenced-code-blocks).
     private function closes(string $fence, string $line): bool
     {
         return 1 === preg_match(self::FENCE_CLOSES, $line, $closing) && $closing[1][0] === $fence[0] && strlen($closing[1]) >= strlen($fence);
     }
 
-    // Paragraph text is marked, because only such a line becomes a heading when a setext underline follows it; an indented line continues a paragraph but never starts one.
+    // Because CommonMark reads a backtick line whose info string holds a backtick as inline code, not as a fence.
+    private function backtickInInfo(string $fence, string $info): bool
+    {
+        return '`' === $fence[0] && str_contains($info, '`');
+    }
+
+    // Paragraph text is marked, because only such a line becomes a heading when a setext underline follows it.
     /**
      * @return array{string, int, string, bool}
      */
-    private function lineOf(string $line, bool $continuesParagraph): array
+    private function lineOf(string $line): array
     {
         [$level, $title] = $this->headingOf($line);
-        $paragraph = 0 === $level && '' !== trim($line) && (1 !== preg_match(self::NO_PARAGRAPH, $line) || ($continuesParagraph && 1 === preg_match(self::INDENTED, $line)));
 
-        return [$line, $level, $title, $paragraph];
+        return [$line, $level, $title, 0 === $level && '' !== trim($line) && 1 !== preg_match(self::NO_PARAGRAPH, $line)];
+    }
+
+    // Because an indented line continues a paragraph, as in CommonMark, although it never starts one.
+    /**
+     * @param list<array{string, int, string, bool}> $lines
+     *
+     * @return list<array{string, int, string, bool}>
+     */
+    private function withParagraphContinuations(array $lines): array
+    {
+        foreach ($lines as $index => $line) {
+            if (0 < $index && $lines[$index - 1][3] && 0 === $line[1] && '' !== trim($line[0]) && 1 === preg_match(self::INDENTED, $line[0])) {
+                $lines[$index][3] = true;
+            }
+        }
+
+        return $lines;
     }
 
     /**

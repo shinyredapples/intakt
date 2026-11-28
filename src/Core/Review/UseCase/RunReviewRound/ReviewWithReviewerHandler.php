@@ -155,7 +155,7 @@ final readonly class ReviewWithReviewerHandler
      */
     private function refuseRepeatedProposals(Verdict $verdict, array $open): void
     {
-        $proposals = self::openProposals($open);
+        $proposals = $this->openProposals($open);
         foreach ($verdict->findings as $finding) {
             if ($finding->repeat && $finding->namesProposal() && !isset($proposals[$finding->id])) {
                 throw VerdictUnreadable::becauseKeySafe('the Technical writer repeated an open finding as a proposal.');
@@ -175,7 +175,7 @@ final readonly class ReviewWithReviewerHandler
      */
     private function ownerRoutingKept(Verdict $verdict, array $open): Verdict
     {
-        $proposals = self::openProposals($open);
+        $proposals = $this->openProposals($open);
 
         return $verdict->withFindings(array_map(
             static fn (Finding $finding): Finding => $finding->repeat && isset($proposals[$finding->id]) ? $finding->withRoutingOf($proposals[$finding->id]) : $finding,
@@ -188,7 +188,7 @@ final readonly class ReviewWithReviewerHandler
      *
      * @return array<string, Finding>
      */
-    private static function openProposals(array $open): array
+    private function openProposals(array $open): array
     {
         $proposals = [];
         foreach ($open as $finding) {
