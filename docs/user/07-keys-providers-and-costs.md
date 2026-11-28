@@ -52,6 +52,8 @@ A build went past its allowance but keeps fixing tests. It may go on while it ma
 
 Planned: Intakt does not watch a running build for these limits yet, so today a build ends when its session's time runs out and keeps its commits the same way. You can already set the limits ([user manual](../reference/user-manual.md#the-build-limits)). Once the watch stops a build, the ledger line of its build job step names why: no progress, the runaway ceiling or the per-task total. It names why also when the job then fails at its end, for example because Docker failed, beside the same failure text as before.
 
+To see what Intakt reads from a finished build, run `intakt:build:run` with `-v`. It prints the tokens from Claude Code's own report, and, marked untrusted because the build wrote them, what its commits show. Failing tests and running checks cannot be seen from outside the build yet ([user manual](../reference/user-manual.md#the-observed-figures)).
+
 ## When a provider says "slow down"
 
 When a provider limits a call, the account that made it cools down until the reset time the provider sent, at most one day and at least one second (a reset of zero or already past waits one second). The reviewer moves on at once to the next account of the same provider, if you have one. A tier can also list substitutes from other providers, used only when its own provider cannot answer.

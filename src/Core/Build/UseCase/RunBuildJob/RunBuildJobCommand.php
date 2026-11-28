@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\Decisions;
+use Intakt\Core\Build\Domain\BuildObservation;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Platform\Contract\ReportableFailure;
@@ -51,6 +52,8 @@ final readonly class RunBuildJobCommand
             return Command::FAILURE;
         }
 
+        $this->observed($io, $outcome->observation);
+
         if ($outcome->question instanceof BuildQuestion) {
             return $this->asked($io, $outcome->question);
         }
@@ -72,6 +75,22 @@ final readonly class RunBuildJobCommand
     private function tierOf(string $value): Tier
     {
         return Tier::tryFrom($value) ?? throw TierNotKnown::named($value);
+    }
+
+    // Only when verbose, because the other output is what the build handed back; every figure printed is a number, a time, a hash or a word of this code's own.
+    private function observed(SymfonyStyle $io, ?BuildObservation $observation): void
+    {
+        if (!$io->isVerbose() || !$observation instanceof BuildObservation) {
+            return;
+        }
+
+        $io->writeln(sprintf('observed at %s: %d tokens (trusted: the CLI\'s report)', $observation->trusted->observedAt->format(DATE_ATOM), $observation->trusted->tokensUsed));
+        $io->writeln(sprintf(
+            'builder\'s figures (untrusted): content %s, %d failing tests, check running: %s',
+            '' === $observation->untrusted->contentFingerprint ? 'none' : $observation->untrusted->contentFingerprint,
+            count($observation->untrusted->failingTests),
+            $observation->untrusted->checkRunning ? 'yes' : 'no',
+        ));
     }
 
     private function asked(SymfonyStyle $io, BuildQuestion $question): int

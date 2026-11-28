@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\RunBuildJob;
 
+use Intakt\Core\Build\Domain\BuildObservation;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\BuildStopCause;
 
@@ -18,6 +19,8 @@ final readonly class BuildJobOutcome
         public ?BuildQuestion $question = null,
         // Beside the verdict, because a stopped session still bundles what it committed and its hand-back goes through the same check as any cut session's.
         public ?BuildStopCause $stopCause = null,
+        // Null when the runner refused the output, because nothing of it can be read then.
+        public ?BuildObservation $observation = null,
     ) {
     }
 
@@ -29,5 +32,10 @@ final readonly class BuildJobOutcome
     public function stoppedFor(?BuildStopCause $cause): self
     {
         return clone($this, ['stopCause' => $cause]);
+    }
+
+    public function observedAs(BuildObservation $observation): self
+    {
+        return clone($this, ['observation' => $observation]);
     }
 }
