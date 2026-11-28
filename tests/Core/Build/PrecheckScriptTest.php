@@ -214,7 +214,8 @@ final class PrecheckScriptTest extends TestCase
     {
         $head = $this->history->commit('feat: build the task');
         $this->givenThePullRequestText();
-        $other = trim($this->git(['commit-tree', $head.'^{tree}', '-p', $this->base], "another message\n"));
+        // The identity as BuildHistory gives it, because a runner without a git identity refuses to write the commit.
+        $other = trim($this->git(['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit-tree', $head.'^{tree}', '-p', $this->base], "another message\n"));
         $this->storeUnder($head, $other);
 
         $run = $this->whenThePrecheckRuns();
