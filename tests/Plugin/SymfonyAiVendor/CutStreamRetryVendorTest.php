@@ -122,7 +122,7 @@ final class CutStreamRetryVendorTest extends KernelTestCase
 
         $this->vendor($answer)->review('alpha', Tier::Strong, $this->request($inARound));
 
-        self::assertSame(['asked again '.self::REVIEWER, 'answer '.self::REVIEWER.' changes [P1 ...:12 ...]'], $this->updates->seen);
+        self::assertSame(['asked again '.self::REVIEWER, 'answer '.self::REVIEWER.' changes [P1 ...:12 A cart loses its discount]'], $this->updates->seen);
     }
 
     public function testTheFirstTryOfAReviewerIsNotMarkedAsAskedAgain(): void
@@ -132,7 +132,7 @@ final class CutStreamRetryVendorTest extends KernelTestCase
 
         $this->vendor($answer)->review('alpha', Tier::Strong, $this->request($inARound));
 
-        self::assertSame(['answer '.self::REVIEWER.' changes [P1 ...:12 ...]'], $this->updates->seen);
+        self::assertSame(['answer '.self::REVIEWER.' changes [P1 ...:12 A cart loses its discount]'], $this->updates->seen);
     }
 
     public function testAStreamCutOffMidAnswerLeavesItsUsageUnsettledOnceBeforeItsRetry(): void
