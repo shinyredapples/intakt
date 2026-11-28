@@ -64,6 +64,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         $routerProvider = $this->modelWaits->routerProviderOf($model);
         $waits = $this->waits($routerProvider);
         $ranked = $this->startable($waits);
+        // Recorded as the ranking at the start only, because the send-time cooldown check and the failover after a refused send can still hand the call to another account, and recording that hand-off is part 3 of #4016.
         $this->ranking->record($this->provider, $this->cooling->pickOf($ranked, $waits));
         $free = $this->freeAccounts($ranked->inOrder, $failures, $routerProvider);
         if ([] === $free) {
