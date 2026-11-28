@@ -29,7 +29,7 @@ Building Intakt led to 13 fixes (12 pull requests) merged upstream in Symfony, S
 | symfony/ai | [Failed streamed tool run reports no usage](ai-agent-streamed-tool-call-cut-stream/) | [comment on #2617](https://github.com/symfony/ai/pull/2617#issuecomment-6876304595) Intakt's, reported |
 | symfony/ai | [`#[NotNull]` leaves `null` in a promoted property's type](ai-platform-not-null-promoted-property/) | draft, not filed |
 | symfony/symfony | [`WordCount` counts punctuation marks as words](validator-word-count-counts-punctuation/) | draft, not filed |
-| PHPStan | [Trait alias and visibility change in one `use`](phpstan-trait-alias-drops-visibility/) | draft, not filed (ready to file, checked 2026-11-28) |
+| PHPStan | [Trait alias and visibility change in one `use`](phpstan-trait-alias-drops-visibility/) | ready to file (checked 2026-11-28) |
 | PHPStan | [Readonly type kept after `clone with`](phpstan-clone-with-readonly-constructor-type/) | [phpstan#14838](https://github.com/phpstan/phpstan/issues/14838) already reported |
 | FrankenPHP | [`php-cli` crashes on SIGTERM](frankenphp-messenger-consume-sigterm/) | [frankenphp#2479](https://github.com/php/frankenphp/issues/2479) already reported, still fails on 1.14.0 (checked 2026-11-22) |
 | Doctrine | [A refused commit leaves the transaction open](dbal-failed-commit-leaves-transaction-open/) | [#7633](https://github.com/doctrine/dbal/pull/7633) Intakt's, open |
