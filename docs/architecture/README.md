@@ -97,7 +97,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Hand-back checks](hand-back.md): the checks on what a build returns before anything is pushed.
 - [Check job](check-job.md): the pre-push run of the project's checks in a fresh clone, and the pull request text rule (Evidence references, body cap).
 - [The build lane's review cap and in-flight limit](lanes.md): when a new build may start.
-- [When a build over its allowance stops](build-allowance.md): the progress stop, the runaway ceiling and the per-task total, with their causes; the build job keeps a stopped job's commits and carries its cause, but nothing watches a running build yet.
+- [When a build over its allowance stops](build-allowance.md): the progress stop, the runaway ceiling and the per-task total, with their causes; the build job watches a running build, ends its session on a stop, keeps its commits and carries its cause.
 - [Bare mirror](mirror.md): the local copy of each project's repository.
 - [Build clone](build-clone.md): the fresh clone a build works in.
 - [Retried network git calls](network-git.md): how a failed network git call is tried again.
