@@ -186,7 +186,7 @@ final class CeilingStartGuardTest extends TestCase
         self::assertSame(StartDecision::Start, $this->decide(1));
     }
 
-    // The pace needs 50 * 40 / (90 * 90) of the week elapsed, counting the current five hours: 149333.3 s against 104400 s now.
+    // 44934 s, because the pace needs 50 * 40 / (90 * 90) of the week elapsed, counting the current five hours: 149333.3 s against 104400 s now.
     public function testAShortWindowWithoutResetTimeHeldOnlyByTheWeeklyPaceIsFreeOnceThePaceCatchesUp(): void
     {
         $this->readWindow(UsageWindow::Weekly, 40.0, $this->weekResets);
@@ -194,16 +194,16 @@ final class CeilingStartGuardTest extends TestCase
 
         $room = $this->guard()->roomOf($this->account());
 
-        self::assertSame([UsageWindow::FiveHour, 44934], [$room->atCeiling, $room->resetsAt?->getTimestamp() - $this->clock->now()->getTimestamp()]);
+        self::assertSame([UsageWindow::FiveHour, 44934], [$room->atCeiling, $this->secondsUntil($room->resetsAt)]);
     }
 
-    // At 81% of the week with 47 h 10 min left, the pace lifts the short ceiling above 75% after 600 s, before the short window resets after 1200 s.
+    // 601 s, because at 81% of the week with 47 h 10 min left the pace lifts the short ceiling to exactly 75% after 600 s, and a use at the ceiling still holds the account.
     public function testARisingWeeklyPaceFreesAShortWindowBeforeEitherReset(): void
     {
         $this->readWindow(UsageWindow::Weekly, 81.0, $this->clock->now()->modify('+47 hours 10 minutes'));
         $this->readWindow(UsageWindow::FiveHour, 75.0, $this->clock->now()->modify('+20 minutes'));
         $room = $this->guard()->roomOf($this->account());
-        $wait = $room->resetsAt?->getTimestamp() - $this->clock->now()->getTimestamp();
+        $wait = $this->secondsUntil($room->resetsAt);
 
         $this->clock->sleep(600);
         $atTheBoundary = $this->guard()->roomOf($this->account())->atCeiling;
@@ -268,6 +268,11 @@ final class CeilingStartGuardTest extends TestCase
     private function readWindow(UsageWindow $window, float $percent, ?DateTimeImmutable $resetsAt): void
     {
         $this->readings->record(new WindowReading($this->account(), $window, new Usage($percent, $resetsAt)));
+    }
+
+    private function secondsUntil(?DateTimeImmutable $moment): ?int
+    {
+        return $moment instanceof DateTimeImmutable ? $moment->getTimestamp() - $this->clock->now()->getTimestamp() : null;
     }
 
     private function fiveHourReset(): DateTimeImmutable
