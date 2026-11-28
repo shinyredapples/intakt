@@ -33,6 +33,7 @@ use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\JobReviewer;
 use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
@@ -177,7 +178,7 @@ final class RankedReviewOnStoredReadingsTest extends KernelTestCase
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);
         $servers = self::createStub(ReviewServerAccesses::class);
         $servers->method('forRound')->willReturn(new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', 'round-credential', new ReviewTools('read_file')));
-        $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $clock, $servers);
+        $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $clock, $servers, self::createStub(JobReviewer::class));
 
         return new AccountLimitedVendor($vendor, $resolver, $cooldowns);
     }

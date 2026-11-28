@@ -28,13 +28,13 @@ use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Review\Contract\ReviewJobRequest;
 use InvalidArgumentException;
 use NoDiscard;
-use RuntimeException;
 use SensitiveParameter;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Finder\Exception\AccessDeniedException;
 use Symfony\Component\Finder\Finder;
 
 final readonly class ReviewJob
@@ -136,7 +136,7 @@ final readonly class ReviewJob
 
         try {
             $this->filesystem->remove($leftBehind);
-        } catch (IOException|RuntimeException) {
+        } catch (IOException|AccessDeniedException) {
             // Ignored, because another worker may be removing the same file, and a file that stays is tried again before the next review.
         }
     }

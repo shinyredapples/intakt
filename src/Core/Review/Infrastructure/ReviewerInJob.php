@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\Infrastructure;
 use Intakt\Core\Ai\Contract\AccountLogins;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Review\Contract\JobReview;
 use Intakt\Core\Review\Contract\JobReviewer;
 use Intakt\Core\Review\Contract\JobVerdict;
@@ -17,8 +18,8 @@ use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Override;
-use RuntimeException;
 use Symfony\AI\Platform\Exception\ValidationException;
+use Symfony\Component\Process\Exception\ExceptionInterface as ProcessFailure;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
@@ -72,7 +73,7 @@ final readonly class ReviewerInJob implements JobReviewer
     {
         try {
             return $this->clones->holdsARegularFileOf($clone, $job->head, $answer->readFiles);
-        } catch (RuntimeException) {
+        } catch (ProcessFailure|RepositoryAttributesRefused) {
             return false;
         }
     }
