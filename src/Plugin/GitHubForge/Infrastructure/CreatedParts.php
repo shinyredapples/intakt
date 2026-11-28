@@ -79,15 +79,15 @@ final readonly class CreatedParts
         return $number;
     }
 
-    // By the project exactly, because the same issue number in another project is another task.
-    public function holds(string $project, int $issue): bool
+    // By the project, its repository and the number exactly, because the same issue number in another project is another task, and a project alias may be remapped to another repository whose issue of that number is no part.
+    public function holds(PartPlace $place, int $issue): bool
     {
-        $kept = $this->ledger->readOfKindsMentioning(new Mentions(json_encode($project, JSON_THROW_ON_ERROR)), LedgerEventKind::PartIssueCreated);
+        $kept = $this->ledger->readOfKindsMentioning(new Mentions(json_encode($place->project, JSON_THROW_ON_ERROR)), LedgerEventKind::PartIssueCreated);
 
-        return array_any([...$kept], static function (RecordedEvent $line) use ($project, $issue): bool {
+        return array_any([...$kept], static function (RecordedEvent $line) use ($place, $issue): bool {
             $fields = PayloadFields::of($line);
 
-            return $fields->text('project') === $project && $fields->number('issue') === $issue;
+            return $fields->text('project') === $place->project && $fields->text('repository') === $place->repository && $fields->number('issue') === $issue;
         });
     }
 

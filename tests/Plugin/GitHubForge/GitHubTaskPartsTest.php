@@ -82,6 +82,22 @@ final class GitHubTaskPartsTest extends TestCase
         self::assertSame([true, false, false], [$parts->isFiledPart(ScriptedIssueTracker::PROJECT, $number), $parts->isFiledPart(ScriptedIssueTracker::PROJECT, $number + 1), $parts->isFiledPart('other', $number)]);
     }
 
+    public function testAPartNumberKeptForOneRepositoryIsNotAFiledPartAfterTheProjectIsRemappedToAnother(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $number = $this->fileOnce($tracker);
+
+        self::assertFalse($tracker->parts('acme/gadget')->isFiledPart(ScriptedIssueTracker::PROJECT, $number));
+    }
+
+    public function testAPartNumberKeptForTheProjectsCurrentRepositoryIsStillAFiledPart(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $number = $this->fileOnce($tracker);
+
+        self::assertTrue($tracker->parts('acme/widget')->isFiledPart(ScriptedIssueTracker::PROJECT, $number));
+    }
+
     public function testAPartIsNotKnownByItsNumberWhileTheAnswerToItsCreateIsLostAndIsOnceARetryFoundIt(): void
     {
         $tracker = new ScriptedIssueTracker();
