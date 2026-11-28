@@ -150,20 +150,23 @@ final class AccountFailoverPlatformRankingTest extends TestCase
         self::assertSame([600, 300], [$bothAtCeiling, $afterTheWeeklyReset]);
     }
 
-    public function testAShortWindowHeldOnlyByTheWeeklyPaceIsFreeAtTheWeeklyReset(): void
+    // Both readings stay below their ceiling of 90, so only the pace holds; 81 * 80 / 8100 of the 604800 s week is 483840 s, which the 465240 s elapsed plus the 18000 s short window reach after 600 s.
+    public function testAShortWindowHeldOnlyByTheWeeklyPaceIsFreeOnceThePaceLiftsItsCeiling(): void
     {
         $account = new Account(Provider::ClaudeCode, Account::DEFAULT);
         $ranking = $this->ranking();
         $platform = new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->answering(Account::DEFAULT)], new NoCooldowns(), $this->clock, new NullLogger(), new NoPinnedProviderCooldowns(), $ranking);
-        $this->readings->record(new WindowReading($account, UsageWindow::Weekly, new Usage(95.0, $this->clock->now()->modify('+300 seconds'))));
-        $this->readings->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(89.0, $this->clock->now()->modify('+600 seconds'))));
+        $this->readings->record(new WindowReading($account, UsageWindow::Weekly, new Usage(80.0, $this->clock->now()->modify('+139560 seconds'))));
+        $this->readings->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(81.0, $this->clock->now()->modify('+3 hours'))));
 
         $reported = $platform->secondsUntilFree('big');
-        $this->clock->sleep(300);
-        $afterTheWeeklyReset = $platform->secondsUntilFree('big');
+        $this->clock->sleep(600);
+        $atTheBoundary = $platform->secondsUntilFree('big');
+        $this->clock->sleep(1);
+        $afterThePaceRelease = $platform->secondsUntilFree('big');
         $rankedAfter = count($ranking->rank([$account])->inOrder);
 
-        self::assertSame([300, 0, 1], [$reported, $afterTheWeeklyReset, $rankedAfter]);
+        self::assertSame([601, 1, 0, 1], [$reported, $atTheBoundary, $afterThePaceRelease, $rankedAfter]);
     }
 
     public function testAShortWindowHeldByAWeekAheadOfItsPaceIsFreeAtItsOwnSoonerReset(): void
