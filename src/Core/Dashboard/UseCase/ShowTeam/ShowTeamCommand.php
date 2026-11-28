@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\ShowTeam;
 
+use Intakt\Core\Ai\Contract\Account;
 use DateTimeImmutable;
 use DateTimeZone;
 use Intakt\Core\Budget\Contract\AccountPick;
@@ -51,7 +52,7 @@ final readonly class ShowTeamCommand
 
     private function pickLineOf(AccountPick $pick): string
     {
-        $picked = null === $pick->picked ? 'no account could start, earliest reset '.self::moment($pick->earliestReset()) : 'picked '.$pick->picked->key();
+        $picked = $pick->picked instanceof Account ? 'picked '.$pick->picked->key() : 'no account could start, earliest reset '.self::moment($pick->earliestReset());
         $leftOut = [] === $pick->leftOut ? 'none' : implode(', ', array_map(static fn (LeftOutAccount $left): string => sprintf('%s (%s until %s)', $left->account->key(), $left->cause->value, self::moment($left->resetsAt)), $pick->leftOut));
 
         return sprintf('Last pick for %s at %s: %s; left out: %s', $pick->provider->value, self::moment($pick->pickedAt), $picked, $leftOut);
