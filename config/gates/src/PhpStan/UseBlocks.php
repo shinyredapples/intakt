@@ -14,7 +14,7 @@ use PhpParser\Node\Stmt\TraitUseAdaptation;
 use PhpParser\Node\Stmt\TraitUseAdaptation\Alias;
 use PhpParser\Node\Stmt\TraitUseAdaptation\Precedence;
 
-// every use statement of a class or trait, merged as PHP merges them before it binds the traits
+// merges every use statement of a class or trait because PHP binds all of them as one block, so an adaptation in one statement applies to a trait another statement names
 final readonly class UseBlocks
 {
     /**
