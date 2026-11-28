@@ -57,7 +57,7 @@ final readonly class TraitAliasCollector implements Collector
         return [
             'class' => [(string) $class->getFileName(), $class->getNativeReflection()->getStartLine(), $class->getName()],
             'declarer' => [(string) $declarer->getFileName(), $declarer->getName()],
-            // the file position tells apart two `use` statements on one line, which PHP applies one after the other
+            // with the file position, because two `use` statements on one line are two statements PHP applies one after the other
             'statement' => $node->getStartFilePos().':'.$node->getStartLine().':'.implode(',', array_map(static fn (Name $trait): string => $trait->toString(), $node->traits)),
             'own' => array_map(static fn (ReflectionMethod $method): string => strtolower($method->getName()), $this->ownMethods($declarer)),
             'traits' => array_map($this->usedTrait(...), array_values($declarer->getTraits())),
@@ -93,17 +93,6 @@ final readonly class TraitAliasCollector implements Collector
         ];
     }
 
-    // because a changed-files run may leave out a wrapper trait's own `use` block, the methods the wrapper takes from its traits are kept as the wrapper exposes them, so the composition still reaches them
-    /**
-     * @return TakenMethod
-     */
-    private function takenFact(ClassReflection $trait, ReflectionMethod $method): array
-    {
-        $declarer = $method->getBetterReflection()->getDeclaringClass();
-
-        return ['fact' => $this->fact($trait, $method), 'source' => [(string) $declarer->getFileName(), (int) $method->getStartLine(), $declarer->getName()]];
-    }
-
     /**
      * @return MethodFact
      */
@@ -117,6 +106,17 @@ final readonly class TraitAliasCollector implements Collector
             'marked' => PhpUnitTestMethod::isMarked($method),
             'provider' => $this->names->mayBeProvider($trait, $method),
         ];
+    }
+
+    // because a changed-files run may leave out a wrapper trait's own `use` block, the methods the wrapper takes from its traits are kept as the wrapper exposes them, so the composition still reaches them
+    /**
+     * @return TakenMethod
+     */
+    private function takenFact(ClassReflection $trait, ReflectionMethod $method): array
+    {
+        $declarer = $method->getBetterReflection()->getDeclaringClass();
+
+        return ['fact' => $this->fact($trait, $method), 'source' => [(string) $declarer->getFileName(), (int) $method->getStartLine(), $declarer->getName()]];
     }
 
     // because BetterReflection gives a method that one block both aliases and changes the visibility of the wrong visibility (upstream/phpstan-trait-alias-drops-visibility/), the adaptations are recorded as the block writes them

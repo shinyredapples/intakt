@@ -135,11 +135,6 @@ final readonly class TestMethodSentenceRule implements Rule
         };
     }
 
-    private function isUnderTests(string $file): bool
-    {
-        return str_starts_with($file, $this->root.'/tests/');
-    }
-
     // because a test the class takes from a trait is run only when the composition of its `use` blocks keeps it public, the same source that decides which alias is judged
     /**
      * @param array<string, array{class: Place, methods: array<string, ComposedTraitMethod>}> $compositions
@@ -158,6 +153,11 @@ final readonly class TestMethodSentenceRule implements Rule
             'references' => array_map(static fn (array $reference): array => [$reference[0], $reference[1], $reference[2]], array_values($references)),
             'runs' => array_merge(...array_column($providers, 'runs')),
         ];
+    }
+
+    private function isUnderTests(string $file): bool
+    {
+        return str_starts_with($file, $this->root.'/tests/');
     }
 
     /**
