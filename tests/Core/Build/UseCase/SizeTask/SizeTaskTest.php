@@ -182,7 +182,7 @@ final class SizeTaskTest extends TestCase
         self::assertSame([], $fixture->comments->posted);
     }
 
-    public function testACommentThatFailsRecordsNoParkedOutcome(): void
+    public function testACommentThatFailsFailsTheSizingAndLeavesTheParkedVerdictOnRecord(): void
     {
         $fixture = $this->fixture();
         $fixture->comments->failure = new ForgeWriteFailed('GitHub answered 502 to a write.');
@@ -194,7 +194,7 @@ final class SizeTaskTest extends TestCase
             self::assertSame('Issue 7 of project "alpha" is parked, but its comment was not posted: GitHub answered 502 to a write.', $notSized->getMessage());
         }
 
-        self::assertNotContains(LedgerEventKind::TaskSized, $fixture->ledger->kinds());
+        self::assertSame(['parked'], array_column($this->sizings($fixture), 'outcome'));
     }
 
     public function testASizingThatOverlapsAnotherOfTheSameTaskIsRefusedAndTheTaskIsParkedOnce(): void
@@ -281,8 +281,7 @@ final class SizeTaskTest extends TestCase
             self::assertSame('Issue 7 of project "widget" is parked, but its comment was not posted: GitHub answered 502 to a write.', $notSized->getMessage());
         }
 
-        self::assertNotContains(LedgerEventKind::TaskSized, $fixture->ledger->kinds());
-        self::assertSame(SizingOutcome::Parked, $sizing->run(ScriptedIssue::PROJECT, ScriptedIssue::NUMBER));
+        self::assertSame(SizingOutcome::AlreadySized, $sizing->run(ScriptedIssue::PROJECT, ScriptedIssue::NUMBER));
         self::assertCount(1, $issue->posted());
         self::assertStringStartsWith('This task is not ready to build. It lacks: an acceptance condition.', $issue->posted()[0]);
         self::assertCount(1, $fixture->parked->fetchFirstColumn('SELECT run FROM build_parked_task'));
@@ -310,7 +309,7 @@ final class SizeTaskTest extends TestCase
         self::assertSame($fixture->comments->posted[0][2], $fixture->comments->posted[1][2]);
     }
 
-    public function testCommentsThatCannotBeReadBackFailTheSizingAndRecordNoParkedOutcome(): void
+    public function testCommentsThatCannotBeReadBackFailTheSizingAndPostNothing(): void
     {
         $fixture = $this->fixture();
         $fixture->comments->unreadable = new ForgeReadFailed('GitHub answered 500 to a read of the comments.');
@@ -323,7 +322,6 @@ final class SizeTaskTest extends TestCase
         }
 
         self::assertSame([], $fixture->comments->posted);
-        self::assertNotContains(LedgerEventKind::TaskSized, $fixture->ledger->kinds());
     }
 
     public function testATaskAnEditMadeReadyNoLongerShowsItsReadinessQuestion(): void

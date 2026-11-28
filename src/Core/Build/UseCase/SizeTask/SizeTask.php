@@ -6,6 +6,7 @@ namespace Intakt\Core\Build\UseCase\SizeTask;
 
 use Intakt\Core\Build\Contract\ReadinessGap;
 use Intakt\Core\Build\Contract\SizingRequest;
+use Intakt\Core\Build\Contract\SizingVerdict;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTaskNotCleared;
@@ -92,8 +93,8 @@ final readonly class SizeTask
 
         $latest = $this->records->latestVerdictOf($request);
 
-        if ($latest?->isOf($request) ?? false) {
-            return SizingOutcome::AlreadySized;
+        if (null !== $latest && $latest->isOf($request)) {
+            return $this->askedAgainIfParked($run, $request, $latest);
         }
 
         $verdict = $this->vendor->size($request);
@@ -101,26 +102,43 @@ final readonly class SizeTask
         $missing = $verdict->missing ?? [];
 
         if (SizingOutcome::Parked === $outcome && [] !== $missing) {
-            $this->parkedAndAsked($run, $request, $missing);
+            $this->parkedAndAsked($run, $request, $verdict, $missing);
+
+            return $outcome;
         }
 
         if (SizingOutcome::Ready === $outcome) {
             $this->releasedFromItsReadinessQuestion($run, $latest);
         }
 
-        // After the parking and the comment, so a record says parked only once the task is parked and asked, and ready only once the earlier readiness question is gone.
+        // After the release, so a record says ready only once the earlier readiness question is gone.
         $this->records->record($request, $verdict, $run->id);
 
         return $outcome;
     }
 
-    // Parked before the comment, because a comment before a failed park would ask about a task that is not parked. The comment is keyed by the hash of the sized text, because the forge can store a comment and still answer as failed: the retry then finds it and posts no second one, while an edited text that still lacks the same item gets its own comment.
+    // No call for a text that already has a verdict, because a second answer would cost tokens and could name another gap than the parked question and its comment; a parked verdict ensures its comment again, because the forge can store a comment and still answer the post as failed.
+    /**
+     * @throws TaskNotSized
+     */
+    private function askedAgainIfParked(BuildRun $run, SizingRequest $request, RecordedSizing $latest): SizingOutcome
+    {
+        $missing = $latest->parkedFor();
+
+        if ([] !== $missing) {
+            $this->asked($run, $request, BuildQuestion::forMissingReadiness($missing));
+        }
+
+        return SizingOutcome::AlreadySized;
+    }
+
+    // Parked before the record, because a record of a failed park would keep the task from being sized again; recorded before the comment, so a comment the forge stored but answered as failed leaves the verdict on record and the retry only ensures the comment.
     /**
      * @param non-empty-list<ReadinessGap> $missing
      *
      * @throws TaskNotSized
      */
-    private function parkedAndAsked(BuildRun $run, SizingRequest $request, array $missing): void
+    private function parkedAndAsked(BuildRun $run, SizingRequest $request, SizingVerdict $verdict, array $missing): void
     {
         $question = BuildQuestion::forMissingReadiness($missing);
 
@@ -130,6 +148,17 @@ final readonly class SizeTask
             throw TaskNotSized::notParked($run->project, $run->task);
         }
 
+        $this->records->record($request, $verdict, $run->id);
+
+        $this->asked($run, $request, $question);
+    }
+
+    // Keyed by the hash of the sized text, so a retry finds a stored comment and posts no second one, while an edited text that still lacks the same item gets its own comment.
+    /**
+     * @throws TaskNotSized
+     */
+    private function asked(BuildRun $run, SizingRequest $request, BuildQuestion $question): void
+    {
         try {
             $this->comments->postOnce($run->project, $run->task, new KeyedComment($question->asComment(), 'sizing-'.SizingRecords::textOf($request)));
         } catch (ForgeReadFailed|ForgeWriteFailed|ForgeRateLimited $failure) {
