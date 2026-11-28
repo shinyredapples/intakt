@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
@@ -17,6 +18,8 @@ use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 final readonly class PartIssueCalls
 {
     private const int UNAUTHORIZED = 401;
+    private const int FIRST_REFUSAL = 400;
+    private const int LAST_REFUSAL = 499;
 
     public function __construct(
         private GitHubCalls $calls,
@@ -58,8 +61,40 @@ final readonly class PartIssueCalls
      * @return array<mixed>
      *
      * @throws ForgeWriteFailed
+     * @throws ForgeRateLimited
      */
     public function written(string $method, string $path, array $payload): array
+    {
+        try {
+            return $this->sent($method, $path, $payload);
+        } catch (WriteRefused $refused) {
+            throw $refused->failure;
+        }
+    }
+
+    // Apart from the other writes, because a create GitHub certainly did not store may be sent again, and its caller records which it was.
+    /**
+     * @param array<string, mixed> $payload
+     *
+     * @return array<mixed>
+     *
+     * @throws WriteRefused
+     * @throws ForgeWriteFailed
+     */
+    public function created(string $path, array $payload): array
+    {
+        return $this->sent('POST', $path, $payload);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     *
+     * @return array<mixed>
+     *
+     * @throws WriteRefused
+     * @throws ForgeWriteFailed
+     */
+    private function sent(string $method, string $path, array $payload): array
     {
         // Never retried, because GitHub can create an issue and still answer 502, and a retry would file it twice.
         $options = ['auth_bearer' => $this->writeBearer(), 'json' => $payload, 'headers' => ['Accept' => 'application/vnd.github+json'], 'max_retries' => 0];
@@ -68,12 +103,18 @@ final readonly class PartIssueCalls
             $response = $this->calls->asInstallation($method, $path, $options);
             $status = $response->getStatusCode();
             $stored = $response->getContent(false);
+        } catch (ForgeRateLimited $limited) {
+            // A refusal, because the pause is raised before anything is sent or for an answer of 403 or 429, and GitHub stored nothing either way.
+            throw new WriteRefused($limited);
         } catch (ExceptionInterface $failure) {
             throw $this->unreachableForWrite($failure::class);
         }
 
         if ($status < 200 || $status >= 300) {
-            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
+            $failed = new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
+
+            // Only a 4xx answer says GitHub did not act on the request: after any other answer the write may have been stored.
+            throw $status >= self::FIRST_REFUSAL && $status <= self::LAST_REFUSAL ? new WriteRefused($failed) : $failed;
         }
 
         return $this->answeredIssue($stored);
@@ -97,15 +138,16 @@ final readonly class PartIssueCalls
         return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
     }
 
+    // A refusal, because without a token nothing is sent.
     /**
-     * @throws ForgeWriteFailed
+     * @throws WriteRefused
      */
     private function writeBearer(): string
     {
         try {
             return $this->tokens->current()->value;
         } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
-            throw new ForgeWriteFailed('No GitHub write of an issue: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
+            throw new WriteRefused(new ForgeWriteFailed('No GitHub write of an issue: '.$refused->getMessage(), $refused->getCode(), previous: $refused));
         }
     }
 

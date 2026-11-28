@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\GitHubForge;
 
 use DateTimeImmutable;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueLabels;
@@ -13,19 +14,23 @@ use Intakt\Plugin\GitHubForge\Contract\PartIssue;
 use Intakt\Plugin\GitHubForge\Infrastructure\CreatedParts;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubTaskParts;
 use Intakt\Plugin\GitHubForge\Infrastructure\PartIssueCalls;
+use Intakt\Plugin\GitHubForge\Infrastructure\WriteRefused;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(GitHubTaskParts::class)]
 #[CoversClass(PartIssueCalls::class)]
 #[CoversClass(CreatedParts::class)]
+#[CoversClass(WriteRefused::class)]
 #[UsesClass(PartIssue::class)]
 #[UsesClass(IssueLabels::class)]
 final class GitHubTaskPartsTest extends TestCase
 {
     private const string MARKER = '<!-- intakt:part task-sizing-abc 1 -->';
+    private const string STOPPED = 'An earlier create of this part has no known outcome: it kept no issue number, GitHub did not refuse it and no issue carries its marker, so nothing was filed again; check the repository\'s issues for the part.';
 
     public function testAPartIsFiledWithItsTitleBodyMarkerAndTheOriginalsLabels(): void
     {
@@ -303,9 +308,149 @@ final class GitHubTaskPartsTest extends TestCase
             self::assertCount(1, $tracker->filed());
         }
 
-        $this->expectExceptionObject(new ForgeWriteFailed('An earlier create of this part kept no issue number and no issue carries its marker, so nothing was filed again; check the repository\'s issues for the part.'));
+        $this->expectExceptionObject(new ForgeWriteFailed(self::STOPPED));
 
         $this->fileOnce($tracker);
+    }
+
+    #[DataProvider('refusals')]
+    public function testACreateGitHubRefusedIsFiledByTheNextCallExactlyOnce(int $refusal): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->answerToAnUnstoredCreate = $refusal;
+
+        try {
+            $this->fileOnce($tracker);
+            self::fail('A refused create was reported as filed.');
+        } catch (ForgeWriteFailed $failed) {
+            self::assertSame(sprintf('GitHub answered %d to a write.', $refusal), $failed->getMessage());
+        }
+
+        $tracker->answerToAnUnstoredCreate = null;
+
+        self::assertSame([1, 1, 1], [$this->fileOnce($tracker), $this->fileOnce($tracker), count($tracker->filed())]);
+    }
+
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function refusals(): iterable
+    {
+        yield 'the first refusal status' => [400];
+        yield 'a refused credential' => [401];
+        yield 'a forbidden write' => [403];
+        yield 'an invalid issue' => [422];
+        yield 'the last refusal status' => [499];
+    }
+
+    #[DataProvider('unknownOutcomes')]
+    public function testACreateAnsweredWithoutAKnownOutcomeStopsTheNextCall(int $answer): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->answerToAnUnstoredCreate = $answer;
+
+        try {
+            $this->fileOnce($tracker);
+            self::fail('A create answered with an error was reported as filed.');
+        } catch (ForgeWriteFailed $failed) {
+            self::assertSame(sprintf('GitHub answered %d to a write.', $answer), $failed->getMessage());
+        }
+
+        $tracker->answerToAnUnstoredCreate = null;
+
+        try {
+            $this->fileOnce($tracker);
+            self::fail('A part whose earlier create has no known outcome was filed again.');
+        } catch (ForgeWriteFailed $stopped) {
+            self::assertSame(self::STOPPED, $stopped->getMessage());
+        }
+
+        self::assertSame([], $tracker->filed());
+    }
+
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function unknownOutcomes(): iterable
+    {
+        yield 'the status below the refusals' => [399];
+        yield 'the status above the refusals' => [500];
+        yield 'a bad gateway' => [502];
+    }
+
+    public function testARateLimitedCreateIsFiledByTheNextCallExactlyOnce(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->answerToAnUnstoredCreate = 403;
+        $tracker->headersOfAnUnstoredCreate = ['retry-after: 60'];
+
+        try {
+            $this->fileOnce($tracker);
+            self::fail('A rate limited create was reported as filed.');
+        } catch (ForgeRateLimited $limited) {
+            self::assertSame('The forge is rate limited until 2026-11-28T12:01:00+00:00.', $limited->getMessage());
+        }
+
+        $tracker->answerToAnUnstoredCreate = null;
+
+        self::assertSame([1, 1], [$this->fileOnce($tracker), count($tracker->filed())]);
+    }
+
+    public function testARefusedCreateIsKeptInTheLedgerAfterItsIntent(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->answerToAnUnstoredCreate = 422;
+
+        try {
+            $this->fileOnce($tracker);
+            self::fail('A refused create was reported as filed.');
+        } catch (ForgeWriteFailed) {
+            $place = ['project' => 'widget', 'repository' => '/repos/acme/widget', 'marker' => self::MARKER];
+            self::assertSame([$place, [...$place, 'refused' => 'GitHub answered 422 to a write.']], $tracker->ledger->payloads());
+        }
+    }
+
+    public function testARefusalTheLedgerDoesNotKeepStopsTheNextCall(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->answerToAnUnstoredCreate = 422;
+        $tracker->ledger = new InMemoryLedger(1);
+
+        try {
+            $this->fileOnce($tracker);
+            self::fail('A refused create was reported as filed.');
+        } catch (ForgeWriteFailed $failed) {
+            self::assertSame('Nothing was filed (GitHub answered 422 to a write.), but the ledger did not keep that, so the next run stops until a person has checked the issues: the ledger is down', $failed->getMessage());
+        }
+
+        $tracker->answerToAnUnstoredCreate = null;
+        $this->expectExceptionObject(new ForgeWriteFailed(self::STOPPED));
+
+        $this->fileOnce($tracker);
+    }
+
+    public function testACreateWithoutATokenIsARefusalBecauseNothingWasSent(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+
+        try {
+            $tracker->calls('contents:read')->created('/repos/acme/widget/issues', ['title' => 'Read the cart']);
+            self::fail('A create without a token was sent.');
+        } catch (WriteRefused $refused) {
+            self::assertStringStartsWith('No GitHub write of an issue: ', $refused->failure->getMessage());
+        }
+
+        self::assertSame([], $tracker->requests);
+    }
+
+    public function testAnotherWriteGitHubRefusedFailsAsAnyFailedWrite(): void
+    {
+        $tracker = new ScriptedIssueTracker();
+        $tracker->refusal = 422;
+
+        $this->expectExceptionObject(new ForgeWriteFailed('GitHub answered 422 to a write.'));
+
+        $tracker->calls()->written('PATCH', '/repos/acme/widget/issues/1', ['body' => 'Part 1 of 2 of #7.']);
     }
 
     public function testAPartWhoseFilingIsHeldByAnotherRunIsNotFiledByThisOne(): void

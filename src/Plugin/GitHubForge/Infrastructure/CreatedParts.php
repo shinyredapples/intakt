@@ -77,10 +77,16 @@ final readonly class CreatedParts
         return $number;
     }
 
-    // Any line of the part, the intent of a create included, because a create whose number was never kept may still have stored the part.
+    // Whether the part's last line is anything but a refusal, because a create whose number was never kept may still have stored the part, while a create GitHub refused stored nothing and may be sent again.
     public function attempted(PartPlace $place, PartIssue $part): bool
     {
-        return [] !== [...$this->ledger->readOfKindAbout(LedgerEventKind::PartIssueCreated, $this->subjectOf($place, $part))];
+        $unresolved = false;
+
+        foreach ($this->ledger->readOfKindAbout(LedgerEventKind::PartIssueCreated, $this->subjectOf($place, $part)) as $kept) {
+            $unresolved = PayloadFields::of($kept)->lacks('refused');
+        }
+
+        return $unresolved;
     }
 
     // Before the create, so a retry that finds no number and no marker stops instead of filing the part a second time.
@@ -93,6 +99,19 @@ final readonly class CreatedParts
 
         if (!$appended->succeeded()) {
             throw new ForgeWriteFailed(sprintf('Nothing was filed, because the ledger did not keep the intent to file the part: %s', (string) $appended->failure));
+        }
+    }
+
+    // After a create GitHub certainly did not store, so the intent before it no longer stops the next run from filing the part.
+    /**
+     * @throws ForgeWriteFailed
+     */
+    public function refuse(PartPlace $place, PartIssue $part, string $reason): void
+    {
+        $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::PartIssueCreated, json_encode(['project' => $place->project, 'repository' => $place->repository, 'marker' => $part->marker, 'refused' => $reason], JSON_THROW_ON_ERROR), $this->subjectOf($place, $part)));
+
+        if (!$appended->succeeded()) {
+            throw new ForgeWriteFailed(sprintf('Nothing was filed (%s), but the ledger did not keep that, so the next run stops until a person has checked the issues: %s', $reason, (string) $appended->failure));
         }
     }
 

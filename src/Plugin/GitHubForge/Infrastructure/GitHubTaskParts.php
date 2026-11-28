@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
 use DateTimeZone;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\GitHubForge\Contract\PartIssue;
@@ -44,6 +45,7 @@ final readonly class GitHubTaskParts implements TaskParts
     /**
      * @throws ForgeReadFailed
      * @throws ForgeWriteFailed
+     * @throws ForgeRateLimited
      */
     private function filedOnce(PartPlace $place, PartIssue $part): int
     {
@@ -60,9 +62,9 @@ final readonly class GitHubTaskParts implements TaskParts
             return $found;
         }
 
-        // An earlier create whose number was never kept may have stored the part without the marker, which no search finds, so a person checks the issues instead of this run filing it again.
+        // An earlier create whose outcome is unknown may have stored the part without the marker, which no search finds, so a person checks the issues instead of this run filing it again.
         if ($this->created->attempted($place, $part)) {
-            throw new ForgeWriteFailed('An earlier create of this part kept no issue number and no issue carries its marker, so nothing was filed again; check the repository\'s issues for the part.');
+            throw new ForgeWriteFailed('An earlier create of this part has no known outcome: it kept no issue number, GitHub did not refuse it and no issue carries its marker, so nothing was filed again; check the repository\'s issues for the part.');
         }
 
         return $this->filed($path, $place, $part);
@@ -191,11 +193,21 @@ final readonly class GitHubTaskParts implements TaskParts
     // Kept before the answer is checked for the marker, because GitHub may have stored a part whose answer lacks it, and the next run must check that issue instead of filing the part again.
     /**
      * @throws ForgeWriteFailed
+     * @throws ForgeRateLimited
      */
     private function filed(string $path, PartPlace $place, PartIssue $part): int
     {
         $this->created->intend($place, $part);
-        $issue = $this->calls->written('POST', $path, ['title' => $part->title, 'body' => $part->body."\n\n".$part->marker, 'labels' => [...$part->labels]]);
+
+        try {
+            $issue = $this->calls->created($path, ['title' => $part->title, 'body' => $part->body."\n\n".$part->marker, 'labels' => [...$part->labels]]);
+        } catch (WriteRefused $refused) {
+            // Recorded, because the intent alone would stop every later run, and GitHub stored nothing a later create could double.
+            $this->created->refuse($place, $part, $refused->getMessage());
+
+            throw $refused->failure;
+        }
+
         $number = $this->numberOf($issue) ?? throw new ForgeWriteFailed('GitHub answered the create without the number of the issue.');
         $this->created->keep($place, $part, $number);
 

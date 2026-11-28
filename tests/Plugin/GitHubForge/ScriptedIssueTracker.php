@@ -49,6 +49,13 @@ final class ScriptedIssueTracker
     // Answered after the issue is kept, because GitHub can create an issue and still answer 502.
     public ?int $answerToAStoredCreate = null;
 
+    // Answered instead of keeping the issue, because GitHub stores nothing for a create it refuses or cannot serve.
+    public ?int $answerToAnUnstoredCreate = null;
+
+    // Sent with that answer, so a test can make it a rate limit.
+    /** @var list<string> */
+    public array $headersOfAnUnstoredCreate = [];
+
     // What GitHub stores other than what was sent, for a create GitHub does not keep as sent.
     /** @var array<string, mixed> */
     public array $storedOtherwise = [];
@@ -90,16 +97,22 @@ final class ScriptedIssueTracker
 
     public function parts(string $repository = 'acme/widget'): GitHubTaskParts
     {
+        return new GitHubTaskParts($this->calls(), new WatchedRepositories([self::PROJECT => ['github' => $repository]]), new CreatedParts($this->ledger, $this->locks), self::APP_ID);
+    }
+
+    // With the permissions the configuration expects, so a test can make the installation differ from it and no token be handed out.
+    public function calls(string $permissions = 'contents:write,pull_requests:write,workflows:write'): PartIssueCalls
+    {
         $clock = new MockClock('2026-11-28 12:00:00 UTC');
         $identity = new RecordedInstallation($clock, 'installation-secret')->client();
         $jwt = new AppJwt(self::APP_ID, AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
-        $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');
+        $expected = ExpectedInstallation::fromSettings($permissions, 'acme/widget,acme/gadget');
         $readings = FreshReadings::at($clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
         $calls = new GitHubCalls(new MockHttpClient($this->answer(...), 'https://api.github.com'), $readings, $tokens);
 
-        return new GitHubTaskParts(new PartIssueCalls($calls, new CheckedInstallationTokens($readBack, $tokens), new NextLinks()), new WatchedRepositories([self::PROJECT => ['github' => $repository]]), new CreatedParts($this->ledger, $this->locks), self::APP_ID);
+        return new PartIssueCalls($calls, new CheckedInstallationTokens($readBack, $tokens), new NextLinks());
     }
 
     /**
@@ -164,6 +177,10 @@ final class ScriptedIssueTracker
      */
     private function created(array $options): ResponseInterface
     {
+        if (null !== $this->answerToAnUnstoredCreate) {
+            return new MockResponse('{"message":"Refused"}', ['http_code' => $this->answerToAnUnstoredCreate, 'response_headers' => $this->headersOfAnUnstoredCreate]);
+        }
+
         $body = $options['body'] ?? '';
         $payload = (array) json_decode(is_string($body) ? $body : '', true, flags: JSON_THROW_ON_ERROR);
         $labels = is_array($payload['labels'] ?? null) ? $payload['labels'] : [];
