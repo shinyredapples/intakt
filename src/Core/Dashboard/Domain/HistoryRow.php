@@ -19,6 +19,7 @@ final readonly class HistoryRow
 
     // A change to a secret carries only its fingerprint, so before and after are not read from such a row and a secret's value can never reach the page.
     private function __construct(
+        public string $id,
         public DateTimeImmutable $at,
         public string $kind,
         public string $who,
@@ -42,6 +43,7 @@ final readonly class HistoryRow
         $source = self::sourceOf($actor, $recorded->event->kind);
 
         return new self(
+            $recorded->id->toRfc4122(),
             $recorded->recordedAt->setTimezone(new DateTimeZone('UTC')),
             $recorded->event->kind->value,
             $actor ?? self::unnamedActorOf($source),

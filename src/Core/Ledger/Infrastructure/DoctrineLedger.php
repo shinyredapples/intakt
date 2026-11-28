@@ -22,9 +22,11 @@ use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Ledger\Domain\EventRecord;
 use NoDiscard;
 use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Uid\UuidV7;
 
 // The ledger owns the default entity manager: append flushes every pending change in it and a failed append's reset discards them, so a second entity needs its own manager or a flush of only the ledger record.
+#[AsAlias(Ledger::class)]
 final readonly class DoctrineLedger implements Ledger
 {
     // SQLite refuses an expression deeper than 1000, and each text adds one LIKE to the OR chain, so a long list is read in parts.

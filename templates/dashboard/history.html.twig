@@ -11,8 +11,10 @@
 </div>
 {{ include('dashboard/_history_subtabs.html.twig', {current: 'ledger'}, with_context = false) }}
 {% if history.rows is empty %}
-{{ include('dashboard/components/empty.html.twig', {title: 'No history yet', text: 'Nothing has been recorded yet.', pose: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting}, with_context = false) }}
-{% else %}
+<div id="history-empty">{{ include('dashboard/components/empty.html.twig', {title: 'No history yet', text: 'Nothing has been recorded yet.', pose: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting}, with_context = false) }}</div>
+{% endif %}
+{# Rendered on an empty page too, hidden by the stylesheet while its table has no row, so the first pushed row has a table to go in. #}
+<div class="history-ledger">
 {# assets/history-filter.js narrows the rows by the pressed chip and the text, and on a phone, whose top bar has no project filter, by the toolbar's own project picker; the empty value is Everything. #}
 <div class="filters" role="group" aria-label="Filter history" data-history-filter>
     <button class="fchip" type="button" aria-pressed="true" data-filter="">Everything</button>
@@ -27,19 +29,10 @@
 <table class="ledger history">
     <caption class="sr-only">History</caption>
     <thead><tr><th scope="col">When</th><th scope="col">Source</th><th scope="col">What</th><th scope="col">Change</th><th scope="col">Until</th></tr></thead>
-    <tbody>
-{% for row in history.rows %}
-        <tr data-source="{{ row.source.value }}" data-topics="{{ row.topics|map(topic => topic.value)|join(' ') }}"{% if row.project is not null %} data-project="{{ row.project }}"{% endif %}>
-            <td class="when"><time datetime="{{ row.at|date('c', 'UTC') }}">{{ row.at|date('Y-m-d H:i:s', 'UTC') }} UTC</time></td>
-            <td class="who">{{ row.who }}</td>
-            <td>{{ row.label }}{% if row.project is not null %} <span class="pname">{{ row.project }}</span>{% endif %}{% if row.fingerprint is not null %} <span class="fingerprint">Fingerprint <code>{{ row.fingerprint }}</code></span>{% endif %}</td>
-            <td class="change">{% if row.showsChange %}<b>{{ row.before }}</b> <span class="arrow">&rarr;</span> <b>{{ row.after }}</b>{% else %}<span class="muted">None</span>{% endif %}</td>
-            <td>{% if row.expires is not null %}<time class="expiry" datetime="{{ row.expires|date('c', 'UTC') }}">{{ row.expires|date('Y-m-d H:i:s', 'UTC') }} UTC</time>{% else %}<span class="muted">None</span>{% endif %}</td>
-        </tr>
-{% endfor %}
-    </tbody>
+    {#- Nothing between the tags while there is no row, so the stylesheet's :empty sees an empty table. -#}
+    <tbody id="history-rows">{% for row in history.rows %}{{ include('dashboard/_history_row.html.twig', {row: row}, with_context = false) }}{% endfor %}</tbody>
 </table>
 </div>
 <p class="muted history-none" role="status" data-none="No entries match. Clear the filter to see everything."></p>
-{% endif %}
+</div>
 {% endblock %}

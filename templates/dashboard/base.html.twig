@@ -258,6 +258,15 @@
                 };
                 return;
             }
+            if (event.target.getAttribute('action') === 'prepend' && replaced?.id === 'history-rows') {
+                const render = event.detail.render;
+                // A pushed History row comes shown, so the project choice is put on it; the run tells assets/history-filter.js, which applies the chip and the text.
+                event.detail.render = (stream) => {
+                    render(stream);
+                    showProject();
+                };
+                return;
+            }
             if (event.target.getAttribute('action') === 'replace' && replaced?.matches('.board > .col')) {
                 const render = event.detail.render;
                 // The pushed column comes from the server with its start state and every card shown, so the person's own fold, Show more and project choice are put back on it; the Show more mark goes back before the filter runs, because assets/column-more.js reads it there.

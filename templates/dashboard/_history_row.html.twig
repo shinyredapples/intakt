@@ -1,0 +1,8 @@
+{#- One ledger row, shared by the page and its live push, so a pushed row never differs from a reload. Its id is the event's, so Turbo drops a row the hub sends again after a reconnect instead of showing it twice. -#}
+<tr id="history-row-{{ row.id }}" data-source="{{ row.source.value }}" data-topics="{{ row.topics|map(topic => topic.value)|join(' ') }}"{% if row.project is not null %} data-project="{{ row.project }}"{% endif %}>
+    <td class="when"><time datetime="{{ row.at|date('c', 'UTC') }}">{{ row.at|date('Y-m-d H:i:s', 'UTC') }} UTC</time></td>
+    <td class="who">{{ row.who }}</td>
+    <td>{{ row.label }}{% if row.project is not null %} <span class="pname">{{ row.project }}</span>{% endif %}{% if row.fingerprint is not null %} <span class="fingerprint">Fingerprint <code>{{ row.fingerprint }}</code></span>{% endif %}</td>
+    <td class="change">{% if row.showsChange %}<b>{{ row.before }}</b> <span class="arrow">&rarr;</span> <b>{{ row.after }}</b>{% else %}<span class="muted">None</span>{% endif %}</td>
+    <td>{% if row.expires is not null %}<time class="expiry" datetime="{{ row.expires|date('c', 'UTC') }}">{{ row.expires|date('Y-m-d H:i:s', 'UTC') }} UTC</time>{% else %}<span class="muted">None</span>{% endif %}</td>
+</tr>

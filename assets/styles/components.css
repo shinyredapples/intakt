@@ -203,6 +203,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 /* Its own mark, not hidden, because the project filter owns a row's hidden and either may hide it. */
 .ledger tr[data-filtered-out] { display: none; }
 .history-none:empty { margin: 0; }
+/* An empty History keeps its ledger for the first pushed row, hidden until that row arrives, so the empty state stands alone. */
+.history-ledger:has(#history-rows:empty) { display: none; }
 
 /* Toasts */
 .toast {
