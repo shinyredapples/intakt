@@ -16,6 +16,9 @@ final readonly class ReviewersAgree
     // A backslash escape first because an escaped backtick opens no span while the backtick after an escaped backslash does (CommonMark), a whole backtick run because a span never opens inside one, Unicode mode because a nonbreaking space is prose white space too.
     private const string BACKSLASH_ESCAPE_OR_BACKTICK_RUN_OR_WHITE_SPACE = '/\\\\[\\\\`]|`+|\s+/u';
 
+    // Any line ending counts, because a CRLF finding would otherwise let a span cross the paragraph again.
+    private const string BLANK_LINE = '/\R[ \t]*\R/';
+
     /**
      * @param list<Verdict> $verdicts
      */
@@ -94,6 +97,14 @@ final readonly class ReviewersAgree
             return $text;
         }
 
+        // Split at blank lines because a code span never crosses one (CommonMark), so a lone backtick cannot pair with a span opener of a later paragraph.
+        $paragraphs = array_map($this->paragraphWords(...), (array) preg_split(self::BLANK_LINE, $text));
+
+        return implode(' ', array_filter($paragraphs, static fn (string $words): bool => '' !== $words));
+    }
+
+    private function paragraphWords(string $text): string
+    {
         $runs = new BacktickRuns($text);
         $words = '';
         $cursor = 0;

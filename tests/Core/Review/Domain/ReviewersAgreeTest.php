@@ -234,6 +234,38 @@ final class ReviewersAgreeTest extends TestCase
         ]));
     }
 
+    public function testFindingsThatDifferOnlyInWhiteSpaceInsideACodeSpanAfterALoneBacktickInTheParagraphBeforeAreNotShared(): void
+    {
+        self::assertFalse($this->agree([
+            $this->changes($this->finding("A lone ` marker.\n\nThe literal `\"A B\"` is wrong.")),
+            $this->changes($this->finding("A lone ` marker.\n\nThe literal `\"A  B\"` is wrong.")),
+        ], self::LITERALS));
+    }
+
+    public function testFindingsThatDifferOnlyInProseWhiteSpaceAndTheBlankLineAfterALoneBacktickInTheParagraphBeforeAreShared(): void
+    {
+        self::assertTrue($this->agree([
+            $this->changes($this->finding("A lone ` marker.\n\nThe literal `\"A B\"` is wrong.")),
+            $this->changes($this->finding("A lone `  marker. \r\n \t\n\nThe  literal `\"A B\"` is wrong.")),
+        ], self::LITERALS));
+    }
+
+    public function testFindingsThatDifferOnlyInWhiteSpaceInsideACodeSpanHoldingOneLineBreakAreNotShared(): void
+    {
+        self::assertFalse($this->agree([
+            $this->changes($this->finding("The literal `total(\n\"A B\")` is wrong.")),
+            $this->changes($this->finding("The literal `total(\n\"A  B\")` is wrong.")),
+        ], self::LITERALS));
+    }
+
+    public function testFindingsThatShareACodeSpanHoldingOneLineBreakAreShared(): void
+    {
+        self::assertTrue($this->agree([
+            $this->changes($this->finding("The literal `total(\n\"A B\")` is wrong.")),
+            $this->changes($this->finding("The  literal `total(\n\"A B\")` is wrong.")),
+        ], self::LITERALS));
+    }
+
     public function testReviewersWhoAskForChangesWithoutAFindingDoNotAgree(): void
     {
         self::assertFalse($this->agree([$this->changes(), $this->changes()]));
