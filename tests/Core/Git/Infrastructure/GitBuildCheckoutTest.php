@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\Infrastructure;
 
+use Intakt\Core\Disk\Contract\DiskSpace;
 use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\GitCall;
@@ -75,6 +76,14 @@ final class GitBuildCheckoutTest extends TestCase
         $this->checkout(new Filesystem())->updateMirror('../alpha', $this->remote->path);
     }
 
+    public function testAProjectNameThatIsNoFolderNameFailsTheMirrorRefreshWithItsReason(): void
+    {
+        $this->expectException(BuildCheckoutFailed::class);
+        $this->expectExceptionMessageIsOrContains('"../alpha" is not a project name that can be a folder name');
+
+        $this->checkout(new Filesystem())->refreshMirror('../alpha', $this->remote->path);
+    }
+
     public function testATaskBranchThatIsMainFailsTheCloneWithItsReason(): void
     {
         $this->checkout(new Filesystem())->updateMirror('alpha', $this->remote->path);
@@ -141,8 +150,8 @@ final class GitBuildCheckoutTest extends TestCase
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
 
         return new GitBuildCheckout(
-            new UpdateMirror(new HardenedGit(), $network, $filesystem, new LockFactory(new InMemoryStore()), $mirrors),
-            new MakeBuildClone(new HardenedGit(), $filesystem, $mirrors),
+            new UpdateMirror(new HardenedGit(), $network, $filesystem, new LockFactory(new InMemoryStore()), $mirrors, self::createStub(DiskSpace::class)),
+            new MakeBuildClone(new HardenedGit(), $filesystem, $mirrors, self::createStub(DiskSpace::class)),
             $mirrors,
             new TakeCheckedHead(new HardenedGit(), $mirrors),
         );
