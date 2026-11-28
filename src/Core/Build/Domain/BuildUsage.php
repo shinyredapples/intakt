@@ -29,14 +29,11 @@ final readonly class BuildUsage
      */
     public static function fromCounts(array $counts): ?self
     {
-        $read = array_map(static fn (string $name): mixed => $counts[$name] ?? null, self::COUNTS);
-        $whole = array_filter($read, static fn (mixed $count): bool => is_int($count) && $count >= 0 && $count <= self::MOST);
+        [$input, $output, $cacheRead, $cacheCreation] = array_map(static fn (string $name): ?int => self::wholeCount($counts, $name), self::COUNTS);
 
-        if (count($whole) !== count(self::COUNTS)) {
+        if (null === $input || null === $output || null === $cacheRead || null === $cacheCreation) {
             return null;
         }
-
-        [$input, $output, $cacheRead, $cacheCreation] = array_map(intval(...), $whole);
 
         return new self($input, $output, $cacheRead, $cacheCreation);
     }
@@ -52,5 +49,15 @@ final readonly class BuildUsage
     public function counts(): array
     {
         return array_combine(self::COUNTS, [$this->inputTokens, $this->outputTokens, $this->cacheReadTokens, $this->cacheCreationTokens]);
+    }
+
+    /**
+     * @param array<mixed> $counts
+     */
+    private static function wholeCount(array $counts, string $name): ?int
+    {
+        $count = $counts[$name] ?? null;
+
+        return is_int($count) && $count >= 0 && $count <= self::MOST ? $count : null;
     }
 }

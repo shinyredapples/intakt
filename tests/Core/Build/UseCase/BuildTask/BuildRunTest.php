@@ -56,7 +56,11 @@ final class BuildRunTest extends TestCase
 
     public function testTheStepPayloadOfABuildJobNamesItsStopCauseAndEachCountOfItsUsage(): void
     {
-        $job = new BuildJobOutcome(BuildVerdict::NoCommits, stopCause: BuildStopCause::NoProgress, usage: SessionUsage::read(new BuildUsage(1, 2, 3, 4)));
+        $job = new BuildJobOutcome(
+            BuildVerdict::NoCommits,
+            stopCause: BuildStopCause::NoProgress,
+            usage: SessionUsage::read(new BuildUsage(1, 2, 3, 4)),
+        );
 
         $payload = new BuildRun('alpha', 7, self::RUN)->stepPayload(EndedStep::ofBuildJob(BuildVerdict::NoCommits->reason(), $job));
 

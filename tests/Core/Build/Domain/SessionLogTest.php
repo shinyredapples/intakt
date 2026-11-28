@@ -8,6 +8,7 @@ use Intakt\Core\Build\Domain\BuildUsage;
 use Intakt\Core\Build\Domain\SessionLog;
 use Intakt\Core\Build\Domain\SessionUsage;
 use Intakt\Core\Build\Domain\UsageReading;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\TestCase;
@@ -30,7 +31,7 @@ final class SessionLogTest extends TestCase
 
     public function testALogWithoutAResultReportsNoUsage(): void
     {
-        $usage = SessionLog::usageIn("{\"type\":\"assistant\",".self::USAGE."}\nclaude cut after 3000 seconds, its commits are kept\n");
+        $usage = SessionLog::usageIn('{"type":"assistant",'.self::USAGE."}\nclaude cut after 3000 seconds, its commits are kept\n");
 
         self::assertSame(UsageReading::NotReported, $usage->reading);
         self::assertNull($usage->usage);
@@ -45,7 +46,7 @@ final class SessionLogTest extends TestCase
     #[TestWith(['"usage":null'])]
     public function testALastResultWithoutValidCountsIsMalformed(string $usage): void
     {
-        $read = SessionLog::usageIn("{\"type\":\"result\",".self::USAGE."}\n{\"type\":\"result\",{$usage}}\n");
+        $read = SessionLog::usageIn('{"type":"result",'.self::USAGE."}\n{\"type\":\"result\",{$usage}}\n");
 
         self::assertSame(UsageReading::Malformed, $read->reading);
         self::assertNull($read->usage);
@@ -74,7 +75,7 @@ final class SessionLogTest extends TestCase
 
     public function testALineOneByteOverTheLineLimitIsRefused(): void
     {
-        $usage = SessionLog::usageIn("{\"type\":\"result\",".self::USAGE."}\n".str_repeat('x', SessionLog::MAX_LINE_BYTES + 1));
+        $usage = SessionLog::usageIn('{"type":"result",'.self::USAGE."}\n".str_repeat('x', SessionLog::MAX_LINE_BYTES + 1));
 
         self::assertSame(UsageReading::LineTooLong, $usage->reading);
     }
@@ -108,9 +109,9 @@ final class SessionLogTest extends TestCase
 
     public function testAUsageWithoutCountsCannotBeMarkedAsRead(): void
     {
-        $this->expectExceptionMessage('A usage that was read carries its counts.');
+        $this->expectException(InvalidArgumentException::class);
 
-        (void) SessionUsage::withoutUsage(UsageReading::Read);
+        SessionUsage::withoutUsage(UsageReading::Read);
     }
 
     public function testTheLedgerPayloadNamesTheReadingAndEachCount(): void

@@ -34,7 +34,7 @@ final readonly class BuildRun
             'failure' => $ended->failure,
             'stop_cause' => $ended->stopCause?->value,
             'usage' => $ended->usage?->payload(),
-        ],JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+        ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     // The run too, as in its steps, so a reader can tell which of a task's runs parked it; never the question, because it stays in the row the readers redact.
