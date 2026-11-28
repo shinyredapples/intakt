@@ -17,7 +17,9 @@ use PHPUnit\Framework\Attributes\DataProviderExternal;
 use PHPUnit\Framework\TestCase;
 
 /**
- * @implements Collector<InClassNode, array{references: list<array{string, string, string}>, runs: list<array{string, string, string}>}>
+ * @phpstan-type Providers array{references: list<array{string, string, string, string, string, bool}>, runs: list<array{string, string, string, string, string, bool}>}
+ *
+ * @implements Collector<InClassNode, Providers>
  */
 final readonly class TestProviderCollector implements Collector
 {
@@ -31,7 +33,7 @@ final readonly class TestProviderCollector implements Collector
     }
 
     /**
-     * @return array{references: list<array{string, string, string}>, runs: list<array{string, string, string}>}|null
+     * @return Providers|null
      */
     public function processNode(Node $node, Scope $scope): ?array
     {
@@ -43,10 +45,10 @@ final readonly class TestProviderCollector implements Collector
         }
 
         $native = $class->getNativeReflection();
-        // because PHPUnit ignores a provider attribute on a method it does not run as a test, such as a private helper
-        $tests = array_values(array_filter($native->getMethods(), PhpUnitTestMethod::isRun(...)));
-        $references = array_merge(...array_map(fn (ReflectionMethod $test): array => [...$this->providersInTheClass($test, $native), ...$this->externalProviders($test)], $tests));
-        $runs = $this->staticRuns($tests, $class->getName());
+        // each reference names the class whose `use` blocks bring the test in (a parent's for an inherited one) and the test, with the visibility reflection gives it, because reflection may give a trait method the visibility of another adaptation in its `use` block (upstream/phpstan-trait-alias-drops-visibility/), so the rule asks that class's composed trait methods first and PHPUnit ignores a provider attribute on a method it does not run
+        $named = array_values(array_filter($native->getMethods(), PhpUnitTestMethod::isNamedOrMarked(...)));
+        $references = array_merge(...array_map(fn (ReflectionMethod $test): array => array_map(static fn (array $reference): array => [...$reference, $test->getBetterReflection()->getImplementingClass()->getName(), $test->getName(), $test->isPublic()], [...$this->providersInTheClass($test, $native), ...$this->externalProviders($test)]), $named));
+        $runs = $this->staticRuns($named, $class->getName());
 
         return [] === $references && [] === $runs ? null : ['references' => $references, 'runs' => $runs];
     }
@@ -110,13 +112,14 @@ final readonly class TestProviderCollector implements Collector
     /**
      * @param list<ReflectionMethod> $tests
      *
-     * @return list<array{string, string, string}>
+     * @return list<array{string, string, string, string, string, bool}>
      */
     private function staticRuns(array $tests, string $class): array
     {
         // because only a static method can be exempt as a provider
         $static = array_values(array_filter($tests, static fn (ReflectionMethod $test): bool => $test->isStatic()));
 
-        return array_map(static fn (ReflectionMethod $test): array => [$test->getDeclaringClass()->getName(), $test->getName(), $class], $static);
+        // with the class whose `use` blocks bring the test in and whether reflection runs it, as for a reference, because reflection may hide a test a trait alias keeps public (upstream/phpstan-trait-alias-drops-visibility/)
+        return array_map(static fn (ReflectionMethod $test): array => [$test->getDeclaringClass()->getName(), $test->getName(), $class, $test->getBetterReflection()->getImplementingClass()->getName(), $test->getName(), PhpUnitTestMethod::isRun($test)], $static);
     }
 }

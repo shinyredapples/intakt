@@ -43,6 +43,7 @@ final readonly class SizeTask
         private TaskComments $comments,
         private LockFactory $locks,
         private SplitTask $splits,
+        private SmallPoolSplit $smallPool,
     ) {
     }
 
@@ -123,9 +124,10 @@ final readonly class SizeTask
             $this->releasedFromItsReadinessQuestion($run, $latest);
         }
 
-        // A part keeps a split verdict whole, because a part is never split again; its `task_sized` line says ready with size split.
-        if ($verdict instanceof SizingVerdict && SizingOutcome::Ready === $outcome && SizeTier::Split === $verdict->size && !$this->splits->isPart($request)) {
-            return $this->splits->finished($this->splits->planned($run, $request, $verdict));
+        $split = $this->splitVerdictFor($request, $verdict);
+
+        if ($split instanceof SizingVerdict) {
+            return $this->splits->finished($this->splits->planned($run, $request, $split));
         }
 
         // After the release, so a record says ready only once the earlier readiness question is gone.
@@ -197,5 +199,52 @@ final readonly class SizeTask
         } catch (ParkedTaskNotCleared) {
             throw TaskNotSized::stillParked($run->project, $run->task);
         }
+    }
+
+    /**
+     * @throws UsageNotRecorded
+     * @throws ProviderRateLimited
+     * @throws ProviderFailedTransiently
+     * @throws VendorAccountOut
+     * @throws VendorAccountBusy
+     * @throws NoProviderLeft
+     * @throws ProviderRejectedTheKey
+     * @throws ProviderUnreachable
+     */
+    private function splitVerdictFor(SizingRequest $request, ?SizingVerdict $verdict): ?SizingVerdict
+    {
+        if (true !== $verdict?->ready) {
+            return null;
+        }
+
+        if (SizeTier::Split === $verdict->size) {
+            // A part keeps a split verdict whole, because a part is never split again; its `task_sized` line says ready with size split.
+            return $this->splits->isPart($request) ? null : $verdict;
+        }
+
+        if (!$this->smallPool->forces($verdict) || $this->splits->isPart($request)) {
+            return null;
+        }
+
+        return $this->partsFor($request);
+    }
+
+    // Asked once, because the first verdict below `split` named no parts; an answer without valid parts keeps the task whole and ready, and never parks it. Its readiness is not asked again: the first answer found the task ready, so a second answer that says otherwise cannot veto the split.
+    /**
+     * @throws UsageNotRecorded
+     * @throws ProviderRateLimited
+     * @throws ProviderFailedTransiently
+     * @throws VendorAccountOut
+     * @throws VendorAccountBusy
+     * @throws NoProviderLeft
+     * @throws ProviderRejectedTheKey
+     * @throws ProviderUnreachable
+     */
+    private function partsFor(SizingRequest $request): ?SizingVerdict
+    {
+        $answer = $this->vendor->size($request->askingForParts());
+
+        // Size `split` means valid part lines here, because the vendor returns no verdict whose parts do not match its size or fail the line check.
+        return SizeTier::Split === $answer?->size ? new SizingVerdict(true, [], $answer->size, $answer->estimated_lines, $answer->reason, $answer->parts) : null;
     }
 }

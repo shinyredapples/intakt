@@ -20,7 +20,7 @@ php bin/console intakt:build:size <project> <issue number>
 2. A model reads the task once and answers whether it says what changes, how to tell it is done, and that it is one change. It also guesses the size: `small`, `medium`, `large`, or `split` (too big for one build).
 3. If something is missing, Intakt parks the task and posts one comment on the issue naming what to add. Edit the issue, then run the command again. If the command fails after parking, run it again: it finds a comment it already posted and does not post it twice.
 4. Once the edited task is ready, Intakt removes that question again.
-5. If the task is too big for one build, Intakt splits it into two to four new issues, each with the task's labels, and each waiting for the parts it builds on. The task itself stays open and gets one comment naming the parts. If the command stops halfway, run it again: it finishes the split and files no part twice. A task is split only once, also after you edit it.
+5. If the task is too big for one build, Intakt splits it (with a single AI account, already at about 400 changed lines; then it asks the model once more for the parts, and keeps the task whole if none come back) into two to four new issues, each with the task's labels, and each waiting for the parts it builds on. The task itself stays open and gets one comment naming the parts. If the command stops halfway, run it again: it finishes the split and files no part twice. A task is split only once, also after you edit it.
 
 The command prints `outcome ready`, `outcome parked`, `outcome invalid` (the answer was unusable, nothing happened), `outcome split` (the task was split into its parts) or `outcome already_sized` (the task's latest verdict is on this same text, or it was split before).
 
