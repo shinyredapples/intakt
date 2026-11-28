@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node\Stmt\TraitUse;
+use PHPStan\BetterReflection\Reflection\Adapter\ReflectionMethod;
 use PHPStan\Reflection\ClassReflection;
 
 final readonly class TraitUseScope
@@ -16,9 +17,9 @@ final readonly class TraitUseScope
     ) {
     }
 
-    // because only the class's own use block has the last word on the visibility of the names it takes, while a wrapper trait's block can be overruled by the class
-    public function isInClass(): bool
+    // because only the class's own use block has the last word on the visibility of the names it takes, while the class can still hide a name a wrapper trait's block made public
+    public function keepsPublic(ReflectionMethod $bound): bool
     {
-        return $this->declarer === $this->class;
+        return $this->declarer === $this->class || $bound->isPublic();
     }
 }

@@ -75,27 +75,27 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
     public function testAnAttributedTraitTestMethodUnderTestsIsReportedInTheTraitAndAtItsPublicAlias(): void
     {
         $sandbox = $this->emptySandbox();
-        $sandbox->write('tests/MarkedTest.php', <<<'PHP'
-            <?php
-
-            namespace Intakt\Sample;
-
-            use PHPUnit\Framework\Attributes\Test;
-            use PHPUnit\Framework\TestCase;
-
-            trait MarkedChecks
+        $sandbox->write('tests/MarkedTest.php', <<<'PHP_WRAP'
+        <?php
+        
+        namespace Intakt\Sample;
+        
+        use PHPUnit\Framework\Attributes\Test;
+        use PHPUnit\Framework\TestCase;
+        
+        trait MarkedChecks
+        {
+            #[Test]
+            public function check(): void
             {
-                #[Test]
-                public function check(): void
-                {
-                }
             }
-
-            final class MarkedTest extends TestCase
-            {
-                use MarkedChecks { check as checkAgain; }
-            }
-            PHP);
+        }
+        
+        final class MarkedTest extends TestCase
+        {
+            use MarkedChecks { check as checkAgain; }
+        }
+        PHP_WRAP);
 
         self::assertSame(
             'tests/MarkedTest.php:18 intakt.testMethodSentence Test method Intakt\Sample\MarkedTest::checkAgain()'.self::FINDING."\n"
@@ -107,23 +107,23 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
     public function testOnlyTheAliasOfTheWrapperTraitThatInsteadofSelectsIsReported(): void
     {
         $sandbox = $this->emptySandbox();
-        $sandbox->write('tests/PrecedenceTest.php', <<<'PHP'
-            <?php
-
-            namespace Intakt\Sample;
-
-            use PHPUnit\Framework\TestCase;
-
-            trait LeftCheck { public function left(): void {} }
-            trait RightCheck { public function right(): void {} }
-            trait LeftWrapper { use LeftCheck { left as testGo; } }
-            trait RightWrapper { use RightCheck { right as testGo; } }
-
-            final class PrecedenceTest extends TestCase
-            {
-                use LeftWrapper, RightWrapper { RightWrapper::testGo insteadof LeftWrapper; }
-            }
-            PHP);
+        $sandbox->write('tests/PrecedenceTest.php', <<<'PHP_WRAP'
+        <?php
+        
+        namespace Intakt\Sample;
+        
+        use PHPUnit\Framework\TestCase;
+        
+        trait LeftCheck { public function left(): void {} }
+        trait RightCheck { public function right(): void {} }
+        trait LeftWrapper { use LeftCheck { left as testGo; } }
+        trait RightWrapper { use RightCheck { right as testGo; } }
+        
+        final class PrecedenceTest extends TestCase
+        {
+            use LeftWrapper, RightWrapper { RightWrapper::testGo insteadof LeftWrapper; }
+        }
+        PHP_WRAP);
 
         self::assertSame('tests/PrecedenceTest.php:10 intakt.testMethodSentence Test method Intakt\Sample\RightWrapper::testGo()'.self::FINDING, $this->ruleFindingsIn($sandbox));
     }
@@ -138,21 +138,21 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
 
             trait SameLineLeft { public function testGo(): void {} } trait SameLineRight { public function testGo(): void {} }
             PHP);
-        $sandbox->write('tests/SameLineTest.php', <<<'PHP'
-            <?php
-
-            namespace Intakt\Sample;
-
-            use PHPUnit\Framework\TestCase;
-
-            final class SameLineTest extends TestCase
-            {
-                use SameLineLeft, SameLineRight {
-                    SameLineRight::testGo insteadof SameLineLeft;
-                    SameLineLeft::testGo as testTheLeftCheckRuns;
-                }
+        $sandbox->write('tests/SameLineTest.php', <<<'PHP_WRAP'
+        <?php
+        
+        namespace Intakt\Sample;
+        
+        use PHPUnit\Framework\TestCase;
+        
+        final class SameLineTest extends TestCase
+        {
+            use SameLineLeft, SameLineRight {
+                SameLineRight::testGo insteadof SameLineLeft;
+                SameLineLeft::testGo as testTheLeftCheckRuns;
             }
-            PHP);
+        }
+        PHP_WRAP);
 
         self::assertSame('', $this->ruleFindingsIn($sandbox));
     }
@@ -171,19 +171,19 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
     {
         $sandbox = $this->emptySandbox();
         $sandbox->write('src/TwiceChecks.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait TwiceChecks { public function testRuns(): void {} }\n");
-        $sandbox->write('tests/TwiceTest.php', <<<'PHP'
-            <?php
-
-            namespace Intakt\Sample;
-
-            final class TwiceTest extends \PHPUnit\Framework\TestCase
-            {
-                use TwiceChecks {
-                    testRuns as testRunsTheFirstWay;
-                    testRuns as testRunsTheSecondWay;
-                }
+        $sandbox->write('tests/TwiceTest.php', <<<'PHP_WRAP'
+        <?php
+        
+        namespace Intakt\Sample;
+        
+        final class TwiceTest extends \PHPUnit\Framework\TestCase
+        {
+            use TwiceChecks {
+                testRuns as testRunsTheFirstWay;
+                testRuns as testRunsTheSecondWay;
             }
-            PHP);
+        }
+        PHP_WRAP);
 
         self::assertSame('tests/TwiceTest.php:8 intakt.testMethodSentence Test method Intakt\Sample\TwiceTest::testRuns()'.self::FINDING, $this->ruleFindingsIn($sandbox));
     }
@@ -192,19 +192,19 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
     {
         $sandbox = $this->emptySandbox();
         $sandbox->write('src/HiddenOriginalChecks.php', "<?php\n\nnamespace Intakt\\Sample;\n\ntrait HiddenOriginalChecks { public function testRuns(): void {} }\n");
-        $sandbox->write('tests/HiddenOriginalTest.php', <<<'PHP'
-            <?php
-
-            namespace Intakt\Sample;
-
-            final class HiddenOriginalTest extends \PHPUnit\Framework\TestCase
-            {
-                use HiddenOriginalChecks {
-                    testRuns as private;
-                    testRuns as testRunsAgain;
-                }
+        $sandbox->write('tests/HiddenOriginalTest.php', <<<'PHP_WRAP'
+        <?php
+        
+        namespace Intakt\Sample;
+        
+        final class HiddenOriginalTest extends \PHPUnit\Framework\TestCase
+        {
+            use HiddenOriginalChecks {
+                testRuns as private;
+                testRuns as testRunsAgain;
             }
-            PHP);
+        }
+        PHP_WRAP);
 
         self::assertSame('tests/HiddenOriginalTest.php:9 intakt.testMethodSentence Test method Intakt\Sample\HiddenOriginalTest::testRunsAgain()'.self::FINDING, $this->ruleFindingsIn($sandbox));
     }
@@ -212,19 +212,19 @@ final class TestMethodTraitAliasTest extends PhpStanRuleTestCase
     public function testAShortAliasOfAWrapperTraitThatTheTestClassMakesPrivatePassesStaticAnalysis(): void
     {
         $sandbox = $this->emptySandbox();
-        $sandbox->write('tests/PrivateWrapper.php', <<<'PHP'
-            <?php
-
-            namespace Intakt\Sample;
-
-            trait PrivateWrapperChecks { public function helper(): void {} }
-            trait PrivateWrapper { use PrivateWrapperChecks { helper as testGo; } }
-
-            final class PrivateWrapperTest extends \PHPUnit\Framework\TestCase
-            {
-                use PrivateWrapper { testGo as private; }
-            }
-            PHP);
+        $sandbox->write('tests/PrivateWrapper.php', <<<'PHP_WRAP'
+        <?php
+        
+        namespace Intakt\Sample;
+        
+        trait PrivateWrapperChecks { public function helper(): void {} }
+        trait PrivateWrapper { use PrivateWrapperChecks { helper as testGo; } }
+        
+        final class PrivateWrapperTest extends \PHPUnit\Framework\TestCase
+        {
+            use PrivateWrapper { testGo as private; }
+        }
+        PHP_WRAP);
 
         self::assertSame('', $this->ruleFindingsIn($sandbox));
     }
